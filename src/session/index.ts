@@ -2113,7 +2113,7 @@ ${agentInstructions}
     }
 
     if (fileModified) {
-      const autoLinter = this.getResolvedSettings().autoLinter;
+      const autoLinter = this.getResolvedSettings();
       if (autoLinter) {
         try {
           const { execSync } = require("child_process");

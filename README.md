@@ -1,13 +1,8 @@
 <div align="center">
 <br/>
-<p align="center">
-  <a href='https://github.com/sanng1112/anng-cli'>
-    <img src='https://avatars.githubusercontent.com/u/118287711?s=200&v=4' width='100' alt="anng-cli"/>
-  </a>
-</p>
 <h1>ANNG CLI</h1>
 
-<h3>Trợ lý Lập trình AI Tự trị Chạy Trên Terminal — Sóc Quấn Người Mascot 🐿️</h3>
+<h3>Trợ lý Lập trình AI Tự trị Chạy Trên Terminal 🚀</h3>
 
 [![npm](https://img.shields.io/npm/v/anng-cli?color=D4704B&labelColor=black&logo=npm&logoColor=white&style=flat-square)](https://www.npmjs.com/package/anng-cli)
 [![github-stars](https://img.shields.io/github/stars/sanng1112/anng-cli?color=D4704B&labelColor=black&style=flat-square)](https://github.com/sanng1112/anng-cli/stargazers)
@@ -18,39 +13,36 @@
 
 ---
 
-**ANNG CLI** là trợ lý lập trình trí tuệ nhân tạo (AI Coding Assistant) dạng terminal (dòng lệnh) được thiết kế tối ưu cho trải nghiệm lập trình tự trị. Lấy cảm hứng từ chú sóc quấn mình nhỏ nhắn mà linh hoạt, ANNG CLI giúp tự động hóa từ viết mã, sửa lỗi, tìm kiếm cấu trúc project thông qua Codegraph, cho đến điều phối toàn bộ đội ngũ Multi-Agent thông minh giải quyết những task hóc búa nhất.
+**ANNG CLI** là trợ lý lập trình trí tuệ nhân tạo (AI Coding Assistant) dạng terminal (dòng lệnh) được thiết kế tối ưu cho trải nghiệm lập trình tự trị. ANNG CLI giúp tự động hóa toàn bộ quá trình phát triển phần mềm: từ viết mã, sửa lỗi, tìm kiếm cấu trúc dự án thông qua Codegraph, cho đến điều phối toàn bộ đội ngũ Multi-Agent thông minh để giải quyết những task phức tạp nhất.
 
-Được phát triển độc lập và cá nhân hoá để mang lại trải nghiệm *"vibe coding"* mượt mà nhất. 
+Được phát triển độc lập và cá nhân hoá để mang lại trải nghiệm *"vibe coding"* cực kỳ mượt mà ngay trên giao diện dòng lệnh.
 
 ---
 
 ## 🌟 Điểm nổi bật
 
-- 🐿️ **Trải nghiệm Sóc Quấn (Squirrel Mascot):** Nhỏ gọn, linh hoạt, len lỏi mọi ngóc ngách của thư mục project, đánh index codebase bằng Codegraph & tạo cache thông minh vào `ANNG.md`.
-- 🤖 **Đội ngũ Multi-Agent (Team Mode):** Khả năng gọi lệnh `anng --team`, lập tức triệu hồi một đội Agent để chia nhỏ task song song, tương tác qua các panel tmux thời gian thực.
-- 🎨 **Theme Màu Cam Sang Trọng:** Giao diện TUI được tái thiết kế tinh tế với dải màu #D4704B ấm áp, hiện đại.
-- 🛠️ **Hỗ trợ Model Context Protocol (MCP):** Mở rộng tính năng vô hạn (kết nối database, git, aws, slack...) thông qua MCP.
-- 🧠 **Suy luận Đa Chiều (Reasoning Control):** Có menu SelectList để trực tiếp chọn Model cũng như tùy chỉnh Mức độ suy luận (Reasoning Effort) ngay tại Terminal, khỏi cần sửa config file.
+- ⚡ **Tốc độ & Thông minh:** Phân tích mã nguồn mạnh mẽ, đánh index codebase bằng Codegraph & tạo bộ nhớ cache thông minh vào `ANNG.md` để đọc hiểu toàn bộ dự án siêu tốc.
+- 🤖 **Đội ngũ Multi-Agent (Team Mode):** Khả năng gọi lệnh `anng --team`, lập tức triệu hồi một đội Agent để chia nhỏ task song song, tương tác và hiển thị log real-time qua các panel tmux thời gian thực.
+- 🎨 **Giao diện Minimalist Sang Trọng:** Giao diện TUI được thiết kế tối giản, tinh tế mang đậm chất nghệ thuật ASCII/Quadrant Blocks với dải màu `#D4704B` hiện đại, thanh lịch.
+- 🛠️ **Hỗ trợ Model Context Protocol (MCP):** Mở rộng tính năng vô hạn. Kết nối trực tiếp hệ thống với Database, Git, AWS, Slack, v.v. thông qua các plugin MCP.
+- 🧠 **Suy luận Đa Chiều (Reasoning Control):** Tích hợp menu SelectList cho phép trực tiếp chuyển đổi Model và tùy chỉnh Mức độ suy luận (Reasoning Effort) ngay trên Terminal một cách trực quan.
 
 ---
 
 ## 🚀 Cài đặt & Khởi chạy
 
-Cài đặt ANNG CLI thông qua `npm`:
+Cài đặt ANNG CLI thông qua `npm` rất đơn giản:
 
 ```bash
-# Cài đặt global
+# Cài đặt global từ NPM registry
 npm install -g anng-cli
 
-# Hoặc tải code trực tiếp và link
-git clone https://github.com/sanng1112/anng-cli.git
-cd anng-cli
-npm install
-npm run bundle
-npm link
+# Hoặc cài đặt bản pack local mới nhất (nếu bạn tự build)
+npm pack
+npm install -g ./anng-cli-*.tgz
 ```
 
-Khởi chạy trong bất kỳ dự án nào:
+Khởi chạy trong bất kỳ thư mục dự án nào của bạn:
 ```bash
 anng
 ```
@@ -63,7 +55,7 @@ anng
 - `Enter`: Gửi prompt.
 - `Shift+Enter`: Xuống dòng.
 - `Ctrl+V`: Dán ảnh từ clipboard.
-- `/`: Mở menu kỹ năng (Skills) và tính năng nhanh.
+- `/`: Mở menu kỹ năng (Skills) và tính năng nhanh (Commands).
 - `Esc`: Huỷ tiến trình sinh văn bản/suy luận hiện tại của AI.
 
 ### 2. Các Mode Vận Hành
@@ -71,11 +63,11 @@ anng
 # Mở giao diện TUI mặc định
 anng
 
-# Chạy lệnh trực tiếp không qua giao diện
+# Chạy một lệnh trực tiếp và thoát (không qua giao diện)
 anng -p "viết hàm tính tổng"
 
-# Mode YOLO (Auto-Accept mọi quyền đọc/ghi)
-anng --yolo -p "dọn dẹp thư mục dist"
+# Mode YOLO (Auto-Accept mọi quyền đọc/ghi mà không cần hỏi lại)
+anng --yolo -p "dọn dẹp thư mục dist và dọn dẹp log"
 
 # Chế độ làm việc Đội ngũ (Multi-Agent Team)
 anng --team -p "phân tích hệ thống và tạo test case cho mọi hàm"
@@ -97,4 +89,4 @@ Sử dụng thư mục `.anng` để tinh chỉnh cấu hình của riêng bạn
 ---
 
 ## 🤝 Tham gia đóng góp
-Dự án được bảo trì và phát triển bởi [sanng1112](https://github.com/sanng1112). Mọi ý tưởng đóng góp, Issue hay Pull Request đều được chào đón! Hãy star 🌟 project nếu nó giúp ích cho công việc của bạn.
+Dự án được bảo trì và phát triển bởi [sanng1112](https://github.com/sanng1112). Mọi ý tưởng đóng góp, Issue hay Pull Request đều được chào đón nồng nhiệt! Hãy thả sao 🌟 cho project nếu công cụ này hữu ích cho công việc của bạn.

@@ -48,7 +48,7 @@ export function AsciiLogo() {
       const upperRow = FOX_MAP[r];
       const lowerRow = FOX_MAP[r + 1] || ".".repeat(upperRow.length);
 
-      const parts = [];
+      const parts: React.ReactNode[] = [];
       let lastProps: Record<string, string> | null = null;
       let currentString = "";
 

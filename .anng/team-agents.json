@@ -7,11 +7,6 @@
     "reasoningEffort": "high"
   },
   {
-    "name": "Backend Worker",
-    "prompt": "",
-    "model": ""
-  },
-  {
     "name": "Database Expert",
     "prompt": "",
     "model": ""

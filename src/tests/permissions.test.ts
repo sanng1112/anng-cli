@@ -190,9 +190,7 @@ test("isPathInAnyDirectory matches absolute and project-relative directories wit
     false
   );
   assert.equal(
-    isPathInAnyDirectory(projectRoot, path.join(projectRoot, ".anng", "skills-extra", "file.md"), [
-      relativeSkillRoot,
-    ]),
+    isPathInAnyDirectory(projectRoot, path.join(projectRoot, ".anng", "skills-extra", "file.md"), [relativeSkillRoot]),
     false
   );
   assert.equal(isPathInAnyDirectory(projectRoot, path.join(home, "notes.txt"), undefined), false);
