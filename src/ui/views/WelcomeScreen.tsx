@@ -5,7 +5,6 @@ import path from "node:path";
 import type { SkillInfo } from "../../session";
 import type { ResolvedDeepcodingSettings } from "../../settings";
 import { buildSlashCommands, BUILTIN_SLASH_COMMANDS, formatSlashCommandDescription } from "../core/slash-commands";
-import { ThemedGradient } from "./ThemedGradient";
 import { AsciiLogo } from "../ascii-art";
 import { useAppContext } from "../contexts";
 
@@ -44,7 +43,7 @@ export function WelcomeScreen({ projectRoot, settings, skills, width }: WelcomeS
         <Box flexDirection="column" paddingX={1}>
           <Box flexDirection="column" justifyContent="center" paddingX={1}>
             <Box justifyContent="center" width={compact ? undefined : TITLE_PANEL_WIDTH}>
-              <ThemedGradient>{AsciiLogo}</ThemedGradient>
+              <AsciiLogo />
             </Box>
           </Box>
 
