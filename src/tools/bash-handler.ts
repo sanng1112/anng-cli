@@ -137,7 +137,7 @@ async function executeShellCommand(
   shellPath: string,
   shellArgs: string[],
   cwd: string,
-  _command: string,
+  command: string,
   context: ToolExecutionContext
 ): Promise<{
   stdout: string;
@@ -261,7 +261,7 @@ function startBackgroundShellCommand(
   shellPath: string,
   shellArgs: string[],
   cwd: string,
-  _command: string,
+  command: string,
   marker: string,
   context: ToolExecutionContext
 ): ToolExecutionResult {
@@ -418,8 +418,8 @@ async function buildToolCommandResult(
   signal: string | null,
   shellPath: string,
   startCwd: string,
-  _command: string,
-  _projectRoot: string,
+  command: string,
+  projectRoot: string,
   timedOut: boolean = false,
   timeoutMs?: number,
   deadlineAtMs?: number
