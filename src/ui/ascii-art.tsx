@@ -9,58 +9,63 @@ export function AsciiLogo() {
           <Text color="#D4704B"> ▄▄▄████████▄▄▄</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> ▄████████████████▄ ▄▄▄▄</Text>
+          <Text color="#D4704B"> ▄████████████████▄</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> ████████████████████ ▄██████▄</Text>
+          <Text color="#D4704B"> █████▀▀ ▀▀█████</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> █████████████████████▌</Text>
-          <Text color="#D4704B">██</Text>
-          <Text color="#FFFFFF">███████</Text>
-          <Text color="#D4704B">█</Text>
+          <Text color="#D4704B"> █████ ▄▄</Text>
+          <Text color="#FFFFFF">████</Text>
+          <Text color="#D4704B">▄▄ ████▌</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> █████████████████████▌</Text>
-          <Text color="#D4704B">██</Text>
+          <Text color="#D4704B"> ████▌ █</Text>
+          <Text color="#FFFFFF">██▀ ▀██</Text>
+          <Text color="#D4704B">█ ▐███▌</Text>
+        </Text>
+        <Text>
+          <Text color="#D4704B"> ████▌ █</Text>
+          <Text color="#FFFFFF">█</Text>
           <Text color="#000000" backgroundColor="#FFFFFF">
             {" "}
             o o{" "}
           </Text>
-          <Text color="#D4704B">█</Text>
+          <Text color="#FFFFFF">█</Text>
+          <Text color="#D4704B"> ▐███</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> █████████████████████ </Text>
-          <Text color="#D4704B">▐█</Text>
+          <Text color="#D4704B"> ████ </Text>
+          <Text color="#FFFFFF">█</Text>
           <Text color="#000000" backgroundColor="#FFFFFF">
             {" "}
             w{" "}
           </Text>
-          <Text color="#D4704B">█</Text>
+          <Text color="#FFFFFF">█</Text>
+          <Text color="#D4704B"> ███</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> ███████████████████ </Text>
-          <Text color="#D4704B">██</Text>
-          <Text color="#FFFFFF">███████</Text>
-          <Text color="#D4704B">█</Text>
+          <Text color="#D4704B"> ▀███ █</Text>
+          <Text color="#FFFFFF">█▄▄▄▄▄██</Text>
+          <Text color="#D4704B"> █▀</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> ▀██████████████▀ ▄▄ ▀▀▀▀▀</Text>
+          <Text color="#D4704B"> ▀█████████████▄</Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> ▀▀████████████████▄ </Text>
+          <Text color="#D4704B"> ▀▀██████████▌ </Text>
           <Text color="#888888" bold>
             _O_
           </Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> ▀▀▀▀▀▀██████████▌ </Text>
+          <Text color="#D4704B"> ▀▀▀▀▀▀ </Text>
           <Text color="#888888" bold>
             / | \{" "}
           </Text>
         </Text>
         <Text>
-          <Text color="#D4704B"> ▀▀██████ </Text>
+          <Text color="#D4704B"> </Text>
           <Text color="#888888" bold>
             / \{" "}
           </Text>
