@@ -12,33 +12,20 @@ const COLORS: Record<string, string | undefined> = {
 };
 
 const SQUIRREL_MAP = [
-  "........BBBBBBBB........",
-  "......BBOOOOOOOOBB......",
-  ".....BBOOOOOOOOOOOOB....",
-  "....BBOOOOOOOOOOOOOOB...",
-  "...BBOOOOOOOOOOOOOOOOB..",
-  "..BBOOOOOBBBBBBBBBOOOOB.",
-  "..BBOOOOBBOOOOODDBBWWOB.",
-  ".BBOOOOBBBOOOOODDDBBWWOB",
-  ".BBOOOOBBOOOBBOOBDBBWOB.",
-  ".BBOOOOBOOOBBeOeOBBWOB..",
-  ".BBOOOOBOOOBOOOOOOBWOB..",
-  ".BBOOOOBBOOOBOOmOBBWOB..",
-  "..BBOOOOBBOOOBBBBBWOB...",
-  "..BBOOOOOBBDDDDDDBWWOB..",
-  "...BBOOOOOOBBBBBBWWOB...",
-  "....BBOOOOOOOWWWWWOB....",
-  ".....BBOOOOOOWWWWOBB....",
-  "......BBBBBBBBBBBB......",
-];
-
-const LOGO_LINES = [
-  "█████╗ ███╗   ██╗███╗   ██╗ ██████╗",
-  "██╔══██╗████╗  ██║████╗  ██║██╔════╝",
-  "███████║██╔██╗ ██║██╔██╗ ██║██║  ███╗",
-  "██╔══██║██║╚██╗██║██║╚██╗██║██║   ██║",
-  "██║  ██║██║ ╚████║██║ ╚████║╚██████╔╝",
-  "╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝ ╚═════╝",
+  "...BBBBBBBB...",
+  ".BBOOOOOOOOBB.",
+  "BBOOOOOOOOOOOB",
+  "BBOOOOBBBBBOOB",
+  "BBOOOBBOOOOBWB",
+  "BBOOBOBBOBDBWB",
+  "BBOOBOeBeBDBWB",
+  "BBOOBO...BDBWB",
+  ".BBOOBO.m.BWOB",
+  ".BBOOBBBBBBWOB",
+  "..BBOOOOOWWWOB",
+  "...BBOOWWWWWOB",
+  ".....BBBBBBB..",
+  "......B...B...",
 ];
 
 export function AsciiLogo() {
@@ -49,7 +36,7 @@ export function AsciiLogo() {
       const lowerRow = SQUIRREL_MAP[r + 1] || ".".repeat(upperRow.length);
 
       const parts = [];
-      let lastProps = null;
+      let lastProps: Record<string, string> | null = null;
       let currentString = "";
 
       const pushPart = () => {
@@ -90,7 +77,6 @@ export function AsciiLogo() {
           props.backgroundColor = colorL;
         }
 
-        // Check if we can merge with previous
         const propsKey = JSON.stringify(props);
         const lastPropsKey = lastProps ? JSON.stringify(lastProps) : null;
 
@@ -104,29 +90,13 @@ export function AsciiLogo() {
       }
       pushPart();
 
-      // Add logo text on specific lines
-      let rightText = null;
-      // We have 9 rows of output (18/2). Logo has 6 lines.
-      // Output rows 1 to 6 can hold the logo.
-      if (r / 2 >= 1 && r / 2 <= 6) {
-        const logoLine = LOGO_LINES[r / 2 - 1];
-        rightText = <Text color="#D4704B"> {logoLine}</Text>;
-      } else if (r / 2 === 7) {
-        rightText = <Text color="#888888"> S Q U I R R E L</Text>;
-      }
-
-      lines.push(
-        <Text wrap="truncate-end" key={r}>
-          {parts}
-          {rightText}
-        </Text>
-      );
+      lines.push(<Text key={r}>{parts}</Text>);
     }
     return lines;
   }, []);
 
   return (
-    <Box flexDirection="column" alignItems="flex-start">
+    <Box flexDirection="column" alignItems="center">
       {renderedLines}
     </Box>
   );
