@@ -137,7 +137,7 @@ async function executeShellCommand(
   shellPath: string,
   shellArgs: string[],
   cwd: string,
-  command: string,
+  _command: string,
   context: ToolExecutionContext
 ): Promise<{
   stdout: string;
@@ -261,7 +261,7 @@ function startBackgroundShellCommand(
   shellPath: string,
   shellArgs: string[],
   cwd: string,
-  command: string,
+  _command: string,
   marker: string,
   context: ToolExecutionContext
 ): ToolExecutionResult {
@@ -418,8 +418,8 @@ async function buildToolCommandResult(
   signal: string | null,
   shellPath: string,
   startCwd: string,
-  command: string,
-  projectRoot: string,
+  _command: string,
+  _projectRoot: string,
   timedOut: boolean = false,
   timeoutMs?: number,
   deadlineAtMs?: number
@@ -483,47 +483,36 @@ function joinOutput(stdout: string, stderr: string): string {
 
 async function truncateOutput(
   output: string,
-  command: string,
-  projectRoot: string
+  _command: string,
+  _projectRoot: string
 ): Promise<{ text: string; truncated: boolean }> {
   if (output.length <= MAX_OUTPUT_CHARS) {
-    return { text: output, truncated: false };
-  }
-
-  try {
-    const { createProxyClient } = await import("../common/openai-client");
-    const { resolveCurrentSettings } = await import("../settings");
-    const client = createProxyClient(projectRoot);
-    const settings = resolveCurrentSettings(projectRoot);
-    if (client) {
-      const res = await client.chat.completions.create({
-        model: settings.proxyModel || "deepseek-v4-flash-free",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an expert developer assistant. Summarize this long terminal output to save tokens. Discard noisy progress bars and successful compilations. Keep the core error messages and stack traces. VERY IMPORTANT: At the very end of your summary, append a brief 'Proxy Hint: [your analysis]' suggesting the root cause or next steps to fix the error. Keep the total output under 15000 chars.",
-          },
-          { role: "user", content: `Command: ${command}\n\nOutput:\n${output}` },
-        ],
-      });
-      const compressed = res.choices[0]?.message?.content || "";
-      if (compressed) {
-        return {
-          text: compressed + "\n\n(Note: This output was compressed by an LLM to save tokens)",
-          truncated: true,
-        };
-      }
+    // Additionally check if there are too many lines
+    const lines = output.split(/\r?\n/);
+    if (lines.length <= 200) {
+      return { text: output, truncated: false };
     }
-  } catch (_err) {
-    // silently fallback to text truncation on LLM error
   }
 
-  const half = Math.floor(MAX_OUTPUT_CHARS / 2);
-  const head = output.slice(0, half);
-  const tail = output.slice(-half);
+  const lines = output.split(/\r?\n/);
+  if (lines.length <= 200) {
+    // If it's few lines but long chars, just do a simple character slice
+    const half = Math.floor(MAX_OUTPUT_CHARS / 2);
+    const head = output.slice(0, half);
+    const tail = output.slice(-half);
+    return {
+      text: `${head}\n\n...[OUTPUT TRUNCATED: ${output.length - MAX_OUTPUT_CHARS} chars omitted]...\n\n${tail}`,
+      truncated: true,
+    };
+  }
+
+  // Line-based truncation: first 50 lines and last 50 lines
+  const headLines = lines.slice(0, 50).join("\n");
+  const tailLines = lines.slice(-50).join("\n");
+  const omittedCount = lines.length - 100;
+
   return {
-    text: `${head}\n\n...[OUTPUT TRUNCATED: ${output.length - MAX_OUTPUT_CHARS} chars omitted]...\n\n${tail}`,
+    text: `${headLines}\n\n...[OUTPUT TRUNCATED: ${omittedCount} lines omitted]...\n\n${tailLines}`,
     truncated: true,
   };
 }

@@ -224,11 +224,69 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
 
   // New provider: create client with key rotation support
   const rotator = new KeyRotator(providerConfig.apiKey);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fetchWithRotation = async (url: any, init: any): Promise<any> => {
+    let lastError: unknown;
+    const maxRetries = Math.max(2, rotator.getKeyCount());
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      if (attempt > 0) {
+        rotator.rotate();
+      }
+      const currentKey = rotator.getCurrentKey();
+
+      const headers = new Headers(init.headers);
+      headers.set("authorization", `Bearer ${currentKey}`);
+
+      const ac = new AbortController();
+      let abortedByCaller = false;
+
+      if (init.signal) {
+        init.signal.addEventListener("abort", () => {
+          abortedByCaller = true;
+          ac.abort(init.signal.reason);
+        });
+        if (init.signal.aborted) {
+          throw new Error("Aborted");
+        }
+      }
+
+      const timeoutId = setTimeout(() => {
+        if (!abortedByCaller) {
+          ac.abort(new Error("TimeoutAfter10s"));
+        }
+      }, 10000);
+
+      try {
+        const response = await undiciFetch(url, {
+          ...init,
+          headers,
+          signal: ac.signal,
+          dispatcher: keepAliveAgent,
+        });
+        clearTimeout(timeoutId);
+
+        if (response.status === 429 || response.status === 401 || response.status >= 500) {
+          throw new Error(`ApiError${response.status}`);
+        }
+
+        return response;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        lastError = err;
+        if (abortedByCaller) {
+          throw err;
+        }
+      }
+    }
+    throw lastError;
+  };
+
   const client = new OpenAI({
-    apiKey: rotator.getCurrentKey(),
+    apiKey: "dummy-key-overridden-in-fetch",
     baseURL: providerConfig.baseURL || undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fetch: (url: any, init: any) => undiciFetch(url, { ...init, dispatcher: keepAliveAgent }),
+    fetch: fetchWithRotation,
   });
 
   providerState.set(providerKey, { client, cacheKey: providerConfig.apiKey, rotator });

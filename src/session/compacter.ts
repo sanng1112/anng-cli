@@ -21,9 +21,32 @@ export function shouldCompactContext(options: {
   }
 
   // Phase boundary heuristic: look for recent successful tool results or system prompts
-  // Instead of an arbitrary 30%, we find the last 5 user messages or significant phase breaks.
-  let boundaryIndex = Math.min(activeMessages.length, Math.max(3, Math.floor(activeMessages.length * 0.3)));
-  for (let i = Math.floor(activeMessages.length * 0.5); i < activeMessages.length - 2; i++) {
+  // Instead of an arbitrary 30%, we accumulate tokens from the end to ensure we drop below the threshold
+  // We want the kept messages to be roughly 60-70% of the threshold at most.
+  const targetKeepTokens = Math.floor(threshold * 0.6);
+  let keptTokens = 0;
+  let boundaryIndex = 0;
+
+  for (let i = activeMessages.length - 1; i >= 0; i--) {
+    const msg = activeMessages[i];
+    const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? "");
+    // Approximate token count to avoid expensive full tokenization in a tight loop
+    // 1 char ~ 0.3 tokens for English, 0.6 for CJK. Use 0.5 as a fast upper bound.
+    const msgTokens = Math.ceil(content.length * 0.5);
+
+    if (keptTokens + msgTokens > targetKeepTokens) {
+      boundaryIndex = i + 1;
+      break;
+    }
+    keptTokens += msgTokens;
+  }
+
+  // Fallback to ensure we compact AT LEAST 1 message if we are above threshold,
+  // but also try not to compact the very last message if possible.
+  boundaryIndex = Math.min(Math.max(1, boundaryIndex), activeMessages.length - 1);
+
+  // Try to find a clean break (user or system message) near the boundary
+  for (let i = boundaryIndex; i < activeMessages.length - 1; i++) {
     const msg = activeMessages[i];
     if (msg.role === "user" || msg.role === "system") {
       boundaryIndex = i;

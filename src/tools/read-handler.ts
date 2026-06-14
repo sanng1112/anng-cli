@@ -306,7 +306,7 @@ export async function handleReadTool(
           });
           const summary = res.choices[0]?.message?.content || "";
           if (summary) {
-            textResult.output = `[HYBRID AUTOPILOT ACTIVATED: File is too large to load fully (${textResult.totalLines} lines). Gemini Proxy generated this structural outline instead to save tokens.]\n\n${summary}\n\n[To read specific code, use the read tool again with 'offset' and 'limit' parameters, or use ProxyRead tool.]`;
+            textResult.output = `[HYBRID AUTOPILOT ACTIVATED: File is too large to load fully (${textResult.totalLines} lines). Proxy Model generated this structural outline instead to save tokens.]\n\n${summary}\n\n[To read specific code, use the read tool again with 'offset' and 'limit' parameters, or use ProxyRead tool.]`;
           }
         }
       } catch (_e) {

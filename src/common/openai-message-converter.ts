@@ -57,6 +57,41 @@ export class OpenAIMessageConverter {
       }
     }
 
+    // --- Active Context Pinning (Anthropic/OpenRouter cache_control) ---
+    // This allows active caching of the static system prompt and the latest dynamic context boundary.
+    const isAnthropic = model.includes("claude") || model.includes("anthropic");
+    if (isAnthropic && openAIMessages.length > 0) {
+      // 1. Pin the static system prompt
+      for (let i = openAIMessages.length - 1; i >= 0; i--) {
+        if (openAIMessages[i].role === "system") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sysMsg = openAIMessages[i] as any;
+          if (typeof sysMsg.content === "string") {
+            sysMsg.content = [{ type: "text", text: sysMsg.content, cache_control: { type: "ephemeral" } }];
+          } else if (Array.isArray(sysMsg.content) && sysMsg.content.length > 0) {
+            sysMsg.content[sysMsg.content.length - 1].cache_control = { type: "ephemeral" };
+          }
+          break;
+        }
+      }
+      // 2. Pin the dynamic conversation boundary (last user or tool message)
+      let pinnedDynamic = false;
+      for (let i = openAIMessages.length - 1; i >= 0; i--) {
+        if (openAIMessages[i].role === "user" || openAIMessages[i].role === "tool") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const boundaryMsg = openAIMessages[i] as any;
+          if (typeof boundaryMsg.content === "string") {
+            boundaryMsg.content = [{ type: "text", text: boundaryMsg.content, cache_control: { type: "ephemeral" } }];
+            pinnedDynamic = true;
+          } else if (Array.isArray(boundaryMsg.content) && boundaryMsg.content.length > 0) {
+            boundaryMsg.content[boundaryMsg.content.length - 1].cache_control = { type: "ephemeral" };
+            pinnedDynamic = true;
+          }
+          if (pinnedDynamic) break;
+        }
+      }
+    }
+
     return openAIMessages;
   }
 

@@ -577,11 +577,6 @@ If none of the available skills match, respond with an empty array, i.e. \`{"ski
     }
     const candidateSkillNames = new Set(simpleSkills.map((skill) => skill.name));
 
-    const { client, model, baseURL, debugLogEnabled } = this.createOpenAIClient();
-    if (!client) {
-      return [];
-    }
-
     const agentInstructions = this.loadAgentInstructions();
     if (agentInstructions) {
       systemPrompt += `Use the current agent instructions as additional context when deciding which skills match:\n
@@ -592,6 +587,53 @@ ${agentInstructions}
     }
     systemPrompt += "The candidate skills are as follows:\n\n";
     systemPrompt += "```\n" + JSON.stringify(simpleSkills, null, 2) + "\n```";
+
+    // Try proxy model first (cheaper/faster for simple classification)
+    try {
+      const { createProxyClient } = await import("../common/openai-client");
+      const proxyClient = createProxyClient(this.projectRoot);
+      if (proxyClient) {
+        const { resolveCurrentSettings } = await import("../settings");
+        const settings = resolveCurrentSettings(this.projectRoot);
+        const res = await proxyClient.chat.completions.create(
+          {
+            model: settings.proxyModel || "deepseek-v4-flash-free",
+            temperature: 0.1,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            response_format: { type: "json_object" },
+          },
+          options?.signal ? { signal: options.signal } : undefined
+        );
+        this.throwIfAborted(options?.signal);
+
+        const rawContent = res.choices?.[0]?.message?.content;
+        const content = typeof rawContent === "string" ? rawContent : "";
+        if (content) {
+          const parsed = JSON.parse(content);
+          if (parsed && Array.isArray(parsed.skillNames)) {
+            return parsed.skillNames.filter(
+              (skillName: unknown): skillName is string =>
+                typeof skillName === "string" && candidateSkillNames.has(skillName)
+            );
+          }
+        }
+        return [];
+      }
+    } catch (error) {
+      if (this.isAbortLikeError(error) || options?.signal?.aborted) {
+        throw error;
+      }
+      // Fallback to main model below
+    }
+
+    // Fallback: use main model if proxy is unavailable
+    const { client, model, baseURL, debugLogEnabled } = this.createOpenAIClient();
+    if (!client) {
+      return [];
+    }
 
     try {
       const response = await this.createChatCompletionStream(

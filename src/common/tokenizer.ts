@@ -25,5 +25,5 @@ export function countMessagesTokens(messages: Array<{ role: string; content: str
 }
 
 export function getCompactThreshold(model: string): number {
-  return DEEPSEEK_V4_MODELS.has(model) ? 512 * 1024 : 128 * 1024;
+  return DEEPSEEK_V4_MODELS.has(model) ? 48 * 1024 : 32 * 1024;
 }

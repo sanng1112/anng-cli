@@ -57,7 +57,7 @@ type CorrectedEditStrings = {
 };
 
 async function validateDiff(filePath: string, diffPreview: string, projectRoot: string): Promise<string | null> {
-  // Try to use Gemini to validate diff
+  // Try to use Proxy Model to validate diff
   try {
     const { createProxyClient } = await import("../common/openai-client");
     const { resolveCurrentSettings } = await import("../settings");
