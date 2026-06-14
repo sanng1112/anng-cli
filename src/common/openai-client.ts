@@ -131,9 +131,9 @@ export function createProxyClient(projectRoot: string = process.cwd()): OpenAI |
 
       const timeoutId = setTimeout(() => {
         if (!abortedByCaller) {
-          ac.abort(new Error("TimeoutAfter10s"));
+          ac.abort(new Error("TimeoutAfter300s"));
         }
-      }, 10000);
+      }, 300000);
 
       try {
         const response = await undiciFetch(url, {
@@ -145,6 +145,7 @@ export function createProxyClient(projectRoot: string = process.cwd()): OpenAI |
         clearTimeout(timeoutId);
 
         if (response.status === 429 || response.status === 401) {
+          await response.text().catch(() => {});
           throw new Error(`ApiError${response.status}`);
         }
 
@@ -254,9 +255,9 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
 
       const timeoutId = setTimeout(() => {
         if (!abortedByCaller) {
-          ac.abort(new Error("TimeoutAfter10s"));
+          ac.abort(new Error("TimeoutAfter300s"));
         }
-      }, 10000);
+      }, 300000);
 
       try {
         const response = await undiciFetch(url, {
@@ -268,6 +269,7 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
         clearTimeout(timeoutId);
 
         if (response.status === 429 || response.status === 401 || response.status >= 500) {
+          await response.text().catch(() => {});
           throw new Error(`ApiError${response.status}`);
         }
 
