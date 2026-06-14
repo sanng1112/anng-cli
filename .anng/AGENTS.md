@@ -6,7 +6,7 @@
 src/
 ├── cli.tsx              # Entry point — parses args (-p, -v), renders Ink App
 ├── session.ts           # SessionManager — LLM loop, compaction, tool orchestration
-├── settings.ts          # Settings resolution from ~/.deepcode/settings.json
+├── settings.ts          # Settings resolution from ~/.anng/settings.json
 ├── prompt.ts            # System prompt builder, tool definitions, built-in skills
 ├── common/
 │   ├── bash-timeout.ts  # Bash command timeout enforcement
@@ -120,13 +120,13 @@ Run the CLI locally for manual testing: `node dist/cli.js` (after `npm run bundl
 
 ## Architecture Overview
 
-The CLI (`@vegamo/deepcode-cli`) renders a terminal UI using [Ink](https://github.com/vadimdemedes/ink) (React for terminals). `SessionManager` drives the LLM interaction loop: it builds system prompts, sends user messages with optional skills/images, streams responses, executes tool calls via `ToolExecutor`, and compacts context when token thresholds are exceeded (512K for DeepSeek V4 models, 128K for others). OpenAI client connectivity is managed by `createOpenAIClient()` in `src/common/openai-client.ts`, which caches the client singleton and applies a 180-second keep-alive timeout.
+The CLI (`anng-cli`) renders a terminal UI using [Ink](https://github.com/vadimdemedes/ink) (React for terminals). `SessionManager` drives the LLM interaction loop: it builds system prompts, sends user messages with optional skills/images, streams responses, executes tool calls via `ToolExecutor`, and compacts context when token thresholds are exceeded (512K for DeepSeek V4 models, 128K for others). OpenAI client connectivity is managed by `createOpenAIClient()` in `src/common/openai-client.ts`, which caches the client singleton and applies a 180-second keep-alive timeout.
 
 Seven built-in tools are available to the LLM: `bash`, `read`, `write`, `edit`, `AskUserQuestion`, `UpdatePlan`, and `WebSearch`. Tool definitions are registered in `src/tools/executor.ts` and described to the LLM via `src/prompt.ts` and `templates/tools/`. The `UpdatePlan` tool enables the LLM to display and update a structured task list in the terminal.
 
 A **permission system** (`src/common/permissions.ts`) controls tool execution scopes (read/write/delete/network/git-log, etc.) with configurable allow/deny/ask decisions. The `PermissionPrompt` view presents interactive prompts when a tool requires user approval.
 
-A **file history system** (`src/common/file-history.ts`) provides undo/checkpoint support by creating lightweight Git branches per session. The `GitFileHistory` class manages blob storage and branch references via a `.deepcode-file-history.json` manifest.
+A **file history system** (`src/common/file-history.ts`) provides undo/checkpoint support by creating lightweight Git branches per session. The `GitFileHistory` class manages blob storage and branch references via a `.anng-file-history.json` manifest.
 
 **Slash commands**: `/model`, `/new`, `/init`, `/resume`, `/continue`, `/mcp`, `/exit`, plus dynamic `/skill-name` for each loaded skill.
 
@@ -136,6 +136,6 @@ A **file history system** (`src/common/file-history.ts`) provides undo/checkpoin
 
 ## Agent-Specific Instructions
 
-- **AGENTS.md loading**: The CLI loads agent instructions from `./AGENTS.md`, `./.deepcode/AGENTS.md`, or `~/.deepcode/AGENTS.md` (first found wins). Write project-specific guidance for the LLM in any of these.
-- **Skills**: Place skill definitions in `~/.agents/skills/<name>/SKILL.md` (user-level) or `./.agents/skills/<name>/SKILL.md` (project-level). Legacy path `./.deepcode/skills/` is also supported. Each SKILL.md uses YAML frontmatter with `name` and `description` fields.
+- **AGENTS.md loading**: The CLI loads agent instructions from `./AGENTS.md`, `./.anng/AGENTS.md`, or `~/.anng/AGENTS.md` (first found wins). Write project-specific guidance for the LLM in any of these.
+- **Skills**: Place skill definitions in `~/.agents/skills/<name>/SKILL.md` (user-level) or `./.agents/skills/<name>/SKILL.md` (project-level). Legacy path `./.anng/skills/` is also supported. Each SKILL.md uses YAML frontmatter with `name` and `description` fields.
 - **Built-in skills**: `agent-drift-guard` (detects and corrects execution drift), `plan-and-execute` (structured task planning with progress tracking), and `karpathy-guidelines` (behavioral guidelines to reduce common LLM coding mistakes). All three are defined in `templates/skills/` and always injected into every session.

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Upgrade the existing execution harness in `deepcode-cli` to follow advanced autonomous agent design patterns, including proper Observation Design, Error Recovery Contracts, Semantic Context Compaction, and Persistent Task Queues for headless operations.
+**Goal:** Upgrade the existing execution harness in `anng-cli` to follow advanced autonomous agent design patterns, including proper Observation Design, Error Recovery Contracts, Semantic Context Compaction, and Persistent Task Queues for headless operations.
 **Status:** Completed
 **Architecture:** We will refactor the `ToolExecutionResult` schema and its JSON formatting to enforce structured observations (`status`, `summary`, `next_actions`, `artifacts`). We will add an error analyzer to `bash-handler` to provide root cause hints and retry instructions. We will modify `shouldCompactContext` to look for phase boundaries (e.g. successful macro tool calls) rather than arbitrary 30% retention. Finally, we will inject a file-based task queue loader in `cli.tsx` to handle headless autonomous workflows.
 
@@ -224,7 +224,7 @@ import * as path from "path";
 
 // Below initialPrompt extraction (around line 71), add task queue loader:
 function loadTaskQueue(rootPath: string): string | undefined {
-  const taskPath = path.join(rootPath, ".deepcode", "memory", "task-queue.md");
+  const taskPath = path.join(rootPath, ".anng", "memory", "task-queue.md");
   try {
     if (fs.existsSync(taskPath)) {
       return `Please process the following persistent task queue:\n\n${fs.readFileSync(taskPath, "utf8")}`;
@@ -247,8 +247,8 @@ if (autoAcceptEnabled && !initialPrompt) {
 - [x] **Step 2: Test parsing with dummy task queue**
 
 ```bash
-mkdir -p .deepcode/memory
-echo "- [ ] Test task" > .deepcode/memory/task-queue.md
+mkdir -p .anng/memory
+echo "- [ ] Test task" > .anng/memory/task-queue.md
 # We just verify it builds and does not crash
 npx tsx src/cli.tsx --help > /dev/null
 ```

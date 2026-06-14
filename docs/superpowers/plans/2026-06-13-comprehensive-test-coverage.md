@@ -1,8 +1,8 @@
-# Kiểm Thử Toàn Bộ DeepCode CLI — Implementation Plan
+# Kiểm Thử Toàn Bộ ANNG CLI CLI — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Achieve comprehensive test coverage across all 15+ untested source modules in deepcode-cli, prioritizing critical paths (API connectivity, validation, file I/O, state management) with the Node.js native test runner.
+**Goal:** Achieve comprehensive test coverage across all 15+ untested source modules in anng-cli, prioritizing critical paths (API connectivity, validation, file I/O, state management) with the Node.js native test runner.
 
 **Architecture:** Each test module tests one source module in isolation using `node:test` + `node:assert/strict`, following the existing test patterns (describe/it blocks, manual mocks for fs/process/file I/O via inline stubs, cleanup via `afterEach`). Tests are grouped by risk level — 🔴 CRITICAL (openai-client), 🟠 MEDIUM (validate, state, file-utils, error-logger, mcp-manager), 🟡 LOW (model-capabilities, bash-timeout, ask-user-question).
 
@@ -382,10 +382,10 @@ function makeEntry(overrides: Partial<ApiErrorLogEntry> = {}): ApiErrorLogEntry 
 }
 
 // Note: These tests verify maskSensitive and truncation logic indirectly via logApiError.
-// To avoid polluting ~/.deepcode/logs/error.log, we read-write the log and verify contents.
+// To avoid polluting ~/.anng/logs/error.log, we read-write the log and verify contents.
 
 describe("maskSensitive (via logApiError)", () => {
-  const logDir = path.join(os.homedir(), ".deepcode", "logs");
+  const logDir = path.join(os.homedir(), ".anng", "logs");
   const logPath = path.join(logDir, "error.log");
 
   afterEach(() => {
@@ -480,7 +480,7 @@ describe("maskSensitive (via logApiError)", () => {
       error: {
         name: "Error",
         message: "Request failed",
-        stack: "    at call(/home/user/.deepcode/settings.json: apiKey: sk-deadbeef)",
+        stack: "    at call(/home/user/.anng/settings.json: apiKey: sk-deadbeef)",
       },
     });
 
@@ -634,7 +634,7 @@ describe("detectEncoding", () => {
 });
 
 describe("readTextFileWithMetadata", () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-test-file-utils-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-test-file-utils-"));
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -663,7 +663,7 @@ describe("readTextFileWithMetadata", () => {
 });
 
 describe("writeTextFile", () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-test-file-utils-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-test-file-utils-"));
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -693,7 +693,7 @@ describe("writeTextFile", () => {
 });
 
 describe("ensureParentDirectory", () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-test-file-utils-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-test-file-utils-"));
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -753,7 +753,7 @@ describe("buildDiffPreview", () => {
 });
 
 describe("hasFileChangedSinceState", () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-test-file-utils-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-test-file-utils-"));
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -1400,7 +1400,7 @@ git checkout -- src/tests/ask-user-question.test.ts
 
 | Risk | Mitigation |
 |------|-----------|
-| error-logger.test.ts modifies ~/.deepcode/logs/error.log | afterEach cleans up, tests only read-back what they wrote |
+| error-logger.test.ts modifies ~/.anng/logs/error.log | afterEach cleans up, tests only read-back what they wrote |
 | file-utils.test.ts creates temp files | Uses os.tmpdir() with cleanup in afterEach |
 | state.test.ts uses in-memory Maps | afterEach calls clearSessionState |
 | openai-client.test.ts only tests exports (not createOpenAIClient which instantiates OpenAI) | Provider config and error detection logic is covered; full integration needs mock API |

@@ -1019,7 +1019,7 @@ function createContext(
 }
 
 function createTempWorkspace(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-tools-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-tools-"));
   tempDirs.push(dir);
   return dir;
 }

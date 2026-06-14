@@ -188,7 +188,7 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
 
 function getMachineId(): string | undefined {
   try {
-    const idPath = path.join(os.homedir(), ".deepcode", "machine-id");
+    const idPath = path.join(os.homedir(), ".anng", "machine-id");
     if (fs.existsSync(idPath)) {
       const raw = fs.readFileSync(idPath, "utf8").trim();
       if (raw) {

@@ -40,7 +40,7 @@ test(
   "readClipboardImage uses osascript fallback on macOS when pngpaste is missing",
   { skip: process.platform === "win32" },
   async () => {
-    const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-clipboard-test-bin-"));
+    const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-clipboard-test-bin-"));
     try {
       fs.writeFileSync(path.join(binDir, "pngpaste"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
       fs.writeFileSync(

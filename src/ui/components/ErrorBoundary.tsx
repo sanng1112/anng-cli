@@ -20,7 +20,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     this.props.onError?.(error);
-    process.stderr.write(`[deepcode] UI Error: ${error.message}\n${info.componentStack ?? ""}\n`);
+    process.stderr.write(`[anng] UI Error: ${error.message}\n${info.componentStack ?? ""}\n`);
   }
 
   render(): React.ReactNode {

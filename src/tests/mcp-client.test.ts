@@ -68,7 +68,7 @@ test("createMcpSpawnSpec quotes Windows args with cmd metacharacters", () => {
 });
 
 test("McpClient starts a PATH-resolved cmd MCP server on Windows", { skip: process.platform !== "win32" }, async () => {
-  const serverDir = mkdtempSync(path.join(tmpdir(), "deepcode-mcp-probe-"));
+  const serverDir = mkdtempSync(path.join(tmpdir(), "anng-mcp-probe-"));
   const originalPath = process.env.PATH;
 
   writeFileSync(path.join(serverDir, "mcp-probe.cmd"), '@echo off\r\nnode "%~dp0mcp-probe-server.cjs"\r\n');

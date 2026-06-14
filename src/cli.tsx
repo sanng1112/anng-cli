@@ -17,26 +17,26 @@ if (args.includes("--version") || args.includes("-v")) {
 if (args.includes("--help") || args.includes("-h")) {
   process.stdout.write(
     [
-      "deepcode - Deep Code CLI",
+      "anng - ANNG CLI CLI",
       "",
       "Usage:",
-      "  deepcode                              Launch the interactive TUI in the current directory",
-      "  deepcode -p <prompt>                  Launch with a pre-filled prompt",
-      "  deepcode --yolo -p <prompt>           Headless mode: auto-accept all permissions",
-      "  deepcode --plan                       Plan mode: ask for confirmation for all tool calls",
-      "  deepcode --yolo --max-turns 10 -p <p> Headless with turn limit",
-      "  deepcode --team -p <prompt>               Team mode: dispatch task to multiple agents",
-      "  deepcode --team --tmux -p <prompt>        Team mode with tmux visual panels",
-      "  deepcode --team --team-workers 8 -p <...>  Team mode with 8 parallel workers",
-      "  deepcode --version                    Print the version",
-      "  deepcode --help                       Show this help",
+      "  anng                              Launch the interactive TUI in the current directory",
+      "  anng -p <prompt>                  Launch with a pre-filled prompt",
+      "  anng --yolo -p <prompt>           Headless mode: auto-accept all permissions",
+      "  anng --plan                       Plan mode: ask for confirmation for all tool calls",
+      "  anng --yolo --max-turns 10 -p <p> Headless with turn limit",
+      "  anng --team -p <prompt>               Team mode: dispatch task to multiple agents",
+      "  anng --team --tmux -p <prompt>        Team mode with tmux visual panels",
+      "  anng --team --team-workers 8 -p <...>  Team mode with 8 parallel workers",
+      "  anng --version                    Print the version",
+      "  anng --help                       Show this help",
       "",
       "Configuration:",
-      "  ~/.deepcode/settings.json    User-level API key, model, base URL",
-      "  ./.deepcode/settings.json    Project-level settings",
-      "  ./.deepcode/skills/*/SKILL.md Project-level native skills",
+      "  ~/.anng/settings.json    User-level API key, model, base URL",
+      "  ./.anng/settings.json    Project-level settings",
+      "  ./.anng/skills/*/SKILL.md Project-level native skills",
       "  ./.agents/skills/*/SKILL.md   Project-level interoperable skills",
-      "  ~/.deepcode/skills/*/SKILL.md User-level native skills",
+      "  ~/.anng/skills/*/SKILL.md User-level native skills",
       "  ~/.agents/skills/*/SKILL.md   User-level interoperable skills",
       "",
       "Inside the TUI:",
@@ -82,7 +82,7 @@ function extractArgValue(args: string[], flag: string): string | undefined {
 }
 
 function loadTaskQueue(rootPath: string): string | undefined {
-  const taskPath = path.join(rootPath, ".deepcode", "memory", "task-queue.md");
+  const taskPath = path.join(rootPath, ".anng", "memory", "task-queue.md");
   try {
     if (fs.existsSync(taskPath)) {
       return `Please process the following persistent task queue:\n\n${fs.readFileSync(taskPath, "utf8")}`;
@@ -116,7 +116,7 @@ const projectRoot = process.cwd();
 configureWindowsShell();
 
 if (!process.stdin.isTTY) {
-  process.stderr.write("deepcode requires an interactive terminal (TTY). " + "Re-run from a real terminal session.\n");
+  process.stderr.write("anng requires an interactive terminal (TTY). " + "Re-run from a real terminal session.\n");
   process.exit(1);
 }
 
@@ -179,7 +179,7 @@ function configureWindowsShell(): void {
     setShellIfWindows();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`deepcode: ${message}\n`);
+    process.stderr.write(`anng: ${message}\n`);
     process.exit(1);
   }
 }
@@ -188,10 +188,10 @@ function readPackageInfo(): PackageInfo {
   try {
     const pkg = require("../package.json") as { name?: unknown; version?: unknown };
     return {
-      name: typeof pkg.name === "string" ? pkg.name : "@vegamo/deepcode-cli",
+      name: typeof pkg.name === "string" ? pkg.name : "anng-cli",
       version: typeof pkg.version === "string" ? pkg.version : "",
     };
   } catch {
-    return { name: "@vegamo/deepcode-cli", version: "" };
+    return { name: "anng-cli", version: "" };
   }
 }

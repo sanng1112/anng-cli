@@ -1,6 +1,6 @@
 # Quick Start
 
-Deep Code is an open-source terminal AI coding assistant optimized for DeepSeek-V4 models, with support for deep thinking, reasoning effort control, and extensibility via Skills and MCP.
+ANNG CLI is an open-source terminal AI coding assistant optimized for DeepSeek-V4 models, with support for deep thinking, reasoning effort control, and extensibility via Skills and MCP.
 
 ## Prerequisites
 
@@ -14,18 +14,18 @@ Before using, ensure your system has:
 Install globally via npm:
 
 ```bash
-npm install -g @vegamo/deepcode-cli
+npm install -g anng-cli
 ```
 
 Verify installation:
 
 ```bash
-deepcode --version
+anng --version
 ```
 
 ## Configure DeepSeek-V4
 
-Deep Code recommends `deepseek-v4-pro` and also supports `deepseek-v4-flash`. Create `~/.deepcode/settings.json` with your DeepSeek model configuration:
+ANNG CLI recommends `deepseek-v4-pro` and also supports `deepseek-v4-flash`. Create `~/.anng/settings.json` with your DeepSeek model configuration:
 
 ```json
 {
@@ -57,19 +57,19 @@ Common fields:
 Navigate to your project directory and run:
 
 ```bash
-deepcode
+anng
 ```
 
 No arguments for interactive mode, use `-p` to submit a prompt directly:
 
 ```bash
-deepcode -p "write a function to sort an array"
+anng -p "write a function to sort an array"
 ```
 
 For headless/CI mode with auto-accept:
 
 ```bash
-deepcode --yolo --max-turns 10 -p "fix the bug in src/index.ts"
+anng --yolo --max-turns 10 -p "fix the bug in src/index.ts"
 ```
 
 ## Common Commands
@@ -113,7 +113,7 @@ All `env.*` fields in `settings.json` can also be set via environment variables,
 Use `--yolo` to auto-accept all tool permissions without prompting. Combine with `--max-turns` to limit conversations:
 
 ```bash
-deepcode --yolo --max-turns 10 -p "run the test suite and fix failures"
+anng --yolo --max-turns 10 -p "run the test suite and fix failures"
 ```
 
 `--yolo` skips all permission prompts (bash commands, file writes, network access). Use with caution in production environments.

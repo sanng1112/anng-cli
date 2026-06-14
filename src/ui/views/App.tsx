@@ -422,7 +422,7 @@ function App({
           });
           let workers: AgentConfig[] | undefined = undefined;
           try {
-            const configPath = path.join(projectRoot, ".deepcode", "team-agents.json");
+            const configPath = path.join(projectRoot, ".anng", "team-agents.json");
             if (fs.existsSync(configPath)) {
               const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
               if (Array.isArray(data) && data.length > 0) {

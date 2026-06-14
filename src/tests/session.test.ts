@@ -52,7 +52,7 @@ test("getProjectCode shortens long project roots for Windows-compatible storage 
 
   const longRoot = path.join(
     os.tmpdir(),
-    "deepcode-project-code-workspace-with-a-long-name-that-would-create-long-git-internal-paths"
+    "anng-project-code-workspace-with-a-long-name-that-would-create-long-git-internal-paths"
   );
   const projectCode = getProjectCode(longRoot);
 
@@ -111,8 +111,8 @@ test("SessionManager preserves structured system content when building OpenAI me
 });
 
 test("SessionManager appends failed background log tail as XML", () => {
-  const workspace = createTempDir("deepcode-background-log-workspace-");
-  const home = createTempDir("deepcode-background-log-home-");
+  const workspace = createTempDir("anng-background-log-workspace-");
+  const home = createTempDir("anng-background-log-home-");
   setHomeDir(home);
   const outputPath = path.join(workspace, "background.log");
   fs.writeFileSync(outputPath, ["before", "failure <line> & one", "failure line two"].join("\n"), "utf8");
@@ -326,12 +326,12 @@ test("SessionManager replays normal assistant messages with reasoning content in
 });
 
 test("SessionManager normalizes legacy sessions without activeTokens to zero", () => {
-  const workspace = createTempDir("deepcode-legacy-active-tokens-workspace-");
-  const home = createTempDir("deepcode-legacy-active-tokens-home-");
+  const workspace = createTempDir("anng-legacy-active-tokens-workspace-");
+  const home = createTempDir("anng-legacy-active-tokens-home-");
   setHomeDir(home);
 
   const projectCode = getProjectCode(workspace);
-  const projectDir = path.join(home, ".deepcode", "projects", projectCode);
+  const projectDir = path.join(home, ".anng", "projects", projectCode);
   fs.mkdirSync(projectDir, { recursive: true });
   fs.writeFileSync(
     path.join(projectDir, "sessions-index.json"),
@@ -358,8 +358,8 @@ test("SessionManager normalizes legacy sessions without activeTokens to zero", (
 });
 
 test("SessionManager keeps usagePerModel null until response usage is available", async () => {
-  const workspace = createTempDir("deepcode-null-usage-per-model-workspace-");
-  const home = createTempDir("deepcode-null-usage-per-model-home-");
+  const workspace = createTempDir("anng-null-usage-per-model-workspace-");
+  const home = createTempDir("anng-null-usage-per-model-home-");
   setHomeDir(home);
 
   const manager = createMockedClientSessionManager(workspace, [{ choices: [{ message: { content: "no usage" } }] }]);
@@ -371,8 +371,8 @@ test("SessionManager keeps usagePerModel null until response usage is available"
 });
 
 test("SessionManager marks skills loaded from existing session messages", async () => {
-  const workspace = createTempDir("deepcode-loaded-skills-workspace-");
-  const home = createTempDir("deepcode-loaded-skills-home-");
+  const workspace = createTempDir("anng-loaded-skills-workspace-");
+  const home = createTempDir("anng-loaded-skills-home-");
   setHomeDir(home);
 
   const skillDir = path.join(home, ".agents", "skills", "lessweb-starter");
@@ -384,7 +384,7 @@ test("SessionManager marks skills loaded from existing session messages", async 
   );
 
   const projectCode = getProjectCode(workspace);
-  const projectDir = path.join(home, ".deepcode", "projects", projectCode);
+  const projectDir = path.join(home, ".anng", "projects", projectCode);
   fs.mkdirSync(projectDir, { recursive: true });
   fs.writeFileSync(
     path.join(projectDir, "loaded-session.jsonl"),
@@ -417,9 +417,9 @@ test("SessionManager marks skills loaded from existing session messages", async 
   assert.equal(loadedSkill?.isLoaded, true);
 });
 
-test("SessionManager lists skills from Deep Code and .agents roots by priority", async () => {
-  const workspace = createTempDir("deepcode-project-skills-workspace-");
-  const home = createTempDir("deepcode-project-skills-home-");
+test("SessionManager lists skills from ANNG CLI and .agents roots by priority", async () => {
+  const workspace = createTempDir("anng-project-skills-workspace-");
+  const home = createTempDir("anng-project-skills-home-");
   setHomeDir(home);
 
   const userSkillDir = path.join(home, ".agents", "skills", "shared");
@@ -430,19 +430,19 @@ test("SessionManager lists skills from Deep Code and .agents roots by priority",
     "utf8"
   );
 
-  const userNativeSkillDir = path.join(home, ".deepcode", "skills", "native-user");
+  const userNativeSkillDir = path.join(home, ".anng", "skills", "native-user");
   fs.mkdirSync(userNativeSkillDir, { recursive: true });
   fs.writeFileSync(
     path.join(userNativeSkillDir, "SKILL.md"),
-    "---\nname: native-user\ndescription: User .deepcode skill\n---\n# Native User\n",
+    "---\nname: native-user\ndescription: User .anng skill\n---\n# Native User\n",
     "utf8"
   );
 
-  const userNativeSharedSkillDir = path.join(home, ".deepcode", "skills", "shared");
+  const userNativeSharedSkillDir = path.join(home, ".anng", "skills", "shared");
   fs.mkdirSync(userNativeSharedSkillDir, { recursive: true });
   fs.writeFileSync(
     path.join(userNativeSharedSkillDir, "SKILL.md"),
-    "---\nname: shared\ndescription: User .deepcode skill\n---\n# Shared\n",
+    "---\nname: shared\ndescription: User .anng skill\n---\n# Shared\n",
     "utf8"
   );
 
@@ -454,11 +454,11 @@ test("SessionManager lists skills from Deep Code and .agents roots by priority",
     "utf8"
   );
 
-  const projectNativeSkillDir = path.join(workspace, ".deepcode", "skills", "shared");
+  const projectNativeSkillDir = path.join(workspace, ".anng", "skills", "shared");
   fs.mkdirSync(projectNativeSkillDir, { recursive: true });
   fs.writeFileSync(
     path.join(projectNativeSkillDir, "SKILL.md"),
-    "---\nname: shared\ndescription: Project .deepcode skill\n---\n# Shared\n",
+    "---\nname: shared\ndescription: Project .anng skill\n---\n# Shared\n",
     "utf8"
   );
 
@@ -467,33 +467,33 @@ test("SessionManager lists skills from Deep Code and .agents roots by priority",
   const nativeUserSkill = skills.find((skill) => skill.name === "native-user");
   const sharedSkill = skills.find((skill) => skill.name === "shared");
 
-  assert.equal(nativeUserSkill?.path, "~/.deepcode/skills/native-user/SKILL.md");
-  assert.equal(nativeUserSkill?.description, "User .deepcode skill");
-  assert.equal(sharedSkill?.path, "./.deepcode/skills/shared/SKILL.md");
-  assert.equal(sharedSkill?.description, "Project .deepcode skill");
+  assert.equal(nativeUserSkill?.path, "~/.anng/skills/native-user/SKILL.md");
+  assert.equal(nativeUserSkill?.description, "User .anng skill");
+  assert.equal(sharedSkill?.path, "./.anng/skills/shared/SKILL.md");
+  assert.equal(sharedSkill?.description, "Project .anng skill");
 });
 
 test("SessionManager lists bundled skills at lowest priority", async () => {
-  const workspace = createTempDir("deepcode-bundled-skills-workspace-");
-  const home = createTempDir("deepcode-bundled-skills-home-");
+  const workspace = createTempDir("anng-bundled-skills-workspace-");
+  const home = createTempDir("anng-bundled-skills-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-bundled-skills");
   const skills = await manager.listSkills();
   const skillWriter = skills.find((skill) => skill.name === "skill-writer");
-  const selfRefer = skills.find((skill) => skill.name === "deepcode-self-refer");
+  const selfRefer = skills.find((skill) => skill.name === "anng-self-refer");
 
   assert.equal(skillWriter?.path, "bundled:skill-writer/SKILL.md");
-  assert.equal(selfRefer?.path, "bundled:deepcode-self-refer/SKILL.md");
+  assert.equal(selfRefer?.path, "bundled:anng-self-refer/SKILL.md");
   assert.match(skillWriter?.description ?? "", /Guide users through creating/);
 });
 
 test("SessionManager lets project skills override bundled skills", async () => {
-  const workspace = createTempDir("deepcode-bundled-override-workspace-");
-  const home = createTempDir("deepcode-bundled-override-home-");
+  const workspace = createTempDir("anng-bundled-override-workspace-");
+  const home = createTempDir("anng-bundled-override-home-");
   setHomeDir(home);
 
-  const projectSkillDir = path.join(workspace, ".deepcode", "skills", "skill-writer");
+  const projectSkillDir = path.join(workspace, ".anng", "skills", "skill-writer");
   fs.mkdirSync(projectSkillDir, { recursive: true });
   fs.writeFileSync(
     path.join(projectSkillDir, "SKILL.md"),
@@ -504,13 +504,13 @@ test("SessionManager lets project skills override bundled skills", async () => {
   const manager = createSessionManager(workspace, "machine-id-bundled-override");
   const skillWriter = (await manager.listSkills()).find((skill) => skill.name === "skill-writer");
 
-  assert.equal(skillWriter?.path, "./.deepcode/skills/skill-writer/SKILL.md");
+  assert.equal(skillWriter?.path, "./.anng/skills/skill-writer/SKILL.md");
   assert.equal(skillWriter?.description, "Project override skill writer");
 });
 
 test("SessionManager resolves bundled skill prompts", () => {
-  const workspace = createTempDir("deepcode-bundled-prompt-workspace-");
-  const home = createTempDir("deepcode-bundled-prompt-home-");
+  const workspace = createTempDir("anng-bundled-prompt-workspace-");
+  const home = createTempDir("anng-bundled-prompt-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-bundled-prompt");
@@ -525,8 +525,8 @@ test("SessionManager resolves bundled skill prompts", () => {
 });
 
 test("SessionManager appends plan mode status whenever the plan skill is selected", async () => {
-  const workspace = createTempDir("deepcode-plan-skill-workspace-");
-  const home = createTempDir("deepcode-plan-skill-home-");
+  const workspace = createTempDir("anng-plan-skill-workspace-");
+  const home = createTempDir("anng-plan-skill-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-plan-skill");
@@ -544,8 +544,8 @@ test("SessionManager appends plan mode status whenever the plan skill is selecte
 });
 
 test("SessionManager appends plan mode status when the plan skill is auto-matched", async () => {
-  const workspace = createTempDir("deepcode-plan-matched-workspace-");
-  const home = createTempDir("deepcode-plan-matched-home-");
+  const workspace = createTempDir("anng-plan-matched-workspace-");
+  const home = createTempDir("anng-plan-matched-home-");
   setHomeDir(home);
 
   const client = {
@@ -569,8 +569,8 @@ test("SessionManager appends plan mode status when the plan skill is auto-matche
 });
 
 test("SessionManager appends plan mode status for deferred permission prompts", async () => {
-  const workspace = createTempDir("deepcode-plan-deferred-workspace-");
-  const home = createTempDir("deepcode-plan-deferred-home-");
+  const workspace = createTempDir("anng-plan-deferred-workspace-");
+  const home = createTempDir("anng-plan-deferred-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-plan-deferred");
@@ -589,8 +589,8 @@ test("SessionManager appends plan mode status for deferred permission prompts", 
 });
 
 test("SessionManager excludes disabled skills by resolved skill name", async () => {
-  const workspace = createTempDir("deepcode-disabled-skills-workspace-");
-  const home = createTempDir("deepcode-disabled-skills-home-");
+  const workspace = createTempDir("anng-disabled-skills-workspace-");
+  const home = createTempDir("anng-disabled-skills-home-");
   setHomeDir(home);
 
   const writeSkill = (root: string, dirName: string, skillName: string): void => {
@@ -604,15 +604,15 @@ test("SessionManager excludes disabled skills by resolved skill name", async () 
   };
 
   for (const root of [
-    path.join(workspace, ".deepcode", "skills"),
+    path.join(workspace, ".anng", "skills"),
     path.join(workspace, ".agents", "skills"),
-    path.join(home, ".deepcode", "skills"),
+    path.join(home, ".anng", "skills"),
     path.join(home, ".agents", "skills"),
   ]) {
     writeSkill(root, "skill-writer", "skill-writer");
   }
-  writeSkill(path.join(workspace, ".deepcode", "skills"), "frontmatter-disabled", "renamed-disabled");
-  writeSkill(path.join(workspace, ".deepcode", "skills"), "enabled-skill", "enabled-skill");
+  writeSkill(path.join(workspace, ".anng", "skills"), "frontmatter-disabled", "renamed-disabled");
+  writeSkill(path.join(workspace, ".anng", "skills"), "enabled-skill", "enabled-skill");
 
   const manager = new SessionManager({
     projectRoot: workspace,
@@ -628,7 +628,7 @@ test("SessionManager excludes disabled skills by resolved skill name", async () 
       enabledSkills: {
         "skill-writer": false,
         "renamed-disabled": false,
-        "deepcode-self-refer": false,
+        "anng-self-refer": false,
         "skill-digester": false,
         plan: false,
         "enabled-skill": true,
@@ -642,12 +642,12 @@ test("SessionManager excludes disabled skills by resolved skill name", async () 
   const skillNames = skills.map((skill) => skill.name);
 
   assert.deepEqual(skillNames, ["enabled-skill"]);
-  assert.equal(skills[0]?.path, "./.deepcode/skills/enabled-skill/SKILL.md");
+  assert.equal(skills[0]?.path, "./.anng/skills/enabled-skill/SKILL.md");
 });
 
 test("SessionManager keeps implicit opt-out skills available for manual invocation", async () => {
-  const workspace = createTempDir("deepcode-manual-only-skill-workspace-");
-  const home = createTempDir("deepcode-manual-only-skill-home-");
+  const workspace = createTempDir("anng-manual-only-skill-workspace-");
+  const home = createTempDir("anng-manual-only-skill-home-");
   setHomeDir(home);
 
   const skillDir = path.join(workspace, ".agents", "skills", "manual-only");
@@ -674,13 +674,13 @@ test("SessionManager keeps implicit opt-out skills available for manual invocati
 });
 
 test("SessionManager excludes implicit opt-out skills from automatic matching candidates", async () => {
-  const workspace = createTempDir("deepcode-implicit-opt-out-workspace-");
-  const home = createTempDir("deepcode-implicit-opt-out-home-");
+  const workspace = createTempDir("anng-implicit-opt-out-workspace-");
+  const home = createTempDir("anng-implicit-opt-out-home-");
   setHomeDir(home);
   globalThis.fetch = (async () => ({ ok: true, text: async () => "" }) as Response) as typeof fetch;
 
   const writeSkill = (name: string, metadata = ""): void => {
-    const skillDir = path.join(workspace, ".deepcode", "skills", name);
+    const skillDir = path.join(workspace, ".anng", "skills", name);
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(
       path.join(skillDir, "SKILL.md"),
@@ -718,7 +718,7 @@ test("SessionManager excludes implicit opt-out skills from automatic matching ca
 });
 
 test("SessionManager dispose disconnects MCP servers", async () => {
-  const workspace = createTempDir("deepcode-mcp-dispose-workspace-");
+  const workspace = createTempDir("anng-mcp-dispose-workspace-");
   const serverPath = path.join(workspace, "mcp-server.cjs");
   fs.writeFileSync(
     serverPath,
@@ -805,7 +805,7 @@ rl.on("line", (line) => {
 });
 
 test("SessionManager exposes MCP tools with API-safe names and preserves original dispatch names", async () => {
-  const workspace = createTempDir("deepcode-mcp-safe-name-workspace-");
+  const workspace = createTempDir("anng-mcp-safe-name-workspace-");
   const serverPath = path.join(workspace, "mcp-invalid-name-server.cjs");
   fs.writeFileSync(
     serverPath,
@@ -868,8 +868,8 @@ test("SessionManager dispose kills live processes without timeout controls", (t)
     return;
   }
 
-  const workspace = createTempDir("deepcode-dispose-process-workspace-");
-  const home = createTempDir("deepcode-dispose-process-home-");
+  const workspace = createTempDir("anng-dispose-process-workspace-");
+  const home = createTempDir("anng-dispose-process-home-");
   setHomeDir(home);
   const manager = createSessionManager(workspace, "machine-id-dispose-process");
   const sessionId = createSessionAndMessages(manager, "session-dispose-process", "Dispose process session");
@@ -897,8 +897,8 @@ test("SessionManager deleteSession ignores persisted processes that are not live
     return;
   }
 
-  const workspace = createTempDir("deepcode-delete-stale-process-workspace-");
-  const home = createTempDir("deepcode-delete-stale-process-home-");
+  const workspace = createTempDir("anng-delete-stale-process-workspace-");
+  const home = createTempDir("anng-delete-stale-process-home-");
   setHomeDir(home);
   const manager = createSessionManager(workspace, "machine-id-delete-stale-process");
   const sessionId = createSessionAndMessages(manager, "session-delete-stale-process", "Delete stale process session");
@@ -924,7 +924,7 @@ test("SessionManager deleteSession ignores persisted processes that are not live
 });
 
 test("SessionManager refreshes cached MCP tool definitions after server crash", async () => {
-  const workspace = createTempDir("deepcode-mcp-crash-cache-workspace-");
+  const workspace = createTempDir("anng-mcp-crash-cache-workspace-");
   const serverPath = path.join(workspace, "mcp-server-crash.cjs");
   fs.writeFileSync(
     serverPath,
@@ -978,7 +978,7 @@ rl.on("line", (line) => {
 });
 
 test("SessionManager reports configured MCP servers as starting before initialization", () => {
-  const workspace = createTempDir("deepcode-mcp-configured-workspace-");
+  const workspace = createTempDir("anng-mcp-configured-workspace-");
   const manager = new SessionManager({
     projectRoot: workspace,
     createOpenAIClient: () => ({
@@ -1012,7 +1012,7 @@ test("SessionManager reports configured MCP servers as starting before initializ
 });
 
 test("SessionManager reports MCP startup stderr on failure", async () => {
-  const workspace = createTempDir("deepcode-mcp-failure-workspace-");
+  const workspace = createTempDir("anng-mcp-failure-workspace-");
   const serverPath = path.join(workspace, "mcp-server-fail.cjs");
   fs.writeFileSync(serverPath, 'process.stderr.write("mcp startup boom"); process.exit(7);', "utf8");
 
@@ -1030,7 +1030,7 @@ test(
   "SessionManager adds -y when launching MCP servers through npx",
   { skip: process.platform === "win32" },
   async () => {
-    const workspace = createTempDir("deepcode-mcp-npx-workspace-");
+    const workspace = createTempDir("anng-mcp-npx-workspace-");
     const argsPath = path.join(workspace, "args.json");
     const fakeNpxPath = path.join(workspace, "npx");
     fs.writeFileSync(
@@ -1073,17 +1073,17 @@ rl.on("line", (line) => {
   }
 );
 
-test("createSession stores /init and sends the active .deepcode project AGENTS path to the LLM", async () => {
-  const workspace = createTempDir("deepcode-init-deepcode-workspace-");
-  const home = createTempDir("deepcode-init-deepcode-home-");
+test("createSession stores /init and sends the active .anng project AGENTS path to the LLM", async () => {
+  const workspace = createTempDir("anng-init-anng-workspace-");
+  const home = createTempDir("anng-init-anng-home-");
   setHomeDir(home);
   globalThis.fetch = (async () => ({ ok: true, text: async () => "" }) as Response) as typeof fetch;
 
-  fs.mkdirSync(path.join(workspace, ".deepcode"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, ".deepcode", "AGENTS.md"), "deepcode project instructions", "utf8");
+  fs.mkdirSync(path.join(workspace, ".anng"), { recursive: true });
+  fs.writeFileSync(path.join(workspace, ".anng", "AGENTS.md"), "anng project instructions", "utf8");
   fs.writeFileSync(path.join(workspace, "AGENTS.md"), "root project instructions", "utf8");
 
-  const manager = createSessionManager(workspace, "machine-id-init-deepcode");
+  const manager = createSessionManager(workspace, "machine-id-init-anng");
   (manager as any).activateSession = async () => {};
 
   const sessionId = await manager.createSession({ text: "/init" });
@@ -1099,15 +1099,15 @@ test("createSession stores /init and sends the active .deepcode project AGENTS p
     .map((message) => message.content ?? "");
 
   assert.equal(userMessage?.content, "/init");
-  assert.match(openAIUserMessage?.content ?? "", /Update \.\/\.deepcode\/AGENTS\.md/);
+  assert.match(openAIUserMessage?.content ?? "", /Update \.\/\.anng\/AGENTS\.md/);
   assert.doesNotMatch(openAIUserMessage?.content ?? "", /Update \.\/AGENTS\.md/);
-  assert.ok(systemContents.includes("deepcode project instructions"));
+  assert.ok(systemContents.includes("anng project instructions"));
   assert.ok(!systemContents.includes("root project instructions"));
 });
 
 test("createSession appends default system prompts in prefix-cache-friendly order", async () => {
-  const workspace = createTempDir("deepcode-system-order-workspace-");
-  const home = createTempDir("deepcode-system-order-home-");
+  const workspace = createTempDir("anng-system-order-workspace-");
+  const home = createTempDir("anng-system-order-home-");
   setHomeDir(home);
   globalThis.fetch = (async () => ({ ok: true, text: async () => "" }) as Response) as typeof fetch;
 
@@ -1140,14 +1140,14 @@ test("createSession appends default system prompts in prefix-cache-friendly orde
 });
 
 test("createSession includes agent instructions in the skill matching system prompt", async () => {
-  const workspace = createTempDir("deepcode-skill-match-create-workspace-");
-  const home = createTempDir("deepcode-skill-match-create-home-");
+  const workspace = createTempDir("anng-skill-match-create-workspace-");
+  const home = createTempDir("anng-skill-match-create-home-");
   setHomeDir(home);
   globalThis.fetch = (async () => ({ ok: true, text: async () => "" }) as Response) as typeof fetch;
 
-  fs.mkdirSync(path.join(workspace, ".deepcode"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, ".deepcode", "AGENTS.md"), "prefer project-specific skill matching", "utf8");
-  const skillDir = path.join(workspace, ".deepcode", "skills", "project-aware");
+  fs.mkdirSync(path.join(workspace, ".anng"), { recursive: true });
+  fs.writeFileSync(path.join(workspace, ".anng", "AGENTS.md"), "prefer project-specific skill matching", "utf8");
+  const skillDir = path.join(workspace, ".anng", "skills", "project-aware");
   fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(
     path.join(skillDir, "SKILL.md"),
@@ -1181,8 +1181,8 @@ test("createSession includes agent instructions in the skill matching system pro
 });
 
 test("replySession includes current agent instructions in the skill matching system prompt", async () => {
-  const workspace = createTempDir("deepcode-skill-match-reply-workspace-");
-  const home = createTempDir("deepcode-skill-match-reply-home-");
+  const workspace = createTempDir("anng-skill-match-reply-workspace-");
+  const home = createTempDir("anng-skill-match-reply-home-");
   setHomeDir(home);
   globalThis.fetch = (async () => ({ ok: true, text: async () => "" }) as Response) as typeof fetch;
 
@@ -1222,8 +1222,8 @@ test("replySession includes current agent instructions in the skill matching sys
 });
 
 test("replySession stores /init and sends the active root project AGENTS path to the LLM", async () => {
-  const workspace = createTempDir("deepcode-init-root-workspace-");
-  const home = createTempDir("deepcode-init-root-home-");
+  const workspace = createTempDir("anng-init-root-workspace-");
+  const home = createTempDir("anng-init-root-home-");
   setHomeDir(home);
   globalThis.fetch = (async () => ({ ok: true, text: async () => "" }) as Response) as typeof fetch;
 
@@ -1249,13 +1249,13 @@ test("replySession stores /init and sends the active root project AGENTS path to
 });
 
 test("createSession stores /init and sends generate prompt when no project AGENTS file is effective", async () => {
-  const workspace = createTempDir("deepcode-init-generate-workspace-");
-  const home = createTempDir("deepcode-init-generate-home-");
+  const workspace = createTempDir("anng-init-generate-workspace-");
+  const home = createTempDir("anng-init-generate-home-");
   setHomeDir(home);
   globalThis.fetch = (async () => ({ ok: true, text: async () => "" }) as Response) as typeof fetch;
 
-  fs.mkdirSync(path.join(home, ".deepcode"), { recursive: true });
-  fs.writeFileSync(path.join(home, ".deepcode", "AGENTS.md"), "user instructions", "utf8");
+  fs.mkdirSync(path.join(home, ".anng"), { recursive: true });
+  fs.writeFileSync(path.join(home, ".anng", "AGENTS.md"), "user instructions", "utf8");
 
   const manager = createSessionManager(workspace, "machine-id-init-generate");
   (manager as any).activateSession = async () => {};
@@ -1275,8 +1275,8 @@ test("createSession stores /init and sends generate prompt when no project AGENT
 });
 
 test("createSession reports a new prompt with the machineId token", async () => {
-  const workspace = createTempDir("deepcode-session-workspace-");
-  const home = createTempDir("deepcode-session-home-");
+  const workspace = createTempDir("anng-session-workspace-");
+  const home = createTempDir("anng-session-home-");
   setHomeDir(home);
 
   const fetchCalls: Array<{ input: string | URL; init?: RequestInit }> = [];
@@ -1300,7 +1300,7 @@ test("createSession reports a new prompt with the machineId token", async () => 
   assert.equal(activatedSessionIds.length, 1);
   assert.equal(activatedSessionIds[0], sessionId);
   assert.equal(fetchCalls.length, 1);
-  assert.equal(String(fetchCalls[0].input), "https://deepcode.vegamo.cn/api/plugin/new");
+  assert.equal(String(fetchCalls[0].input), "https://anng.vegamo.cn/api/plugin/new");
   assert.equal(fetchCalls[0].init?.method, "POST");
   assert.ok(fetchCalls[0].init?.signal instanceof AbortSignal);
   assert.deepEqual(JSON.parse(String(fetchCalls[0].init?.body)), {});
@@ -1308,8 +1308,8 @@ test("createSession reports a new prompt with the machineId token", async () => 
 });
 
 test("replySession reports a new prompt with the machineId token", async () => {
-  const workspace = createTempDir("deepcode-reply-workspace-");
-  const home = createTempDir("deepcode-reply-home-");
+  const workspace = createTempDir("anng-reply-workspace-");
+  const home = createTempDir("anng-reply-home-");
   setHomeDir(home);
 
   const fetchCalls: Array<{ input: string | URL; init?: RequestInit }> = [];
@@ -1332,7 +1332,7 @@ test("replySession reports a new prompt with the machineId token", async () => {
   await flushPromises();
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(String(fetchCalls[0].input), "https://deepcode.vegamo.cn/api/plugin/new");
+  assert.equal(String(fetchCalls[0].input), "https://anng.vegamo.cn/api/plugin/new");
   assert.equal(fetchCalls[0].init?.method, "POST");
   assert.ok(fetchCalls[0].init?.signal instanceof AbortSignal);
   assert.deepEqual(JSON.parse(String(fetchCalls[0].init?.body)), {});
@@ -1340,8 +1340,8 @@ test("replySession reports a new prompt with the machineId token", async () => {
 });
 
 test("reporting a new prompt does not warn when the background request fails", async () => {
-  const workspace = createTempDir("deepcode-report-failure-workspace-");
-  const home = createTempDir("deepcode-report-failure-home-");
+  const workspace = createTempDir("anng-report-failure-workspace-");
+  const home = createTempDir("anng-report-failure-home-");
   setHomeDir(home);
 
   const warnings: unknown[][] = [];
@@ -1365,8 +1365,8 @@ test(
   "SessionManager notifies successful completion with session context",
   { skip: process.platform === "win32" },
   async () => {
-    const workspace = createTempDir("deepcode-notify-success-workspace-");
-    const home = createTempDir("deepcode-notify-success-home-");
+    const workspace = createTempDir("anng-notify-success-workspace-");
+    const home = createTempDir("anng-notify-success-home-");
     setHomeDir(home);
 
     const notifyOutput = path.join(workspace, "notify.jsonl");
@@ -1393,8 +1393,8 @@ test(
   "SessionManager notifies failed completion with failure context",
   { skip: process.platform === "win32" },
   async () => {
-    const workspace = createTempDir("deepcode-notify-failure-workspace-");
-    const home = createTempDir("deepcode-notify-failure-home-");
+    const workspace = createTempDir("anng-notify-failure-workspace-");
+    const home = createTempDir("anng-notify-failure-home-");
     setHomeDir(home);
 
     const notifyOutput = path.join(workspace, "notify.jsonl");
@@ -1424,8 +1424,8 @@ test(
 );
 
 test("replySession continues without appending /continue as a user message", async () => {
-  const workspace = createTempDir("deepcode-continue-workspace-");
-  const home = createTempDir("deepcode-continue-home-");
+  const workspace = createTempDir("anng-continue-workspace-");
+  const home = createTempDir("anng-continue-home-");
   setHomeDir(home);
 
   const fetchCalls: Array<{ input: string | URL; init?: RequestInit }> = [];
@@ -1471,8 +1471,8 @@ test("replySession records the current file-history branch head as checkpointHas
     return;
   }
 
-  const workspace = createTempDir("deepcode-checkpoint-hash-workspace-");
-  const home = createTempDir("deepcode-checkpoint-hash-home-");
+  const workspace = createTempDir("anng-checkpoint-hash-workspace-");
+  const home = createTempDir("anng-checkpoint-hash-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-checkpoint-hash");
@@ -1493,8 +1493,8 @@ test("createSession initializes file-history repo and session branch", async (t)
     return;
   }
 
-  const workspace = createTempDir("deepcode-file-history-init-workspace-");
-  const home = createTempDir("deepcode-file-history-init-home-");
+  const workspace = createTempDir("anng-file-history-init-workspace-");
+  const home = createTempDir("anng-file-history-init-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-file-history-init");
@@ -1502,7 +1502,7 @@ test("createSession initializes file-history repo and session branch", async (t)
 
   const sessionId = await manager.createSession({ text: "first prompt" });
   const userMessage = manager.listSessionMessages(sessionId).find((message) => message.role === "user");
-  const gitDir = path.join(home, ".deepcode", "projects", getProjectCode(workspace), "file-history", ".git");
+  const gitDir = path.join(home, ".anng", "projects", getProjectCode(workspace), "file-history", ".git");
 
   assert.ok(fs.existsSync(gitDir));
   assert.ok(userMessage?.checkpointHash);
@@ -1518,8 +1518,8 @@ test("createSession initializes an empty file-history manifest without scanning 
     return;
   }
 
-  const workspace = createTempDir("deepcode-file-history-empty-init-workspace-");
-  const home = createTempDir("deepcode-file-history-empty-init-home-");
+  const workspace = createTempDir("anng-file-history-empty-init-workspace-");
+  const home = createTempDir("anng-file-history-empty-init-home-");
   setHomeDir(home);
   fs.writeFileSync(path.join(workspace, "unrelated.txt"), "keep me\n", "utf8");
   fs.mkdirSync(path.join(workspace, "nested"));
@@ -1542,8 +1542,8 @@ test("replySession snapshots manual edits to tracked files before appending the 
     return;
   }
 
-  const workspace = createTempDir("deepcode-prompt-checkpoint-manual-edit-workspace-");
-  const home = createTempDir("deepcode-prompt-checkpoint-manual-edit-home-");
+  const workspace = createTempDir("anng-prompt-checkpoint-manual-edit-workspace-");
+  const home = createTempDir("anng-prompt-checkpoint-manual-edit-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "hello_world.py");
@@ -1580,8 +1580,8 @@ test("replySession inserts hidden system notice for manually changed tracked fil
     return;
   }
 
-  const workspace = createTempDir("deepcode-manual-change-notice-workspace-");
-  const home = createTempDir("deepcode-manual-change-notice-home-");
+  const workspace = createTempDir("anng-manual-change-notice-workspace-");
+  const home = createTempDir("anng-manual-change-notice-home-");
   setHomeDir(home);
 
   const firstPath = path.join(workspace, "a.txt");
@@ -1616,8 +1616,8 @@ test("replySession does not insert manual-change notice when tracked files are u
     return;
   }
 
-  const workspace = createTempDir("deepcode-no-manual-change-notice-workspace-");
-  const home = createTempDir("deepcode-no-manual-change-notice-home-");
+  const workspace = createTempDir("anng-no-manual-change-notice-workspace-");
+  const home = createTempDir("anng-no-manual-change-notice-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "tracked.txt");
@@ -1648,8 +1648,8 @@ test("replySession reports manual deletion of a tracked file", async (t) => {
     return;
   }
 
-  const workspace = createTempDir("deepcode-manual-delete-notice-workspace-");
-  const home = createTempDir("deepcode-manual-delete-notice-home-");
+  const workspace = createTempDir("anng-manual-delete-notice-workspace-");
+  const home = createTempDir("anng-manual-delete-notice-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "deleted.txt");
@@ -1680,8 +1680,8 @@ test("replySession ignores manually created untracked files", async (t) => {
     return;
   }
 
-  const workspace = createTempDir("deepcode-untracked-manual-file-workspace-");
-  const home = createTempDir("deepcode-untracked-manual-file-home-");
+  const workspace = createTempDir("anng-untracked-manual-file-workspace-");
+  const home = createTempDir("anng-untracked-manual-file-home-");
   setHomeDir(home);
 
   const trackedPath = path.join(workspace, "tracked.txt");
@@ -1714,8 +1714,8 @@ test("replySession does not insert manual-change notice for /continue", async (t
     return;
   }
 
-  const workspace = createTempDir("deepcode-continue-no-manual-change-notice-workspace-");
-  const home = createTempDir("deepcode-continue-no-manual-change-notice-home-");
+  const workspace = createTempDir("anng-continue-no-manual-change-notice-workspace-");
+  const home = createTempDir("anng-continue-no-manual-change-notice-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "tracked.txt");
@@ -1747,8 +1747,8 @@ test("replySession does not insert manual-change notice for permission-only repl
     return;
   }
 
-  const workspace = createTempDir("deepcode-permission-no-manual-change-notice-workspace-");
-  const home = createTempDir("deepcode-permission-no-manual-change-notice-home-");
+  const workspace = createTempDir("anng-permission-no-manual-change-notice-workspace-");
+  const home = createTempDir("anng-permission-no-manual-change-notice-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "tracked.txt");
@@ -1793,8 +1793,8 @@ test("Write tool advances file-history while preserving the user prompt checkpoi
     return;
   }
 
-  const workspace = createTempDir("deepcode-write-checkpoint-workspace-");
-  const home = createTempDir("deepcode-write-checkpoint-home-");
+  const workspace = createTempDir("anng-write-checkpoint-workspace-");
+  const home = createTempDir("anng-write-checkpoint-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "index.html");
@@ -1837,9 +1837,9 @@ test("Write checkpoints restore tool-touched files outside the workspace and lea
     return;
   }
 
-  const workspace = createTempDir("deepcode-write-outside-workspace-");
-  const outsideDir = createTempDir("deepcode-write-outside-target-");
-  const home = createTempDir("deepcode-write-outside-home-");
+  const workspace = createTempDir("anng-write-outside-workspace-");
+  const outsideDir = createTempDir("anng-write-outside-target-");
+  const home = createTempDir("anng-write-outside-home-");
   setHomeDir(home);
 
   const outsideFilePath = path.join(outsideDir, "outside.txt");
@@ -1880,8 +1880,8 @@ test("Write checkpoints restore tool-touched files outside the workspace and lea
 });
 
 test("missing git executable does not block sessions or Write tool calls", async () => {
-  const workspace = createTempDir("deepcode-no-git-write-workspace-");
-  const home = createTempDir("deepcode-no-git-write-home-");
+  const workspace = createTempDir("anng-no-git-write-workspace-");
+  const home = createTempDir("anng-no-git-write-home-");
   setHomeDir(home);
 
   const originalPath = process.env.PATH;
@@ -1927,8 +1927,8 @@ test("missing git executable does not block sessions or Write tool calls", async
 });
 
 test("restoreSessionConversation truncates messages before the selected user prompt", async () => {
-  const workspace = createTempDir("deepcode-undo-conversation-workspace-");
-  const home = createTempDir("deepcode-undo-conversation-home-");
+  const workspace = createTempDir("anng-undo-conversation-workspace-");
+  const home = createTempDir("anng-undo-conversation-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-undo-conversation");
@@ -1962,8 +1962,8 @@ test("restoreSessionCode restores project files from the recorded Git checkpoint
     return;
   }
 
-  const workspace = createTempDir("deepcode-undo-code-workspace-");
-  const home = createTempDir("deepcode-undo-code-home-");
+  const workspace = createTempDir("anng-undo-code-workspace-");
+  const home = createTempDir("anng-undo-code-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-undo-code");
@@ -1992,8 +1992,8 @@ test("restoreSessionCode preserves files that predate their first tracked mutati
     return;
   }
 
-  const workspace = createTempDir("deepcode-undo-preexisting-files-workspace-");
-  const home = createTempDir("deepcode-undo-preexisting-files-home-");
+  const workspace = createTempDir("anng-undo-preexisting-files-workspace-");
+  const home = createTempDir("anng-undo-preexisting-files-home-");
   setHomeDir(home);
 
   const readmePath = path.join(workspace, "README.md");
@@ -2040,8 +2040,8 @@ test("restoreSessionCode restores deleted tracked files and leaves unrelated fil
     return;
   }
 
-  const workspace = createTempDir("deepcode-undo-deleted-files-workspace-");
-  const home = createTempDir("deepcode-undo-deleted-files-home-");
+  const workspace = createTempDir("anng-undo-deleted-files-workspace-");
+  const home = createTempDir("anng-undo-deleted-files-home-");
   setHomeDir(home);
 
   const trackedPath = path.join(workspace, "tracked.txt");
@@ -2072,8 +2072,8 @@ test("restoreSessionCode restores deleted tracked files and leaves unrelated fil
 });
 
 test("replySession /continue runs trailing pending tool calls before requesting another response", async () => {
-  const workspace = createTempDir("deepcode-continue-tool-workspace-");
-  const home = createTempDir("deepcode-continue-tool-home-");
+  const workspace = createTempDir("anng-continue-tool-workspace-");
+  const home = createTempDir("anng-continue-tool-home-");
   setHomeDir(home);
 
   const responses = [
@@ -2124,8 +2124,8 @@ test("replySession /continue runs trailing pending tool calls before requesting 
 });
 
 test("replySession rebuilds snippet state from persisted read history before editing", async () => {
-  const workspace = createTempDir("deepcode-rebuild-snippet-workspace-");
-  const home = createTempDir("deepcode-rebuild-snippet-home-");
+  const workspace = createTempDir("anng-rebuild-snippet-workspace-");
+  const home = createTempDir("anng-rebuild-snippet-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "note.txt");
@@ -2193,8 +2193,8 @@ test("replySession rebuilds snippet state from persisted read history before edi
 });
 
 test("activateSession pauses for permission when a tool call requires ask", async () => {
-  const workspace = createTempDir("deepcode-permission-ask-workspace-");
-  const home = createTempDir("deepcode-permission-ask-home-");
+  const workspace = createTempDir("anng-permission-ask-workspace-");
+  const home = createTempDir("anng-permission-ask-home-");
   setHomeDir(home);
 
   const manager = createPermissionSessionManager(
@@ -2250,8 +2250,8 @@ test("activateSession pauses for permission when a tool call requires ask", asyn
 });
 
 test("SessionManager preserves permission_denied status when sessions are reloaded", async () => {
-  const workspace = createTempDir("deepcode-permission-denied-workspace-");
-  const home = createTempDir("deepcode-permission-denied-home-");
+  const workspace = createTempDir("anng-permission-denied-workspace-");
+  const home = createTempDir("anng-permission-denied-home-");
   setHomeDir(home);
 
   const permissions = {
@@ -2301,8 +2301,8 @@ test("SessionManager preserves permission_denied status when sessions are reload
 });
 
 test("replySession applies permission replies, runs pending tools, and stores always allow scopes", async () => {
-  const workspace = createTempDir("deepcode-permission-allow-workspace-");
-  const home = createTempDir("deepcode-permission-allow-home-");
+  const workspace = createTempDir("anng-permission-allow-workspace-");
+  const home = createTempDir("anng-permission-allow-home-");
   setHomeDir(home);
   fs.writeFileSync(path.join(workspace, "note.txt"), "allowed content\n", "utf8");
 
@@ -2342,7 +2342,7 @@ test("replySession applies permission replies, runs pending tools, and stores al
   });
 
   const toolMessage = manager.listSessionMessages(sessionId).find((message) => message.role === "tool");
-  const settings = JSON.parse(fs.readFileSync(path.join(workspace, ".deepcode", "settings.json"), "utf8"));
+  const settings = JSON.parse(fs.readFileSync(path.join(workspace, ".anng", "settings.json"), "utf8"));
 
   assert.match(toolMessage?.content ?? "", /allowed content/);
   assert.deepEqual(settings.permissions.allow, ["read-in-cwd"]);
@@ -2350,8 +2350,8 @@ test("replySession applies permission replies, runs pending tools, and stores al
 });
 
 test("replySession turns denied permission replies into tool errors before appending user text", async () => {
-  const workspace = createTempDir("deepcode-permission-deny-workspace-");
-  const home = createTempDir("deepcode-permission-deny-home-");
+  const workspace = createTempDir("anng-permission-deny-workspace-");
+  const home = createTempDir("anng-permission-deny-home-");
   setHomeDir(home);
 
   const manager = createPermissionSessionManager(
@@ -2400,8 +2400,8 @@ test("replySession turns denied permission replies into tool errors before appen
 });
 
 test("replySession preserves raw session messages when a previous tool call is pending", async () => {
-  const workspace = createTempDir("deepcode-pending-tool-workspace-");
-  const home = createTempDir("deepcode-pending-tool-home-");
+  const workspace = createTempDir("anng-pending-tool-workspace-");
+  const home = createTempDir("anng-pending-tool-home-");
   setHomeDir(home);
 
   globalThis.fetch = (async () =>
@@ -2758,8 +2758,8 @@ test("Write tool params prefer file_path even when content appears first", () =>
 });
 
 test("LLM tool calls without ids receive generated 32 character ids", async () => {
-  const workspace = createTempDir("deepcode-tool-call-id-workspace-");
-  const home = createTempDir("deepcode-tool-call-id-home-");
+  const workspace = createTempDir("anng-tool-call-id-workspace-");
+  const home = createTempDir("anng-tool-call-id-home-");
   setHomeDir(home);
 
   const filePath = path.join(workspace, "note.txt");
@@ -2924,8 +2924,8 @@ test("buildOpenAIMessages ignores tool messages that appear before their assista
 });
 
 test("SessionManager accumulates response usage while active tokens track the latest response", async () => {
-  const workspace = createTempDir("deepcode-usage-workspace-");
-  const home = createTempDir("deepcode-usage-home-");
+  const workspace = createTempDir("anng-usage-workspace-");
+  const home = createTempDir("anng-usage-home-");
   setHomeDir(home);
 
   const responses = [
@@ -2975,8 +2975,8 @@ test("SessionManager accumulates response usage while active tokens track the la
 });
 
 test("SessionManager stores usage per model across model changes", async () => {
-  const workspace = createTempDir("deepcode-usage-per-model-workspace-");
-  const home = createTempDir("deepcode-usage-per-model-home-");
+  const workspace = createTempDir("anng-usage-per-model-workspace-");
+  const home = createTempDir("anng-usage-per-model-home-");
   setHomeDir(home);
 
   let currentModel = "deepseek-v4-pro";
@@ -3039,8 +3039,8 @@ test("SessionManager stores usage per model across model changes", async () => {
 });
 
 test("SessionManager active tokens reflect latest response usage with tokenizer-based compaction", async () => {
-  const workspace = createTempDir("deepcode-compact-usage-workspace-");
-  const home = createTempDir("deepcode-compact-usage-home-");
+  const workspace = createTempDir("anng-compact-usage-workspace-");
+  const home = createTempDir("anng-compact-usage-home-");
   setHomeDir(home);
 
   const responses = [
@@ -3073,8 +3073,8 @@ test("SessionManager active tokens reflect latest response usage with tokenizer-
 });
 
 test("SessionManager streams chat completions and counts reasoning progress", async () => {
-  const workspace = createTempDir("deepcode-stream-workspace-");
-  const home = createTempDir("deepcode-stream-home-");
+  const workspace = createTempDir("anng-stream-workspace-");
+  const home = createTempDir("anng-stream-home-");
   setHomeDir(home);
 
   const progressEvents: Array<{
@@ -3142,8 +3142,8 @@ test("SessionManager streams chat completions and counts reasoning progress", as
 });
 
 test("SessionManager persists session and user message before skill matching is cancelled", async () => {
-  const workspace = createTempDir("deepcode-skill-abort-workspace-");
-  const home = createTempDir("deepcode-skill-abort-home-");
+  const workspace = createTempDir("anng-skill-abort-workspace-");
+  const home = createTempDir("anng-skill-abort-home-");
   setHomeDir(home);
 
   const skillDir = path.join(home, ".agents", "skills", "demo");
@@ -3181,8 +3181,8 @@ test("SessionManager persists session and user message before skill matching is 
 });
 
 test("SessionManager treats OpenAI APIUserAbortError as interrupted", async () => {
-  const workspace = createTempDir("deepcode-api-abort-workspace-");
-  const home = createTempDir("deepcode-api-abort-home-");
+  const workspace = createTempDir("anng-api-abort-workspace-");
+  const home = createTempDir("anng-api-abort-home-");
   setHomeDir(home);
 
   let manager: SessionManager;
@@ -3228,7 +3228,7 @@ test("SessionManager treats OpenAI APIUserAbortError as interrupted", async () =
 });
 
 test("SessionManager marks MCP server as failed on single failed attempt (no auto-retry)", async () => {
-  const workspace = createTempDir("deepcode-mcp-fail-noworkspace-");
+  const workspace = createTempDir("anng-mcp-fail-noworkspace-");
   const serverPath = path.join(workspace, "mcp-server-fail.cjs");
   fs.writeFileSync(serverPath, "process.exit(7);", "utf8");
 
@@ -3244,7 +3244,7 @@ test("SessionManager marks MCP server as failed on single failed attempt (no aut
 });
 
 test("SessionManager reconnect succeeds on previously failed server", async () => {
-  const workspace = createTempDir("deepcode-mcp-reconn-ok-workspace-");
+  const workspace = createTempDir("anng-mcp-reconn-ok-workspace-");
   const serverPath = path.join(workspace, "mcp-server-ok.cjs");
   fs.writeFileSync(
     serverPath,
@@ -3283,8 +3283,8 @@ rl.on("line", (line) => {
 });
 
 test("SessionManager adjusts the active Bash timeout control and session metadata", async () => {
-  const workspace = createTempDir("deepcode-bash-timeout-session-");
-  const home = createTempDir("deepcode-bash-timeout-home-");
+  const workspace = createTempDir("anng-bash-timeout-session-");
+  const home = createTempDir("anng-bash-timeout-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "");
@@ -3320,8 +3320,8 @@ test("SessionManager adjusts the active Bash timeout control and session metadat
 });
 
 test("SessionManager.deleteSession removes session entry from the index", () => {
-  const workspace = createTempDir("deepcode-delete-workspace-");
-  const home = createTempDir("deepcode-delete-home-");
+  const workspace = createTempDir("anng-delete-workspace-");
+  const home = createTempDir("anng-delete-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-delete");
@@ -3343,15 +3343,15 @@ test("SessionManager.deleteSession removes session entry from the index", () => 
 });
 
 test("SessionManager.deleteSession removes the messages file", () => {
-  const workspace = createTempDir("deepcode-delete-msg-workspace-");
-  const home = createTempDir("deepcode-delete-msg-home-");
+  const workspace = createTempDir("anng-delete-msg-workspace-");
+  const home = createTempDir("anng-delete-msg-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-delete-msg");
   (manager as any).activateSession = async () => {};
 
   const sessionId = createSessionAndMessages(manager, "session-delete-msg", "Test session");
-  const messagePath = path.join(home, ".deepcode", "projects", getProjectCode(workspace), `${sessionId}.jsonl`);
+  const messagePath = path.join(home, ".anng", "projects", getProjectCode(workspace), `${sessionId}.jsonl`);
 
   // Verify messages file exists
   assert.ok(fs.existsSync(messagePath));
@@ -3363,8 +3363,8 @@ test("SessionManager.deleteSession removes the messages file", () => {
 });
 
 test("SessionManager.deleteSession returns false when session does not exist", () => {
-  const workspace = createTempDir("deepcode-delete-nonexist-workspace-");
-  const home = createTempDir("deepcode-delete-nonexist-home-");
+  const workspace = createTempDir("anng-delete-nonexist-workspace-");
+  const home = createTempDir("anng-delete-nonexist-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-delete-nonexist");
@@ -3375,8 +3375,8 @@ test("SessionManager.deleteSession returns false when session does not exist", (
 });
 
 test("SessionManager.deleteSession does not affect other sessions", () => {
-  const workspace = createTempDir("deepcode-delete-others-workspace-");
-  const home = createTempDir("deepcode-delete-others-home-");
+  const workspace = createTempDir("anng-delete-others-workspace-");
+  const home = createTempDir("anng-delete-others-home-");
   setHomeDir(home);
 
   const manager = createSessionManager(workspace, "machine-id-delete-others");
@@ -3458,7 +3458,7 @@ function createFileHistoryCommit(
   files: Record<string, string>
 ): string {
   const projectCode = getProjectCode(workspace);
-  const gitDir = path.join(home, ".deepcode", "projects", projectCode, "file-history", ".git");
+  const gitDir = path.join(home, ".anng", "projects", projectCode, "file-history", ".git");
   const fileHistory = new GitFileHistory(workspace, gitDir);
   fileHistory.ensureSession(sessionId);
 
@@ -3476,13 +3476,13 @@ function createFileHistoryCommit(
 
 function getFileHistoryGitDir(home: string, workspace: string): string {
   const projectCode = getProjectCode(workspace);
-  return path.join(home, ".deepcode", "projects", projectCode, "file-history", ".git");
+  return path.join(home, ".anng", "projects", projectCode, "file-history", ".git");
 }
 
 function readFileHistoryManifest(home: string, workspace: string, checkpointHash: string): any {
   const gitDir = getFileHistoryGitDir(home, workspace);
   return JSON.parse(
-    runFileHistoryGit(gitDir, workspace, ["cat-file", "blob", `${checkpointHash}:.deepcode-file-history.json`])
+    runFileHistoryGit(gitDir, workspace, ["cat-file", "blob", `${checkpointHash}:.anng-file-history.json`])
   );
 }
 

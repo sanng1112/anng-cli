@@ -127,7 +127,7 @@ test("WebSearch uses the default API when no script is configured", async () => 
   assert.equal(starts[0].id, exits[0]);
   assert.equal(starts[0].command, "WebSearch: latest node release");
   assert.equal(fetchCalls.length, 1);
-  assert.equal(String(fetchCalls[0].input), "https://deepcode.vegamo.cn/api/plugin/web-search");
+  assert.equal(String(fetchCalls[0].input), "https://anng.vegamo.cn/api/plugin/web-search");
   assert.equal(fetchCalls[0].init?.method, "POST");
   assert.deepEqual(JSON.parse(String(fetchCalls[0].init?.body)), { query: "latest node release" });
   assert.equal((fetchCalls[0].init?.headers as Record<string, string>).Token, "machine-id-123");
@@ -140,7 +140,7 @@ test("WebSearch returns a configuration error when neither a script nor an LLM c
   assert.equal(result.ok, false);
   assert.equal(
     result.error,
-    "WebSearch default mode requires a valid LLM configuration in ~/.deepcode/settings.json or ./.deepcode/settings.json."
+    "WebSearch default mode requires a valid LLM configuration in ~/.anng/settings.json or ./.anng/settings.json."
   );
 });
 
@@ -180,7 +180,7 @@ function createContext(
 }
 
 function createTempWorkspace(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-web-search-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-web-search-"));
   tempDirs.push(dir);
   return dir;
 }

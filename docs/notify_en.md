@@ -1,10 +1,10 @@
-# Deep Code Task Completion Notification
+# ANNG CLI Task Completion Notification
 
-When the AI assistant finishes a round of tasks, Deep Code can automatically execute a notification script to send task results to your chosen channel (Slack, system notifications, etc.).
+When the AI assistant finishes a round of tasks, ANNG CLI can automatically execute a notification script to send task results to your chosen channel (Slack, system notifications, etc.).
 
 ## How It Works
 
-Configure the `notify` field in `settings.json` with the full path to an executable script. Every time the AI assistant completes a task response, Deep Code executes that script and injects context as environment variables.
+Configure the `notify` field in `settings.json` with the full path to an executable script. Every time the AI assistant completes a task response, ANNG CLI executes that script and injects context as environment variables.
 
 ## Injected Environment Variables
 
@@ -18,7 +18,7 @@ Configure the `notify` field in `settings.json` with the full path to an executa
 
 ## Configuration
 
-Edit `~/.deepcode/settings.json` and add the `notify` field:
+Edit `~/.anng/settings.json` and add the `notify` field:
 
 ```json
 {
@@ -43,7 +43,7 @@ You can also configure custom environment variables for the notify script in `en
     "API_KEY": "sk-...",
     "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/*****/****/**********"
   },
-  "notify": "/Users/you/.deepcode/notify-slack.sh"
+  "notify": "/Users/you/.anng/notify-slack.sh"
 }
 ```
 
@@ -58,7 +58,7 @@ These `env` variables are injected into the script's execution environment.
 
 ### 2. Create the Notification Script
 
-Create `~/.deepcode/notify-slack.sh`:
+Create `~/.anng/notify-slack.sh`:
 
 ```bash
 #!/usr/bin/env bash
@@ -68,14 +68,14 @@ BRANCH=$(git branch --show-current 2>/dev/null)
 curl -X POST "$SLACK_WEBHOOK_URL" \
   -H "Content-type: application/json" \
   --data "{
-      \"text\": \"✅ Deep Code task completed\n · cwd: $CURRENT_DIR\n · Branch: $BRANCH\n · Duration: $DURATION s\"
+      \"text\": \"✅ ANNG CLI task completed\n · cwd: $CURRENT_DIR\n · Branch: $BRANCH\n · Duration: $DURATION s\"
   }"
 ```
 
 Make the script executable:
 
 ```bash
-chmod +x ~/.deepcode/notify-slack.sh
+chmod +x ~/.anng/notify-slack.sh
 ```
 
 ### 3. Configure settings.json
@@ -85,7 +85,7 @@ chmod +x ~/.deepcode/notify-slack.sh
   "env": {
     "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/*****/****/**********"
   },
-  "notify": "/Users/you/.deepcode/notify-slack.sh"
+  "notify": "/Users/you/.anng/notify-slack.sh"
 }
 ```
 
@@ -108,7 +108,7 @@ PAYLOAD=$(node -e "
 process.stdout.write(JSON.stringify({
   msg_type: 'interactive',
   card: {
-    header: { title: { tag: 'plain_text', content: 'DeepCode: ' + process.env.TITLE + ' ' + process.env.STATUS + ' [' + process.env.DURATION + 's]' } },
+    header: { title: { tag: 'plain_text', content: 'ANNG CLI: ' + process.env.TITLE + ' ' + process.env.STATUS + ' [' + process.env.DURATION + 's]' } },
     elements: [{ tag: 'markdown', content: (process.env.BODY || '').slice(0, 2000) || '(no output)' }]
   }
 }))
@@ -124,7 +124,7 @@ curl -s -X POST "$WEBHOOK_URL" \
   "env": {
     "WEBHOOK_URL": "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxxxx"
   },
-  "notify": "/Users/you/.deepcode/notify-feishu.sh"
+  "notify": "/Users/you/.anng/notify-feishu.sh"
 }
 ```
 
@@ -134,17 +134,17 @@ Replace `WEBHOOK_URL` with your Feishu bot webhook URL. This pattern also works 
 
 On iTerm2 or Windows Terminal, you can use the OSC 9 escape sequence for native terminal notifications with zero dependencies.
 
-Create `~/.deepcode/notify.sh`:
+Create `~/.anng/notify.sh`:
 
 ```bash
 #!/bin/bash
 # iTerm2 / Windows Terminal OSC 9 notification
-printf '\x1b]9;DeepCode: task %s (%ss)\x07' "${STATUS:-completed}" "${DURATION}"
+printf '\x1b]9;ANNG CLI: task %s (%ss)\x07' "${STATUS:-completed}" "${DURATION}"
 ```
 
 ```json
 {
-  "notify": "/Users/you/.deepcode/notify.sh"
+  "notify": "/Users/you/.anng/notify.sh"
 }
 ```
 
@@ -153,7 +153,7 @@ Windows users on Git Bash can use the same script; alternatively, create a `.bat
 ```batch
 @echo off
 REM Windows Terminal OSC 9 notification
-echo \x1b]9;DeepCode: task %STATUS% (%DURATION%s)\x07
+echo \x1b]9;ANNG CLI: task %STATUS% (%DURATION%s)\x07
 ```
 
 ## macOS System Notification
@@ -161,12 +161,12 @@ echo \x1b]9;DeepCode: task %STATUS% (%DURATION%s)\x07
 ```bash
 #!/bin/bash
 # macOS system notification
-osascript -e "display notification \"Task ${STATUS:-completed}, took ${DURATION}s\" with title \"DeepCode\""
+osascript -e "display notification \"Task ${STATUS:-completed}, took ${DURATION}s\" with title \"ANNG CLI\""
 ```
 
 ```json
 {
-  "notify": "/Users/you/.deepcode/notify.sh"
+  "notify": "/Users/you/.anng/notify.sh"
 }
 ```
 
@@ -178,17 +178,17 @@ Requires `libnotify-bin`:
 sudo apt install libnotify-bin   # Debian/Ubuntu
 ```
 
-Create `~/.deepcode/notify.sh`:
+Create `~/.anng/notify.sh`:
 
 ```bash
 #!/bin/bash
 # Linux notify-send notification
-notify-send "DeepCode" "Task ${STATUS:-completed}, took ${DURATION}s"
+notify-send "ANNG CLI" "Task ${STATUS:-completed}, took ${DURATION}s"
 ```
 
 ```json
 {
-  "notify": "/home/you/.deepcode/notify.sh"
+  "notify": "/home/you/.anng/notify.sh"
 }
 ```
 
@@ -197,12 +197,12 @@ notify-send "DeepCode" "Task ${STATUS:-completed}, took ${DURATION}s"
 ```batch
 @echo off
 REM Windows msg popup notification
-msg %USERNAME% "DeepCode: task %STATUS% (%DURATION%s)"
+msg %USERNAME% "ANNG CLI: task %STATUS% (%DURATION%s)"
 ```
 
 ```json
 {
-  "notify": "C:\\Users\\you\\.deepcode\\notify.bat"
+  "notify": "C:\\Users\\you\\.anng\\notify.bat"
 }
 ```
 

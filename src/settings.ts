@@ -252,7 +252,7 @@ function normalizeEnv(env: DeepcodingSettings["env"]): Record<string, string> {
   return result;
 }
 
-export function collectDeepcodeEnv(processEnv: SettingsProcessEnv = process.env): Record<string, string> {
+export function collectAnngEnv(processEnv: SettingsProcessEnv = process.env): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(processEnv)) {
     if (!key.startsWith("DEEPCODE_") || typeof value !== "string") {
@@ -338,7 +338,7 @@ export function resolveSettingsSources(
 ): ResolvedDeepcodingSettings {
   const userEnv = normalizeEnv(userSettings?.env);
   const projectEnv = normalizeEnv(projectSettings?.env);
-  const systemEnv = collectDeepcodeEnv(processEnv);
+  const systemEnv = collectAnngEnv(processEnv);
   const env = {
     ...userEnv,
     ...projectEnv,
@@ -507,11 +507,11 @@ export const DEFAULT_BASE_URL = "https://api.deepseek.com";
 // ---------------------------------------------------------------------------
 
 export function getUserSettingsPath(): string {
-  return path.join(os.homedir(), ".deepcode", "settings.json");
+  return path.join(os.homedir(), ".anng", "settings.json");
 }
 
 export function getProjectSettingsPath(projectRoot: string): string {
-  return path.join(projectRoot, ".deepcode", "settings.json");
+  return path.join(projectRoot, ".anng", "settings.json");
 }
 
 export function readSettingsFile(settingsPath: string): DeepcodingSettings | null {

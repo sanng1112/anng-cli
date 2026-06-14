@@ -1,11 +1,11 @@
 ---
 name: skill-digester
-description: Reviews and improves another DeepCode skill's SKILL.md description field against the Agent Skills description-field rules. Use when the user asks to "digest" a skill, including requests like "digest the pdf skill" or "digest pdf skill".
+description: Reviews and improves another ANNG CLI skill's SKILL.md description field against the Agent Skills description-field rules. Use when the user asks to "digest" a skill, including requests like "digest the pdf skill" or "digest pdf skill".
 ---
 
 # Skill Digester
 
-Use this skill to review and optionally rewrite the `description` field of another DeepCode skill.
+Use this skill to review and optionally rewrite the `description` field of another ANNG CLI skill.
 
 ## Interaction Rule
 
@@ -18,26 +18,26 @@ Whenever user input is needed, call the `AskUserQuestion` tool. Do not ask follo
    - Locate the skill by running the bundled Node script from this skill directory:
 
      ```bash
-     node ~/.deepcode/skills/skill-digester/scripts/find-skill.js "<skill-name-or-path>" "<project-root>"
+     node ~/.anng/skills/skill-digester/scripts/find-skill.js "<skill-name-or-path>" "<project-root>"
      ```
 
      If this skill is loaded from a project-level or different user-level path, use the `scripts/find-skill.js` file next to this `SKILL.md` instead.
-   - The script searches the same roots Deep Code CLI scans, in priority order:
-     1. Project native skills: `./.deepcode/skills/<folder>/SKILL.md`
+   - The script searches the same roots ANNG CLI CLI scans, in priority order:
+     1. Project native skills: `./.anng/skills/<folder>/SKILL.md`
      2. Project interoperable skills: `./.agents/skills/<folder>/SKILL.md`
-     3. User native skills: `~/.deepcode/skills/<folder>/SKILL.md`
+     3. User native skills: `~/.anng/skills/<folder>/SKILL.md`
      4. User interoperable skills: `~/.agents/skills/<folder>/SKILL.md`
-   - Treat `./` as the current Deep Code project root only; do not scan parent directories unless the running project root is changed.
-   - The script resolves each candidate's skill name the way Deep Code does: use the trimmed frontmatter `name` when present, otherwise use the folder name with underscores converted to hyphens.
+   - Treat `./` as the current ANNG CLI project root only; do not scan parent directories unless the running project root is changed.
+   - The script resolves each candidate's skill name the way ANNG CLI does: use the trimmed frontmatter `name` when present, otherwise use the folder name with underscores converted to hyphens.
    - Match the user's input against the resolved skill name first. If needed, also consider the folder name or an explicit path the user provided.
    - Treat the matched skill's `path` as the source `SKILL.md` to review.
    - Treat the matched skill's `digestTarget.path` as the only output `SKILL.md` path to create or edit.
-   - `digestTarget.path` always points to the same scope's native Deep Code root:
-     - Project sources from `./.deepcode/skills` or `./.agents/skills` digest to `./.deepcode/skills/<folder>/SKILL.md`.
-     - User sources from `~/.deepcode/skills` or `~/.agents/skills` digest to `~/.deepcode/skills/<folder>/SKILL.md`.
+   - `digestTarget.path` always points to the same scope's native ANNG CLI root:
+     - Project sources from `./.anng/skills` or `./.agents/skills` digest to `./.anng/skills/<folder>/SKILL.md`.
+     - User sources from `~/.anng/skills` or `~/.agents/skills` digest to `~/.anng/skills/<folder>/SKILL.md`.
    - If the script returns one active match, use its `path` for reading and `digestTarget.path` for writing.
    - If the script returns active and shadowed matches, present each source path and digest target path, then use `AskUserQuestion` before using a shadowed source.
-   - If the script returns no match, state that the skill was not found in Deep Code's scanned skill roots and use `AskUserQuestion` to ask whether the user wants to try another name.
+   - If the script returns no match, state that the skill was not found in ANNG CLI's scanned skill roots and use `AskUserQuestion` to ask whether the user wants to try another name.
 
 2. Infer the user's preferred language before reviewing.
    - Infer a likely language from the user's wording. For example, if the user says `digest pdf skill`, infer Chinese.

@@ -61,7 +61,7 @@ export function UpdatePrompt({ currentVersion, latestVersion, installCommand, on
   return (
     <Box flexDirection="column" marginY={1}>
       <Text bold>
-        Deep Code latest version has been released: {currentVersion} -&gt; {latestVersion}
+        ANNG CLI latest version has been released: {currentVersion} -&gt; {latestVersion}
       </Text>
       <Box flexDirection="column" marginTop={1}>
         {options.map((option, index) => {

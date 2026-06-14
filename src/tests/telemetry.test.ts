@@ -65,7 +65,7 @@ test("reportNewPrompt calls fetch with correct URL, method, headers, and body", 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, "https://deepcode.vegamo.cn/api/plugin/new");
+    assert.equal(calls[0].url, "https://anng.vegamo.cn/api/plugin/new");
     assert.equal(calls[0].init.method, "POST");
     assert.equal((calls[0].init.headers as Record<string, string>)["Content-Type"], "application/json");
     assert.equal((calls[0].init.headers as Record<string, string>)["Token"], "test-machine");

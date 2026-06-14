@@ -8,7 +8,7 @@ import { getDebugLogPath, logOpenAIChatCompletionDebug } from "../common/debug-l
 test("debug logger appends full entries without rotation", () => {
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-debug-log-home-"));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "anng-debug-log-home-"));
   process.env.HOME = home;
   if (process.platform === "win32") {
     process.env.USERPROFILE = home;

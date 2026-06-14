@@ -47,7 +47,7 @@ test("evaluatePermissionScopes applies deny, ask, allow, and default mode preced
 });
 
 test("computeToolCallPermissions maps tool calls to permission requests", () => {
-  const projectRoot = createTempDir("deepcode-permissions-workspace-");
+  const projectRoot = createTempDir("anng-permissions-workspace-");
   const plan = computeToolCallPermissions({
     sessionId: "session-1",
     projectRoot,
@@ -95,7 +95,7 @@ test("computeToolCallPermissions maps tool calls to permission requests", () => 
 });
 
 test("computeToolCallPermissions only asks for scopes not already allowed", () => {
-  const projectRoot = createTempDir("deepcode-permissions-filter-workspace-");
+  const projectRoot = createTempDir("anng-permissions-filter-workspace-");
   const plan = computeToolCallPermissions({
     sessionId: "session-1",
     projectRoot,
@@ -128,8 +128,8 @@ test("computeToolCallPermissions only asks for scopes not already allowed", () =
 });
 
 test("computeToolCallPermissions allows read tool calls under skill scan paths", () => {
-  const projectRoot = createTempDir("deepcode-permissions-skill-read-workspace-");
-  const home = createTempDir("deepcode-permissions-skill-read-home-");
+  const projectRoot = createTempDir("anng-permissions-skill-read-workspace-");
+  const home = createTempDir("anng-permissions-skill-read-home-");
   const skillRoot = path.join(home, ".agents", "skills");
   const skillResourcePath = path.join(skillRoot, "pdf", "scripts", "extract.py");
   const outsidePath = path.join(home, "notes.txt");
@@ -168,10 +168,10 @@ test("computeToolCallPermissions allows read tool calls under skill scan paths",
 });
 
 test("isPathInAnyDirectory matches absolute and project-relative directories without sibling leaks", () => {
-  const projectRoot = createTempDir("deepcode-permissions-directory-match-workspace-");
-  const home = createTempDir("deepcode-permissions-directory-match-home-");
+  const projectRoot = createTempDir("anng-permissions-directory-match-workspace-");
+  const home = createTempDir("anng-permissions-directory-match-home-");
   const absoluteSkillRoot = path.join(home, ".agents", "skills");
-  const relativeSkillRoot = path.join(".deepcode", "skills");
+  const relativeSkillRoot = path.join(".anng", "skills");
 
   assert.equal(
     isPathInAnyDirectory(projectRoot, path.join(absoluteSkillRoot, "pdf", "scripts", "extract.py"), [
@@ -190,7 +190,7 @@ test("isPathInAnyDirectory matches absolute and project-relative directories wit
     false
   );
   assert.equal(
-    isPathInAnyDirectory(projectRoot, path.join(projectRoot, ".deepcode", "skills-extra", "file.md"), [
+    isPathInAnyDirectory(projectRoot, path.join(projectRoot, ".anng", "skills-extra", "file.md"), [
       relativeSkillRoot,
     ]),
     false
@@ -199,8 +199,8 @@ test("isPathInAnyDirectory matches absolute and project-relative directories wit
 });
 
 test("appendProjectPermissionAllows writes unique project-level allow scopes", () => {
-  const projectRoot = createTempDir("deepcode-permission-settings-");
-  const settingsPath = path.join(projectRoot, ".deepcode", "settings.json");
+  const projectRoot = createTempDir("anng-permission-settings-");
+  const settingsPath = path.join(projectRoot, ".anng", "settings.json");
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(settingsPath, JSON.stringify({ permissions: { allow: ["read-in-cwd"] } }), "utf8");
 
@@ -212,7 +212,7 @@ test("appendProjectPermissionAllows writes unique project-level allow scopes", (
 });
 
 test("appendProjectPermissionAllows seeds inherited permissions before adding allow scopes", () => {
-  const projectRoot = createTempDir("deepcode-permission-settings-default-");
+  const projectRoot = createTempDir("anng-permission-settings-default-");
 
   appendProjectPermissionAllows(projectRoot, ["query-git-log"], {
     inheritedPermissions: {
@@ -223,7 +223,7 @@ test("appendProjectPermissionAllows seeds inherited permissions before adding al
     },
   });
 
-  const settingsPath = path.join(projectRoot, ".deepcode", "settings.json");
+  const settingsPath = path.join(projectRoot, ".anng", "settings.json");
   const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
   assert.deepEqual(settings.permissions, {
     allow: ["read-in-cwd", "query-git-log"],
@@ -234,7 +234,7 @@ test("appendProjectPermissionAllows seeds inherited permissions before adding al
 });
 
 test("appendProjectPermissionAllows moves inherited ask and deny scopes into allow", () => {
-  const projectRoot = createTempDir("deepcode-permission-settings-move-inherited-");
+  const projectRoot = createTempDir("anng-permission-settings-move-inherited-");
 
   appendProjectPermissionAllows(projectRoot, ["network", "write-out-cwd"], {
     inheritedPermissions: {
@@ -245,7 +245,7 @@ test("appendProjectPermissionAllows moves inherited ask and deny scopes into all
     },
   });
 
-  const settingsPath = path.join(projectRoot, ".deepcode", "settings.json");
+  const settingsPath = path.join(projectRoot, ".anng", "settings.json");
   const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
   assert.deepEqual(settings.permissions, {
     allow: ["read-in-cwd", "network", "write-out-cwd"],
@@ -256,7 +256,7 @@ test("appendProjectPermissionAllows moves inherited ask and deny scopes into all
 });
 
 test("appendProjectPermissionAllows writes inherited permissions even when scope is already allowed", () => {
-  const projectRoot = createTempDir("deepcode-permission-settings-inherited-existing-");
+  const projectRoot = createTempDir("anng-permission-settings-inherited-existing-");
 
   appendProjectPermissionAllows(projectRoot, ["read-in-cwd"], {
     inheritedPermissions: {
@@ -267,7 +267,7 @@ test("appendProjectPermissionAllows writes inherited permissions even when scope
     },
   });
 
-  const settingsPath = path.join(projectRoot, ".deepcode", "settings.json");
+  const settingsPath = path.join(projectRoot, ".anng", "settings.json");
   const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
   assert.deepEqual(settings.permissions, {
     allow: ["read-in-cwd"],
@@ -278,8 +278,8 @@ test("appendProjectPermissionAllows writes inherited permissions even when scope
 });
 
 test("appendProjectPermissionAllows preserves existing project permissions", () => {
-  const projectRoot = createTempDir("deepcode-permission-settings-explicit-default-");
-  const settingsPath = path.join(projectRoot, ".deepcode", "settings.json");
+  const projectRoot = createTempDir("anng-permission-settings-explicit-default-");
+  const settingsPath = path.join(projectRoot, ".anng", "settings.json");
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(
     settingsPath,
@@ -304,8 +304,8 @@ test("appendProjectPermissionAllows preserves existing project permissions", () 
 });
 
 test("appendProjectPermissionAllows removes existing ask and deny conflicts", () => {
-  const projectRoot = createTempDir("deepcode-permission-settings-existing-conflict-");
-  const settingsPath = path.join(projectRoot, ".deepcode", "settings.json");
+  const projectRoot = createTempDir("anng-permission-settings-existing-conflict-");
+  const settingsPath = path.join(projectRoot, ".anng", "settings.json");
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(
     settingsPath,

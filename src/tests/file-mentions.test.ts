@@ -82,7 +82,7 @@ test("filterFileMentionItems prioritizes prefix and basename matches", () => {
 });
 
 test("scanFileMentionItems returns relative slash-separated files and directories", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.mkdirSync(path.join(root, "src"));
     fs.writeFileSync(path.join(root, "src", "index.ts"), "");
@@ -99,7 +99,7 @@ test("scanFileMentionItems returns relative slash-separated files and directorie
 });
 
 test("scanFileMentionItems applies default noisy-directory ignores when no gitignore is applicable", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     for (const directory of [
       ".next",
@@ -130,7 +130,7 @@ test("scanFileMentionItems applies default noisy-directory ignores when no gitig
 });
 
 test("scanFileMentionItems default max item cap is above 2000", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     for (let index = 0; index < 2001; index++) {
       fs.writeFileSync(path.join(root, `file-${index.toString().padStart(4, "0")}.txt`), "");
@@ -143,7 +143,7 @@ test("scanFileMentionItems default max item cap is above 2000", () => {
 });
 
 test("scanFileMentionItems respects project gitignore patterns inside git repositories", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.mkdirSync(path.join(root, ".git"));
     fs.mkdirSync(path.join(root, ".mypy_cache"), { recursive: true });
@@ -164,7 +164,7 @@ test("scanFileMentionItems respects project gitignore patterns inside git reposi
 });
 
 test("scanFileMentionItems ignores gitignore files outside git repositories", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.mkdirSync(path.join(root, "tmp"));
     fs.writeFileSync(path.join(root, "tmp", "visible.txt"), "");
@@ -180,7 +180,7 @@ test("scanFileMentionItems ignores gitignore files outside git repositories", ()
 });
 
 test("scanFileMentionItems applies parent and nested ignore files", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.mkdirSync(path.join(root, ".git"));
     fs.writeFileSync(path.join(root, ".gitignore"), "ignored-from-parent/\n");
@@ -201,7 +201,7 @@ test("scanFileMentionItems applies parent and nested ignore files", () => {
 });
 
 test("scanFileMentionItems applies git info exclude at the repository root", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.mkdirSync(path.join(root, ".git", "info"), { recursive: true });
     fs.writeFileSync(path.join(root, ".git", "info", "exclude"), "secret.txt\n");
@@ -218,7 +218,7 @@ test("scanFileMentionItems applies git info exclude at the repository root", () 
 });
 
 test("scanFileMentionItems applies .ignore files outside git repositories", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.writeFileSync(path.join(root, ".ignore"), "ignored.txt\n");
     fs.writeFileSync(path.join(root, "ignored.txt"), "");
@@ -234,7 +234,7 @@ test("scanFileMentionItems applies .ignore files outside git repositories", () =
 });
 
 test("scanFileMentionItems honors gitignore negation patterns", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.mkdirSync(path.join(root, ".git"));
     fs.writeFileSync(path.join(root, ".gitignore"), "*.log\n!important.log\n");
@@ -251,7 +251,7 @@ test("scanFileMentionItems honors gitignore negation patterns", () => {
 });
 
 test("scanFileMentionItems includes hidden entries except the .git directory", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.mkdirSync(path.join(root, ".git"));
     fs.writeFileSync(path.join(root, ".env"), "");
@@ -268,7 +268,7 @@ test("scanFileMentionItems includes hidden entries except the .git directory", (
 });
 
 test("scanFileMentionItems sees files created after an earlier scan", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     assert.deepEqual(scanFileMentionItems(root), []);
 
@@ -281,7 +281,7 @@ test("scanFileMentionItems sees files created after an earlier scan", () => {
 });
 
 test("scanFileMentionItems follows symlinked files", (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.writeFileSync(path.join(root, "source.txt"), "");
     try {
@@ -301,7 +301,7 @@ test("scanFileMentionItems follows symlinked files", (t) => {
 });
 
 test("filterFileMentionItems returns newly scanned files for @ mention queries", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-file-mentions-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "anng-file-mentions-"));
   try {
     fs.writeFileSync(path.join(root, "index.html"), "");
     const items = scanFileMentionItems(root);

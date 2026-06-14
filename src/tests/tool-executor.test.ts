@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 test("ToolExecutor accepts title-case built-in tool aliases", async () => {
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-tool-executor-"));
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "anng-tool-executor-"));
   tempDirs.push(workspace);
   const filePath = path.join(workspace, "sample.txt");
   fs.writeFileSync(filePath, "alpha\nbeta\n", "utf8");

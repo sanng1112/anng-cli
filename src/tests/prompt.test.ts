@@ -110,7 +110,7 @@ test("buildSkillDocumentsPrompt excludes SKILL.md frontmatter metadata", () => {
 });
 
 test("buildSkillDocumentsPrompt lists skill resources", () => {
-  const skillDir = createTempDir("deepcode-skill-resources-");
+  const skillDir = createTempDir("anng-skill-resources-");
   fs.mkdirSync(path.join(skillDir, "scripts"), { recursive: true });
   fs.mkdirSync(path.join(skillDir, "references"), { recursive: true });
   const skillPath = path.join(skillDir, "SKILL.md");
@@ -132,7 +132,7 @@ test("buildSkillDocumentsPrompt lists skill resources", () => {
 });
 
 test("buildSkillDocumentsPrompt caps large skill resource listings", () => {
-  const skillDir = createTempDir("deepcode-skill-resource-cap-");
+  const skillDir = createTempDir("anng-skill-resource-cap-");
   const skillPath = path.join(skillDir, "SKILL.md");
   fs.writeFileSync(skillPath, "# Large Skill\n", "utf8");
   for (let index = 0; index < 55; index += 1) {
@@ -150,7 +150,7 @@ test("buildSkillDocumentsPrompt caps large skill resource listings", () => {
 });
 
 test("buildSkillDocumentsPrompt excludes hidden and generated skill resources", () => {
-  const skillDir = createTempDir("deepcode-skill-resource-exclusions-");
+  const skillDir = createTempDir("anng-skill-resource-exclusions-");
   fs.mkdirSync(path.join(skillDir, ".hidden"), { recursive: true });
   fs.mkdirSync(path.join(skillDir, "node_modules", "pkg"), { recursive: true });
   fs.mkdirSync(path.join(skillDir, "dist"), { recursive: true });

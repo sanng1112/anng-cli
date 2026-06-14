@@ -6,7 +6,7 @@ import * as os from "os";
 import * as crypto from "crypto";
 
 function getTeamStorageDir(): string {
-  return path.join(os.homedir(), ".deepcode", "teams");
+  return path.join(os.homedir(), ".anng", "teams");
 }
 
 export class TeamManager {

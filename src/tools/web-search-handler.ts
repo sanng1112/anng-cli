@@ -6,7 +6,7 @@ import type { CreateOpenAIClient, ToolExecutionContext, ToolExecutionResult } fr
 const MAX_OUTPUT_CHARS = 30000;
 const MAX_CAPTURE_CHARS = 10 * 1024 * 1024;
 const WEB_SEARCH_TOOL_ACTIVITY_PREFIX = "WebSearch:";
-const DEFAULT_WEB_SEARCH_API_URL = "https://deepcode.vegamo.cn/api/plugin/web-search";
+const DEFAULT_WEB_SEARCH_API_URL = "https://anng.vegamo.cn/api/plugin/web-search";
 
 type SearchLanguage = "en" | "zh";
 
@@ -55,7 +55,7 @@ export async function handleWebSearchTool(
       ok: false,
       name: "WebSearch",
       error:
-        "WebSearch default mode requires a valid LLM configuration in ~/.deepcode/settings.json or ./.deepcode/settings.json.",
+        "WebSearch default mode requires a valid LLM configuration in ~/.anng/settings.json or ./.anng/settings.json.",
     };
   }
 

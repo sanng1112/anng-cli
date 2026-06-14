@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Hoàn thiện mọi phần còn dang dở của hệ thống multi-agent team orchestration — fix bugs, viết test, kết nối UI, để `deepcode --team -p "..."` hoạt động end-to-end.
+**Goal:** Hoàn thiện mọi phần còn dang dở của hệ thống multi-agent team orchestration — fix bugs, viết test, kết nối UI, để `anng --team -p "..."` hoạt động end-to-end.
 
 **Architecture:** Sửa 2 bugs trong core (`parallel-executor.ts`, `team-orchestrator.ts`), viết 9 test files còn thiếu, kết nối `TeamOrchestrator` vào `App.tsx`, tạo `TeamStatusPanel` UI component, cập nhật test runner để chạy team tests.
 

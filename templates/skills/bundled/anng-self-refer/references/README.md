@@ -1,20 +1,20 @@
-# Deep Code CLI Reference
+# ANNG CLI CLI Reference
 
 [English](README-en.md)
 
-Deep Code is a terminal AI coding assistant optimized for `deepseek-v4` models, with deep thinking, reasoning effort control, Agent Skills, and MCP integration.
+ANNG CLI is a terminal AI coding assistant optimized for `deepseek-v4` models, with deep thinking, reasoning effort control, Agent Skills, and MCP integration.
 
 ## Installation
 
 ```bash
-npm install -g @vegamo/deepcode-cli
+npm install -g anng-cli
 ```
 
-Run `deepcode` in any project directory to start.
+Run `anng` in any project directory to start.
 
 ## Configuration
 
-Create `~/.deepcode/settings.json`:
+Create `~/.anng/settings.json`:
 
 ```json
 {
@@ -26,7 +26,7 @@ Create `~/.deepcode/settings.json`:
 }
 ```
 
-The config file is shared with the Deep Code VSCode extension. See [configuration.md](configuration.md) for full options.
+The config file is shared with the ANNG CLI VSCode extension. See [configuration.md](configuration.md) for full options.
 
 ## Key Features
 

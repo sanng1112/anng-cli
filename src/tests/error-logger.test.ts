@@ -5,7 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { logApiError, type ApiErrorLogEntry } from "../common/error-logger";
 
-const LOG_DIR = path.join(os.homedir(), ".deepcode", "logs");
+const LOG_DIR = path.join(os.homedir(), ".anng", "logs");
 const LOG_PATH = path.join(LOG_DIR, "error.log");
 
 function makeEntry(overrides: Partial<ApiErrorLogEntry> = {}): ApiErrorLogEntry {
@@ -93,7 +93,7 @@ describe("maskSensitive", () => {
         error: {
           name: "Error",
           message: "Request failed",
-          stack: "    at call(/home/user/.deepcode/settings.json: apiKey: sk-deadbeef)",
+          stack: "    at call(/home/user/.anng/settings.json: apiKey: sk-deadbeef)",
         },
       })
     );

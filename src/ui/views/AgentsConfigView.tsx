@@ -24,7 +24,7 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
   const [editingField, setEditingField] = useState<"prompt" | "name" | null>(null);
   const [inputBuffer, setInputBuffer] = useState("");
 
-  const configPath = path.join(projectRoot, ".deepcode", "team-agents.json");
+  const configPath = path.join(projectRoot, ".anng", "team-agents.json");
 
   useEffect(() => {
     try {
@@ -133,7 +133,7 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
       <Text bold color="cyan">
         Team Custom Agents Configuration
       </Text>
-      <Text dimColor>Saved to .deepcode/team-agents.json</Text>
+      <Text dimColor>Saved to .anng/team-agents.json</Text>
       <Text dimColor>
         ↑/↓: Select | Enter: Edit Rules | N: Edit Route/Name | A: Add | D: Delete | M: Cycle Model | R: Cycle Reasoning
       </Text>

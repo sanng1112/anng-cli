@@ -1,11 +1,11 @@
 ---
 name: codegraph
-description: Generates a semantic codegraph and dependency index of the workspace to DEEPCODE.md.
+description: Generates a semantic codegraph and dependency index of the workspace to ANNG.md.
 ---
 
 # Codegraph Semantic Indexing
 
-This skill helps index the workspace into a semantic graph saved in `DEEPCODE.md`, providing a persistent map of the codebase for all future Deepcode agents.
+This skill helps index the workspace into a semantic graph saved in `ANNG.md`, providing a persistent map of the codebase for all future ANNG CLI agents.
 
 ## Workflow
 
@@ -17,5 +17,5 @@ When the user asks you to index the workspace or generate a codegraph:
    - Architecture summary
    - Key directories and their purposes
    - Main dependencies/components and how they connect
-5. Write this output to `DEEPCODE.md` in the project root using the `write_to_file` tool.
-6. The `DEEPCODE.md` file acts as a permanent cache. From now on, agents will automatically read this context!
+5. Write this output to `ANNG.md` in the project root using the `write_to_file` tool.
+6. The `ANNG.md` file acts as a permanent cache. From now on, agents will automatically read this context!

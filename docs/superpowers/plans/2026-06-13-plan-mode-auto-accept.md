@@ -12,7 +12,7 @@ This document outlines the design and implementation of two new project-wide exe
 ## Design
 
 ### 1. Configuration Changes
-Both features are configurable globally via `.deepcode/settings.json` or locally through CLI arguments:
+Both features are configurable globally via `.anng/settings.json` or locally through CLI arguments:
 - Add `autoAccept` (boolean) to `DeepcodingSettings` and `ResolvedDeepcodingSettings`.
 - Add `planMode` (boolean) to `DeepcodingSettings` and `ResolvedDeepcodingSettings`.
 - Expose these via system environment variables (`DEEPCODE_AUTO_ACCEPT`, `DEEPCODE_PLAN_MODE`).
@@ -47,6 +47,6 @@ Both features are configurable globally via `.deepcode/settings.json` or locally
 - [x] **Testing**: Ran `npm test` verifying all 466 tests passed (0 failures) and no regressions occurred.
 
 ## Verification
-- Running `deepcode --plan` forces the Agent to pause and display the "Permission required" prompt for every tool (including benign ones like `read`), effectively creating a plan review sequence.
-- Running `deepcode --yolo` (Auto Accept) bypasses all execution checks cleanly.
-- Updating `~/.deepcode/settings.json` with `"planMode": true` achieves project-wide plan-driven behavior without needing CLI flags.
+- Running `anng --plan` forces the Agent to pause and display the "Permission required" prompt for every tool (including benign ones like `read`), effectively creating a plan review sequence.
+- Running `anng --yolo` (Auto Accept) bypasses all execution checks cleanly.
+- Updating `~/.anng/settings.json` with `"planMode": true` achieves project-wide plan-driven behavior without needing CLI flags.

@@ -1,16 +1,16 @@
 {
-  "name": "@vegamo/deepcode-cli",
+  "name": "anng-cli",
   "version": "0.1.29",
-  "description": "Deep Code CLI - Vibe coding for the deepseek-v4 model in your terminal",
+  "description": "ANNG CLI CLI - Vibe coding for the deepseek-v4 model in your terminal",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lessweb/deepcode-cli.git"
+    "url": "https://github.com/lessweb/anng-cli.git"
   },
-  "homepage": "https://deepcode.vegamo.cn",
+  "homepage": "https://anng.vegamo.cn",
   "bin": {
-    "deepcode": "./dist/cli.js"
+    "anng": "./dist/cli.js"
   },
   "main": "./dist/cli.js",
   "files": [

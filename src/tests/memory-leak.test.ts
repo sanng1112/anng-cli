@@ -64,8 +64,8 @@ afterEach(() => {
 });
 
 test("SessionManager.deleteSession clears state cache for that session", async () => {
-  const home = createTempDir("deepcode-mem-home-");
-  const projectRoot = createTempDir("deepcode-mem-workspace-");
+  const home = createTempDir("anng-mem-home-");
+  const projectRoot = createTempDir("anng-mem-workspace-");
   setHomeDir(home);
   const manager = createSessionManager(projectRoot);
 
@@ -88,8 +88,8 @@ test("SessionManager.deleteSession clears state cache for that session", async (
 });
 
 test("SessionManager.createSession auto-prune clears dropped session state cache", async () => {
-  const home = createTempDir("deepcode-mem-home-");
-  const projectRoot = createTempDir("deepcode-mem-workspace-");
+  const home = createTempDir("anng-mem-home-");
+  const projectRoot = createTempDir("anng-mem-workspace-");
   setHomeDir(home);
   const manager = createSessionManager(projectRoot);
 
@@ -109,8 +109,8 @@ test("SessionManager.createSession auto-prune clears dropped session state cache
 });
 
 test("SessionManager.deleteSession clears controller map entry", async () => {
-  const home = createTempDir("deepcode-mem-home-");
-  const projectRoot = createTempDir("deepcode-mem-workspace-");
+  const home = createTempDir("anng-mem-home-");
+  const projectRoot = createTempDir("anng-mem-workspace-");
   setHomeDir(home);
   const manager = createSessionManager(projectRoot);
 
@@ -124,7 +124,7 @@ test("SessionManager.deleteSession clears controller map entry", async () => {
 });
 
 test("SessionManager.dispose aborts and clears controllers", () => {
-  const projectRoot = createTempDir("deepcode-mem-workspace-");
+  const projectRoot = createTempDir("anng-mem-workspace-");
   const manager = createSessionManager(projectRoot);
   const controllers = (manager as unknown as { sessionControllers: Map<string, AbortController> }).sessionControllers;
 
@@ -139,8 +139,8 @@ test("SessionManager.dispose aborts and clears controllers", () => {
 });
 
 test("Deleted session id reuse should reset bash cwd to project root", async () => {
-  const home = createTempDir("deepcode-mem-home-");
-  const projectRoot = createTempDir("deepcode-mem-workspace-");
+  const home = createTempDir("anng-mem-home-");
+  const projectRoot = createTempDir("anng-mem-workspace-");
   setHomeDir(home);
   const manager = createSessionManager(projectRoot);
 
@@ -184,8 +184,8 @@ test("Deleted session id reuse should reset bash cwd to project root", async () 
 });
 
 test("deleteSession should not kill untracked stale persisted pids", async () => {
-  const home = createTempDir("deepcode-mem-home-");
-  const projectRoot = createTempDir("deepcode-mem-workspace-");
+  const home = createTempDir("anng-mem-home-");
+  const projectRoot = createTempDir("anng-mem-workspace-");
   setHomeDir(home);
   const manager = createSessionManager(projectRoot);
   const sessionId = await manager.createSession({ text: "stale-pid" });

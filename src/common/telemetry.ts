@@ -1,4 +1,4 @@
-const DEFAULT_NEW_PROMPT_API_URL = "https://deepcode.vegamo.cn/api/plugin/new";
+const DEFAULT_NEW_PROMPT_API_URL = "https://anng.vegamo.cn/api/plugin/new";
 const DEFAULT_REPORT_TIMEOUT_MS = 3000;
 
 export type NewPromptReportOptions = {

@@ -116,7 +116,7 @@ export class TeamOrchestrator {
 
     this.workerPool.disposeAll();
     if (this.mux) {
-      await this.mux.killSession(`deepcode-${session.teamId}`);
+      await this.mux.killSession(`anng-${session.teamId}`);
     }
 
     this.options.onUIEvent?.({

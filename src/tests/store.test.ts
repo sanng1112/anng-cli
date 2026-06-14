@@ -13,7 +13,7 @@ describe("SessionStore", () => {
   let tempHome: string;
 
   before(() => {
-    tempHome = createTempDir("deepcode-store-test-");
+    tempHome = createTempDir("anng-store-test-");
   });
 
   after(() => {

@@ -72,7 +72,7 @@ function readMacClipboardImage(): ClipboardImage | null {
     return { dataUrl: bufferToDataUrl(pngpaste, PNG_MIME), mimeType: PNG_MIME };
   }
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "deepcode-clipboard-"));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "anng-clipboard-"));
   const screenshotPath = path.join(tempDir, "clipboard.png");
   try {
     const saved = tryRunStatus("osascript", [

@@ -1,11 +1,11 @@
 <div align="center">
 <br/>
 <p align="center">
-  <a href='https://deepcode.vegamo.cn/'>
-    <img src='https://avatars.githubusercontent.com/u/118287711?s=200&v=4' width='100' alt="deepcode-cli"/>
+  <a href='https://anng.vegamo.cn/'>
+    <img src='https://avatars.githubusercontent.com/u/118287711?s=200&v=4' width='100' alt="anng-cli"/>
   </a>
 </p>
-<h1>Deep Code CLI</h1>
+<h1>ANNG CLI CLI</h1>
 
 <h3>Trợ lý Lập trình AI Tự trị Chạy Trên Terminal — Hỗ Trợ Multi-Agent Team</h3>
 
@@ -21,7 +21,7 @@
 
 ## Tổng Quan
 
-**Deep Code CLI** (`@vegamo/deepcode-cli`) là trợ lý lập trình AI chạy trên terminal, tối ưu cho **DeepSeek V4** và tương thích **Google Gemini**. Hỗ trợ hai chế độ:
+**ANNG CLI CLI** (`anng-cli`) là trợ lý lập trình AI chạy trên terminal, tối ưu cho **DeepSeek V4** và tương thích **Google Gemini**. Hỗ trợ hai chế độ:
 
 - **Single-Agent**: Một agent AI làm việc tuần tự — đọc code, sửa file, chạy lệnh, tìm kiếm.
 - **Multi-Agent Team** (`--team`): Chia task lớn cho nhiều agent chạy song song — mỗi agent có session, context, API key riêng.
@@ -41,7 +41,7 @@
 ## Cài Đặt
 
 ```bash
-npm install -g @vegamo/deepcode-cli
+npm install -g anng-cli
 ```
 
 Yêu cầu Node.js ≥ 22.
@@ -49,17 +49,17 @@ Yêu cầu Node.js ≥ 22.
 ### Từ Mã Nguồn
 
 ```bash
-git clone https://github.com/lessweb/deepcode-cli.git
-cd deepcode-cli
+git clone https://github.com/lessweb/anng-cli.git
+cd anng-cli
 npm install && npm run build && npm link
-deepcode
+anng
 ```
 
 ---
 
 ## Cấu Hình
 
-Tạo `~/.deepcode/settings.json`:
+Tạo `~/.anng/settings.json`:
 
 ```json
 {
@@ -110,17 +110,17 @@ Tạo `~/.deepcode/settings.json`:
 ### Single-Agent (mặc định)
 
 ```bash
-deepcode                                    # Interactive TUI
-deepcode -p "Fix all lint errors"          # Headless prompt
-deepcode --yolo -p "Refactor auth module"  # Tự động accept permissions
+anng                                    # Interactive TUI
+anng -p "Fix all lint errors"          # Headless prompt
+anng --yolo -p "Refactor auth module"  # Tự động accept permissions
 ```
 
 ### Multi-Agent Team
 
 ```bash
-deepcode --team -p "Build REST API + React frontend + tests"
-deepcode --team --tmux -p "Refactor to microservices"     # Visual tmux mode
-deepcode --team --team-workers 8 -p "Migrate codebase"     # 8 workers
+anng --team -p "Build REST API + React frontend + tests"
+anng --team --tmux -p "Refactor to microservices"     # Visual tmux mode
+anng --team --team-workers 8 -p "Migrate codebase"     # 8 workers
 ```
 
 ### Trong TUI
@@ -216,7 +216,7 @@ Dùng `/mcp` trong TUI để kiểm tra trạng thái.
 Skills là module kiến thức tái sử dụng, tự động khớp ngữ cảnh:
 
 ```
-.deepcode/skills/code-review/
+.anng/skills/code-review/
 ├── SKILL.md          # YAML frontmatter + hướng dẫn
 ├── references/       # Tài liệu tham khảo
 └── examples/         # Ví dụ
@@ -230,7 +230,7 @@ Xem `docs/agent-skills.md`.
 
 ### Quản Lý Phiên & Undo
 
-- Session lưu trong `~/.deepcode/projects/<projectCode>/<sessionId>.jsonl`
+- Session lưu trong `~/.anng/projects/<projectCode>/<sessionId>.jsonl`
 - Undo dựa trên Git checkpoint — khôi phục code, hội thoại, hoặc cả hai
 
 ### Context Compaction
@@ -259,8 +259,8 @@ Tự động chạy script khi agent xong việc — hỗ trợ Slack, Feishu, s
 ## Phát Triển
 
 ```bash
-git clone https://github.com/lessweb/deepcode-cli.git
-cd deepcode-cli
+git clone https://github.com/lessweb/anng-cli.git
+cd anng-cli
 npm install
 ```
 
@@ -279,19 +279,19 @@ MIT. Xem [LICENSE](LICENSE).
 
 <!-- LINK GROUP -->
 
-[npm-release-link]: https://www.npmjs.com/package/@vegamo/deepcode-cli
-[npm-release-shield]: https://img.shields.io/npm/v/@vegamo/deepcode-cli?color=4d6BFE&labelColor=black&logo=npm&logoColor=white&style=flat-square&cacheSeconds=1800
-[npm-downloads-link]: https://www.npmjs.com/package/@vegamo/deepcode-cli
-[npm-downloads-shield]: https://img.shields.io/npm/dt/@vegamo/deepcode-cli?labelColor=black&style=flat-square&color=4d6BFE&cacheSeconds=1800
-[github-contributors-link]: https://github.com/lessweb/deepcode-cli/graphs/contributors
-[github-contributors-shield]: https://img.shields.io/github/contributors/lessweb/deepcode-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
-[github-forks-link]: https://github.com/lessweb/deepcode-cli/network/members
-[github-forks-shield]: https://img.shields.io/github/forks/lessweb/deepcode-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
-[github-stars-link]: https://github.com/lessweb/deepcode-cli/network/stargazers
-[github-stars-shield]: https://img.shields.io/github/stars/lessweb/deepcode-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
-[github-issues-link]: https://github.com/lessweb/deepcode-cli/issues
-[github-issues-shield]: https://img.shields.io/github/issues/lessweb/deepcode-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
-[github-issues-pr-link]: https://github.com/lessweb/deepcode-cli/pulls
-[github-issues-pr-shield]: https://img.shields.io/github/issues-pr/lessweb/deepcode-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
-[github-license-link]: https://github.com/lessweb/deepcode-cli/blob/main/LICENSE
-[github-license-shield]: https://img.shields.io/github/license/lessweb/deepcode-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
+[npm-release-link]: https://www.npmjs.com/package/anng-cli
+[npm-release-shield]: https://img.shields.io/npm/v/anng-cli?color=4d6BFE&labelColor=black&logo=npm&logoColor=white&style=flat-square&cacheSeconds=1800
+[npm-downloads-link]: https://www.npmjs.com/package/anng-cli
+[npm-downloads-shield]: https://img.shields.io/npm/dt/anng-cli?labelColor=black&style=flat-square&color=4d6BFE&cacheSeconds=1800
+[github-contributors-link]: https://github.com/lessweb/anng-cli/graphs/contributors
+[github-contributors-shield]: https://img.shields.io/github/contributors/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
+[github-forks-link]: https://github.com/lessweb/anng-cli/network/members
+[github-forks-shield]: https://img.shields.io/github/forks/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
+[github-stars-link]: https://github.com/lessweb/anng-cli/network/stargazers
+[github-stars-shield]: https://img.shields.io/github/stars/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
+[github-issues-link]: https://github.com/lessweb/anng-cli/issues
+[github-issues-shield]: https://img.shields.io/github/issues/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
+[github-issues-pr-link]: https://github.com/lessweb/anng-cli/pulls
+[github-issues-pr-shield]: https://img.shields.io/github/issues-pr/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
+[github-license-link]: https://github.com/lessweb/anng-cli/blob/main/LICENSE
+[github-license-shield]: https://img.shields.io/github/license/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800

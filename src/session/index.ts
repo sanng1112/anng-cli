@@ -608,9 +608,9 @@ ${agentInstructions}
   private getSkillScanRoots(): Array<{ root: string; displayRoot: string }> {
     const homeDir = os.homedir();
     return [
-      { root: path.join(this.projectRoot, ".deepcode", "skills"), displayRoot: "./.deepcode/skills" },
+      { root: path.join(this.projectRoot, ".anng", "skills"), displayRoot: "./.anng/skills" },
       { root: path.join(this.projectRoot, ".agents", "skills"), displayRoot: "./.agents/skills" },
-      { root: path.join(homeDir, ".deepcode", "skills"), displayRoot: "~/.deepcode/skills" },
+      { root: path.join(homeDir, ".anng", "skills"), displayRoot: "~/.anng/skills" },
       { root: path.join(homeDir, ".agents", "skills"), displayRoot: "~/.agents/skills" },
       { root: this.getBundledSkillsRoot(), displayRoot: "bundled:" },
     ];
@@ -1077,7 +1077,7 @@ ${agentInstructions}
       this.onAssistantMessage(
         buildAsstMsg(
           sessionId,
-          "API key not found. Please configure ~/.deepcode/settings.json or ./.deepcode/settings.json.",
+          "API key not found. Please configure ~/.anng/settings.json or ./.anng/settings.json.",
           null
         ),
         false
@@ -1708,7 +1708,7 @@ ${agentInstructions}
     sessionsIndexPath: string;
   } {
     const projectCode = getProjectCode(this.projectRoot);
-    const projectDir = path.join(os.homedir(), ".deepcode", "projects", projectCode);
+    const projectDir = path.join(os.homedir(), ".anng", "projects", projectCode);
     const sessionsIndexPath = path.join(projectDir, "sessions-index.json");
     return { projectCode, projectDir, sessionsIndexPath };
   }
@@ -1941,8 +1941,8 @@ ${agentInstructions}
   private loadProjectAgentInstructions(): { content: string; displayPath: string } | null {
     const candidatePaths = [
       {
-        absolutePath: path.join(this.projectRoot, ".deepcode", "AGENTS.md"),
-        displayPath: "./.deepcode/AGENTS.md",
+        absolutePath: path.join(this.projectRoot, ".anng", "AGENTS.md"),
+        displayPath: "./.anng/AGENTS.md",
       },
       {
         absolutePath: path.join(this.projectRoot, "AGENTS.md"),
@@ -1981,7 +1981,7 @@ ${agentInstructions}
       return projectInstructions.content;
     }
 
-    return this.readNonEmptyFile(path.join(os.homedir(), ".deepcode", "AGENTS.md"));
+    return this.readNonEmptyFile(path.join(os.homedir(), ".anng", "AGENTS.md"));
   }
 
   private generateToolCallId(): string {

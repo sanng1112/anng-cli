@@ -17,7 +17,7 @@ import {
 
 const MAX_OUTPUT_CHARS = 30000;
 const MAX_CAPTURE_CHARS = 10 * 1024 * 1024;
-const BACKGROUND_OUTPUT_DIR = path.join(os.tmpdir(), "deepcode-background");
+const BACKGROUND_OUTPUT_DIR = path.join(os.tmpdir(), "anng-background");
 const TRAILING_BACKGROUND_OPERATOR_PATTERN = /(^|[^\\&])\s*&\s*$/;
 const sessionWorkingDirs = new Map<string, string>();
 

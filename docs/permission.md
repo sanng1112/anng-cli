@@ -1,6 +1,6 @@
 # Permission System
 
-Deep Code uses a scope-based permission system to control tool execution.
+ANNG CLI uses a scope-based permission system to control tool execution.
 
 ## Configuration
 
@@ -39,5 +39,5 @@ In `settings.json`:
 `--yolo` bypasses all permission prompts for automated CI/CD:
 
 ```bash
-deepcode --yolo -p "fix lint errors"
+anng --yolo -p "fix lint errors"
 ```

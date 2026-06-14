@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-const LOG_DIR = path.join(os.homedir(), ".deepcode", "logs");
+const LOG_DIR = path.join(os.homedir(), ".anng", "logs");
 const ERROR_LOG_PATH = path.join(LOG_DIR, "error.log");
 
 function ensureLogDir(): void {
@@ -88,7 +88,7 @@ export type ApiErrorLogEntry = {
 };
 
 /**
- * Write an API error log entry to ~/.deepcode/logs/error.log.
+ * Write an API error log entry to ~/.anng/logs/error.log.
  */
 export function logApiError(entry: ApiErrorLogEntry): void {
   try {

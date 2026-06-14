@@ -1,8 +1,8 @@
-# DeepCode CLI — Master Architecture Refactor Plan
+# ANNG CLI CLI — Master Architecture Refactor Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Refactor the deepcode-cli codebase from a monolithic God Object architecture into a clean, maintainable, testable modular system with bounded contexts, while preserving all existing functionality and test coverage.
+**Goal:** Refactor the anng-cli codebase from a monolithic God Object architecture into a clean, maintainable, testable modular system with bounded contexts, while preserving all existing functionality and test coverage.
 
 **Architecture:** This is a cross-cutting architectural refactor spanning 4 subsystems. We split SessionManager (2834 lines) into 5 focused services, decompose App.tsx (881 lines) using a state machine pattern, break edit-handler.ts (867 lines) into strategy classes, and harden the system with error boundaries, E2E tests, architecture docs, and i18n infrastructure.
 

@@ -1,15 +1,15 @@
 ---
-name: deepcode-self-refer
-description: Answer questions about Deep Code CLI itself — including features, configuration, slash commands, Skills, MCP integration, permissions, notifications, session persistence, and troubleshooting. Use when the user asks how to configure or use Deep Code, set up MCP servers, configure notifications (Slack/Feishu), manage permissions, view available skills, understand slash commands, configure thinking mode, use Undo, or integrate Deep Code with VSCode.
+name: anng-self-refer
+description: Answer questions about ANNG CLI CLI itself — including features, configuration, slash commands, Skills, MCP integration, permissions, notifications, session persistence, and troubleshooting. Use when the user asks how to configure or use ANNG CLI, set up MCP servers, configure notifications (Slack/Feishu), manage permissions, view available skills, understand slash commands, configure thinking mode, use Undo, or integrate ANNG CLI with VSCode.
 ---
 
-# Deep Code Self-Refer
+# ANNG CLI Self-Refer
 
-This Skill helps you answer user questions about Deep Code CLI itself by consulting the reference documentation bundled with this Skill. All docs live in the `references/` subdirectory — always refer to them for authoritative answers.
+This Skill helps you answer user questions about ANNG CLI CLI itself by consulting the reference documentation bundled with this Skill. All docs live in the `references/` subdirectory — always refer to them for authoritative answers.
 
 ## When to use this Skill
 
-Use this Skill when the user asks any question about Deep Code itself, such as:
+Use this Skill when the user asks any question about ANNG CLI itself, such as:
 
 - "List available skills"
 - "How to configure MCP?"
@@ -22,8 +22,8 @@ Use this Skill when the user asks any question about Deep Code itself, such as:
 - "What slash commands are supported?"
 - "Where is session history stored?"
 - "How does /undo work?"
-- "How does Deep Code integrate with the VSCode extension?"
-- Any other question about Deep Code CLI's features, configuration, or usage.
+- "How does ANNG CLI integrate with the VSCode extension?"
+- Any other question about ANNG CLI CLI's features, configuration, or usage.
 
 ## Instructions
 
@@ -60,9 +60,9 @@ Use the `Read` tool to read the appropriate document(s) from the list above. All
 **"List/view available skills":**
 - Treat `/skills` as the canonical UI for listing currently available skills.
 - If answering directly, do not infer the list only from loaded skill prompts or from project/user directories. Enumerate all discovery roots:
-  1. `./.deepcode/skills/<folder>/SKILL.md`
+  1. `./.anng/skills/<folder>/SKILL.md`
   2. `./.agents/skills/<folder>/SKILL.md`
-  3. `~/.deepcode/skills/<folder>/SKILL.md`
+  3. `~/.anng/skills/<folder>/SKILL.md`
   4. `~/.agents/skills/<folder>/SKILL.md`
   5. bundled built-in skills as `bundled:<folder>/SKILL.md`
 - For a source checkout, bundled skills live under `templates/skills/bundled/<folder>/SKILL.md`. For a packaged install, bundled skills may live under `dist/bundled/<folder>/SKILL.md`.
@@ -71,7 +71,7 @@ Use the `Read` tool to read the appropriate document(s) from the list above. All
 - Apply `enabledSkills` from `settings.json`: if `enabledSkills["<name>"] === false`, do not list that skill as available.
 - Clearly separate discoverable skills from other concepts:
   - Discoverable skills are selectable through `/skills` and come from the roots above.
-  - Bundled skills are discoverable skills shipped with Deep Code, such as `bundled:deepcode-self-refer/SKILL.md`.
+  - Bundled skills are discoverable skills shipped with ANNG CLI, such as `bundled:anng-self-refer/SKILL.md`.
   - Default prompt templates or always-injected guidance are not necessarily discoverable skills unless they also exist as `*/SKILL.md` in one of the scan roots.
   - Slash commands such as `/skills`, `/mcp`, and `/undo` are commands, not skills.
 - Mention that `/skills` can be used to verify the result and `enabledSkills` can enable/disable specific skills by name.
@@ -85,7 +85,7 @@ Use the `Read` tool to read the appropriate document(s) from the list above. All
 **"How to configure/modify <setting>":**
 - Read `references/configuration.md`
 - Explain which `settings.json` field controls the setting
-- Clarify user-level (`~/.deepcode/settings.json`) vs project-level (`.deepcode/settings.json`)
+- Clarify user-level (`~/.anng/settings.json`) vs project-level (`.anng/settings.json`)
 - Provide the exact JSON snippet
 
 **"What does <slash command> do?":**
@@ -96,7 +96,7 @@ Use the `Read` tool to read the appropriate document(s) from the list above. All
 
 1. **Always consult the docs first** — never answer from memory alone; the docs are the source of truth.
 2. **Provide copy-paste-ready JSON** — users want to copy config blocks directly into their `settings.json`.
-3. **Be specific about file paths** — always specify whether it's `~/.deepcode/settings.json` or `.deepcode/settings.json`.
+3. **Be specific about file paths** — always specify whether it's `~/.anng/settings.json` or `.anng/settings.json`.
 4. **Mention `/mcp` verification** — after any MCP configuration change, remind users to use `/mcp` to verify.
 5. **Acknowledge both Chinese and English docs** — the project has docs in both languages (`references/xxx.md` for Chinese, `references/xxx_en.md` for English).
 
@@ -106,17 +106,17 @@ Use the `Read` tool to read the appropriate document(s) from the list above. All
 
 Read references/README.md, locate the Skills section, then enumerate all scan roots including bundled skills. Answer:
 
-- Skills are discovered from: `./.deepcode/skills/`, `./.agents/skills/`, `~/.deepcode/skills/`, `~/.agents/skills/`, and bundled built-in skills such as `bundled:deepcode-self-refer/SKILL.md`.
+- Skills are discovered from: `./.anng/skills/`, `./.agents/skills/`, `~/.anng/skills/`, `~/.agents/skills/`, and bundled built-in skills such as `bundled:anng-self-refer/SKILL.md`.
 - In a source checkout, check `templates/skills/bundled/*/SKILL.md`; in a packaged install, check `dist/bundled/*/SKILL.md`.
-- Built-in bundled skills may include `deepcode-self-refer`, `plan`, `skill-digester`, and `skill-writer`; verify the actual list by scanning the bundled root because it can change between versions.
-- Use `/skills` slash command in the Deep Code CLI to list all available skills
+- Built-in bundled skills may include `anng-self-refer`, `plan`, `skill-digester`, and `skill-writer`; verify the actual list by scanning the bundled root because it can change between versions.
+- Use `/skills` slash command in the ANNG CLI CLI to list all available skills
 - Use `enabledSkills` in `settings.json` to enable/disable skills by name
 
 ### Example 2: "Add playwright mcp to this project"
 
 Read `references/mcp.md`, locate the Playwright example. Answer:
 
-- Add to `settings.json` (user-level `~/.deepcode/settings.json` or project-level `.deepcode/settings.json`):
+- Add to `settings.json` (user-level `~/.anng/settings.json` or project-level `.anng/settings.json`):
 
 ```json
 {
@@ -130,7 +130,7 @@ Read `references/mcp.md`, locate the Playwright example. Answer:
 ```
 
 - If merging with existing config, add the `"playwright"` entry into the existing `mcpServers` object
-- After saving, use `/mcp` in Deep Code to verify the server is running
+- After saving, use `/mcp` in ANNG CLI to verify the server is running
 
 ### Example 3: "How to set up Slack notifications?"
 

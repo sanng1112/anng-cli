@@ -15,6 +15,6 @@ test("parseNpmViewVersion parses npm view JSON and plain output", () => {
   assert.equal(parseNpmViewVersion("\n"), null);
 });
 
-test("UPDATE_SUCCESS_MESSAGE tells the user to restart Deep Code", () => {
-  assert.equal(UPDATE_SUCCESS_MESSAGE, "🎉 Update ran successfully! Please restart Deep Code.");
+test("UPDATE_SUCCESS_MESSAGE tells the user to restart ANNG CLI", () => {
+  assert.equal(UPDATE_SUCCESS_MESSAGE, "🎉 Update ran successfully! Please restart ANNG CLI.");
 });

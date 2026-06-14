@@ -1,8 +1,8 @@
-# DeepCode CLI — Đánh Giá Tổng Quan Dự Án
+# ANNG CLI CLI — Đánh Giá Tổng Quan Dự Án
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Đánh giá toàn diện kiến trúc, chất lượng code, quy trình phát triển, điểm mạnh và điểm yếu của dự án deepcode-cli
+**Goal:** Đánh giá toàn diện kiến trúc, chất lượng code, quy trình phát triển, điểm mạnh và điểm yếu của dự án anng-cli
 
 **Architecture:** Ứng dụng CLI dạng interactive coding assistant, dùng Ink (React cho terminal) làm UI, SessionManager làm trung tâm điều phối, tích hợp OpenAI-compatible API (DeepSeek), hệ thống tool handlers, MCP protocol, và hệ thống phân quyền.
 
@@ -14,7 +14,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| **Tên** | `@vegamo/deepcode-cli` v0.1.29 |
+| **Tên** | `anng-cli` v0.1.29 |
 | **Mô tả** | Terminal AI coding assistant cho deepseek-v4 |
 | **Ngôn ngữ** | TypeScript (strict mode) |
 | **Số file source** | 108 file .ts/.tsx |
@@ -231,4 +231,4 @@ cli.tsx (entry)
 
 ---
 
-**Tổng kết**: DeepCode CLI là một dự án chất lượng tốt với kiến trúc module rõ ràng, test coverage khá và CI/CD toàn diện. Vấn đề chính là **SessionManager quá khổ** (God Object pattern) và **thiếu tài liệu kiến trúc** — hai điểm này nên được ưu tiên giải quyết nếu dự án tiếp tục phát triển và mở rộng đội ngũ.
+**Tổng kết**: ANNG CLI CLI là một dự án chất lượng tốt với kiến trúc module rõ ràng, test coverage khá và CI/CD toàn diện. Vấn đề chính là **SessionManager quá khổ** (God Object pattern) và **thiếu tài liệu kiến trúc** — hai điểm này nên được ưu tiên giải quyết nếu dự án tiếp tục phát triển và mở rộng đội ngũ.

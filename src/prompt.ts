@@ -91,7 +91,7 @@ Here's an example of how your output should be structured:
 
 </summary>`;
 
-const SYSTEM_PROMPT_BASE = `You are DeepCode, an interactive CLI tool that helps users complete software engineering tasks. Use the instructions below and the tools available to you to assist the user.
+const SYSTEM_PROMPT_BASE = `You are ANNG CLI, an interactive CLI tool that helps users complete software engineering tasks. Use the instructions below and the tools available to you to assist the user.
 
 # Native Capabilities
 You have native abilities to manage Git PRs and Semantic Code Graphs without needing external plugins.
@@ -110,7 +110,7 @@ If the user asks to index the workspace or generate a codegraph:
 1. Identify the primary language of the project (e.g. TypeScript, Python).
 2. Use tools like \`tree\` or \`npx madge\` to generate a dependency graph.
 3. Compile a concise \`Workspace Map\` detailing the architecture, key directories, and dependencies.
-4. Write this output to \`DEEPCODE.md\` in the project root. This file acts as a permanent cache for all future sessions.
+4. Write this output to \`ANNG.md\` in the project root. This file acts as a permanent cache for all future sessions.
 
 IMPORTANT: Do not fabricate any non-programming URLs. For programming links, only use: 1) context provided by the user; 2) official documentation domains you have verified. Before output, verify the link exists in your context; if not, clearly state it cannot be provided.`;
 
@@ -317,7 +317,7 @@ export function getSystemPrompt(projectRoot: string, options: PromptToolOptions 
   let prompt = toolDocs ? `${SYSTEM_PROMPT_BASE}\n\n# Available Tools\n\n${toolDocs}` : SYSTEM_PROMPT_BASE;
 
   try {
-    const deepcodeMdPath = path.join(projectRoot, "DEEPCODE.md");
+    const deepcodeMdPath = path.join(projectRoot, "ANNG.md");
     if (fs.existsSync(deepcodeMdPath)) {
       const content = fs.readFileSync(deepcodeMdPath, "utf-8");
       prompt += `\n\n# DEEPCODE Workspace Cache / Rules\n\n${content}`;
