@@ -7,25 +7,38 @@ const COLORS: Record<string, string | undefined> = {
   W: "#FFFFFF", // White
   B: "#000000", // Black
   e: "#000000", // Eye (Black)
-  m: "#000000", // Mouth (Black)
+  n: "#000000", // Nose (Black)
   ".": undefined, // Transparent
 };
 
 const SQUIRREL_MAP = [
-  "...BBBBBBBB...",
-  ".BBOOOOOOOOBB.",
-  "BBOOOOOOOOOOOB",
-  "BBOOOOBBBBBOOB",
-  "BBOOOBBOOOOBWB",
-  "BBOOBOBBOBDBWB",
-  "BBOOBOeBeBDBWB",
-  "BBOOBO...BDBWB",
-  ".BBOOBO.m.BWOB",
-  ".BBOOBBBBBBWOB",
-  "..BBOOOOOWWWOB",
-  "...BBOOWWWWWOB",
-  ".....BBBBBBB..",
-  "......B...B...",
+  "............BBBBBBBB....",
+  "..........BBOOOOOOOOBB..",
+  "......BB..BOOOOOOOOOOOB.",
+  ".....BOOB.BOOOOOOOOOOOB.",
+  "....BOOOOBBOOOOOOOOOOOB.",
+  "...BOOOOOOOOOOOOOOOOOOB.",
+  "...BOeOOOOOOOOOOOOOOOOB.",
+  "..BOOOOOOOOOOOOOOOOOOB..",
+  "..BnOOOOOOOOOOOOOOOOBB..",
+  "..BWWWWOOOOOOOOOOOOBWB..",
+  "...BBWWOOOOOOOOOOOBWWB..",
+  ".....BOOOOOOOOOOOBWWWB..",
+  ".....BOOOOOOOOOOBWWWWB..",
+  "....BOOOOOOOOOOBWWWWWB..",
+  "....BOOOOOOOOOOBWWWWBB..",
+  "...BDOOOOOOOODDBWWBB....",
+  "..BDOOBBBOOOOBBDBB......",
+  "..BBBB..BBBB..BBB.......",
+];
+
+const LOGO_LINES = [
+  "█████╗ ███╗   ██╗███╗   ██╗ ██████╗",
+  "██╔══██╗████╗  ██║████╗  ██║██╔════╝",
+  "███████║██╔██╗ ██║██╔██╗ ██║██║  ███╗",
+  "██╔══██║██║╚██╗██║██║╚██╗██║██║   ██║",
+  "██║  ██║██║ ╚████║██║ ╚████║╚██████╔╝",
+  "╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝ ╚═════╝",
 ];
 
 export function AsciiLogo() {
@@ -90,13 +103,27 @@ export function AsciiLogo() {
       }
       pushPart();
 
-      lines.push(<Text key={r}>{parts}</Text>);
+      // Add logo text on specific lines (vertically centered)
+      // 9 lines total. Logo is 6 lines.
+      // Lines index 1 to 6.
+      let rightText = null;
+      if (r / 2 >= 1 && r / 2 <= 6) {
+        const logoLine = LOGO_LINES[r / 2 - 1];
+        rightText = <Text color="#D4704B"> {logoLine}</Text>;
+      }
+
+      lines.push(
+        <Text key={r} wrap="truncate-end">
+          {parts}
+          {rightText}
+        </Text>
+      );
     }
     return lines;
   }, []);
 
   return (
-    <Box flexDirection="column" alignItems="center">
+    <Box flexDirection="column" alignItems="flex-start">
       {renderedLines}
     </Box>
   );
