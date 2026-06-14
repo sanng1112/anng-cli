@@ -317,10 +317,10 @@ export function getSystemPrompt(projectRoot: string, options: PromptToolOptions 
   let prompt = toolDocs ? `${SYSTEM_PROMPT_BASE}\n\n# Available Tools\n\n${toolDocs}` : SYSTEM_PROMPT_BASE;
 
   try {
-    const deepcodeMdPath = path.join(projectRoot, "ANNG.md");
-    if (fs.existsSync(deepcodeMdPath)) {
-      const content = fs.readFileSync(deepcodeMdPath, "utf-8");
-      prompt += `\n\n# DEEPCODE Workspace Cache / Rules\n\n${content}`;
+    const anngMdPath = path.join(projectRoot, "ANNG.md");
+    if (fs.existsSync(anngMdPath)) {
+      const content = fs.readFileSync(anngMdPath, "utf-8");
+      prompt += `\n\n# ANNG Workspace Cache / Rules\n\n${content}`;
     }
   } catch (_e) {
     // Ignore errors

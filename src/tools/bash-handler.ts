@@ -123,9 +123,9 @@ function buildShellCommand(command: string): {
   }
   wrappedParts.push(
     normalizedCommand,
-    "__DEEPCODE_STATUS__=$?",
+    "__ANNG_STATUS__=$?",
     `printf '%s%s\\n' "${marker}" "$PWD"`,
-    "exit $__DEEPCODE_STATUS__"
+    "exit $__ANNG_STATUS__"
   );
   const wrappedCommand = `{ ${wrappedParts.join("; ")}; } < /dev/null`;
   return { shellPath, shellArgs: ["-c", wrappedCommand], marker };
@@ -403,7 +403,7 @@ function appendChunk(existing: string, chunk: string | Buffer): string {
 
 function buildMarker(): string {
   const token = Math.random().toString(36).slice(2);
-  return `__DEEPCODE_PWD__${token}__`;
+  return `__ANNG_PWD__${token}__`;
 }
 
 function buildToolCommandResult(

@@ -255,10 +255,10 @@ function normalizeEnv(env: DeepcodingSettings["env"]): Record<string, string> {
 export function collectAnngEnv(processEnv: SettingsProcessEnv = process.env): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(processEnv)) {
-    if (!key.startsWith("DEEPCODE_") || typeof value !== "string") {
+    if (!key.startsWith("ANNG_") || typeof value !== "string") {
       continue;
     }
-    const strippedKey = key.slice("DEEPCODE_".length);
+    const strippedKey = key.slice("ANNG_".length);
     if (strippedKey) {
       result[strippedKey] = value;
     }
