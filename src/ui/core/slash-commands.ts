@@ -13,7 +13,8 @@ export type SlashCommandKind =
   | "raw"
   | "exit"
   | "team"
-  | "custom-agents";
+  | "custom-agents"
+  | "settings";
 
 export type SlashCommandItem = {
   kind: SlashCommandKind;
@@ -97,6 +98,12 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
     name: "custom-agents",
     label: "/custom-agents",
     description: "Customize agents team route, numbers, model and reasoning effort",
+  },
+  {
+    kind: "settings",
+    name: "settings",
+    label: "/settings",
+    description: "Manage API Key, Base URL, Models, and other configurations",
   },
 ];
 

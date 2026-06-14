@@ -31,6 +31,8 @@ test("buildSlashCommands prefixes skills before built-ins", () => {
     "raw",
     "exit",
     "team",
+    "custom-agents",
+    "settings",
   ]);
 });
 

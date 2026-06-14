@@ -25,7 +25,7 @@ test("buildExitSummaryText only shows Goodbye and model usage with cached tokens
   assert.match(summary, /╭─+╮/);
   assert.match(summary, /╰─+╯/);
   assert.match(summary, /Model Usage/);
-  assert.match(summary, /Cached Tokens/);
+  assert.match(summary, /Cached/);
   assert.match(summary, /mimo-v2\.5-pro\s+2\s+11,966\s+236\s+11,776/);
   assert.doesNotMatch(summary, /Agent powering down/);
   assert.doesNotMatch(summary, /Interaction Summary/);

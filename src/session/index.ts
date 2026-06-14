@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { promises as fsPromises } from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as crypto from "crypto";
@@ -98,6 +99,17 @@ export {
   isInvisibleExecution,
 } from "./message-factory";
 
+class FileWriteQueue {
+  private queue: Promise<void> = Promise.resolve();
+  enqueue(task: () => Promise<void>): void {
+    this.queue = this.queue.then(task).catch((err) => console.error("[FileWriteQueue Error]", err));
+  }
+  async awaitIdle(): Promise<void> {
+    await this.queue;
+  }
+}
+export const globalFileWriteQueue = new FileWriteQueue();
+
 export class SessionManager {
   private readonly projectRoot: string;
   private readonly createOpenAIClient: CreateOpenAIClient;
@@ -125,6 +137,8 @@ export class SessionManager {
   private readonly mcpManager = new McpManager();
   private mcpToolDefinitions: ToolDefinition[] = [];
   private readonly messageConverter: OpenAIMessageConverter;
+  private cachedSessionsIndex: SessionsIndex | null = null;
+  private cachedSessionMessages = new Map<string, SessionMessage[]>();
 
   constructor(options: SessionManagerOptions) {
     this.projectRoot = options.projectRoot;
@@ -143,7 +157,23 @@ export class SessionManager {
     this.messageConverter = new OpenAIMessageConverter({
       renderInitPrompt: () => this.renderInitCommandPrompt(),
     });
+
+    process.on("exit", this.handleProcessExit);
   }
+
+  private handleProcessExit = () => {
+    for (const key of this.liveProcessKeys) {
+      const parts = key.split(":");
+      const pid = parseInt(parts[1] || parts[0], 10);
+      if (!isNaN(pid)) {
+        try {
+          killProcessTree(pid, "SIGKILL");
+        } catch {
+          // ignore already dead processes
+        }
+      }
+    }
+  };
 
   public setAutoAccept(value: boolean): void {
     this.autoAccept = value;
@@ -245,7 +275,9 @@ export class SessionManager {
     startedAt: string,
     estimatedTokens: number,
     phase: LlmStreamProgress["phase"],
-    sessionId?: string
+    sessionId?: string,
+    text?: string,
+    reasoningText?: string
   ): void {
     this.onLlmStreamProgress?.({
       requestId,
@@ -254,6 +286,8 @@ export class SessionManager {
       estimatedTokens: Math.round(estimatedTokens),
       formattedTokens: this.formatEstimatedTokens(estimatedTokens),
       phase,
+      text,
+      reasoningText,
     });
   }
 
@@ -374,7 +408,7 @@ export class SessionManager {
         return;
       }
       estimatedTokens += this.estimateStreamTokens(value);
-      this.emitLlmStreamProgress(requestId, startedAt, estimatedTokens, "update", sessionId);
+      this.emitLlmStreamProgress(requestId, startedAt, estimatedTokens, "update", sessionId, content, reasoningContent);
     };
 
     try {
@@ -1378,31 +1412,70 @@ ${agentInstructions}
     });
 
     const compactPrompt = getCompactPrompt(sliceToCompact);
-    const thinkingOptions = buildThinkingRequestOptions(thinkingEnabled, baseURL, reasoningEffort);
-    const response = await this.createChatCompletionStream(
-      client,
-      {
-        model,
-        ...(temperature !== undefined ? { temperature } : {}),
-        messages: [{ role: "user", content: compactPrompt }],
-        ...thinkingOptions,
-      },
-      signal ? { signal } : undefined,
-      sessionId,
-      {
-        enabled: debugLogEnabled,
-        location: "SessionManager.compactSession",
-        baseURL,
-        params: { temperature, thinkingEnabled, reasoningEffort },
+    let rawLlmResponse: string | undefined = undefined;
+    let responseUsage: ModelUsage | null = null;
+    let proxyClient = null;
+
+    try {
+      const { createProxyClient } = await import("../common/openai-client");
+      proxyClient = createProxyClient(this.projectRoot);
+    } catch (_err) {
+      // Ignored
+    }
+
+    if (proxyClient) {
+      try {
+        const { resolveCurrentSettings } = await import("../settings");
+        const settings = resolveCurrentSettings(this.projectRoot);
+        const res = await proxyClient.chat.completions.create(
+          {
+            model: settings.proxyModel || "deepseek-v4-flash-free",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a proxy model assisting a main AI. Summarize the following conversation history briefly but without losing any important technical details, resolved issues, or pending goals. Keep it under 5000 characters.",
+              },
+              { role: "user", content: compactPrompt },
+            ],
+          },
+          { signal }
+        );
+        rawLlmResponse = res.choices[0]?.message?.content || "";
+      } catch (_err) {
+        proxyClient = null; // Fallback on error
       }
-    );
-    this.throwIfAborted(signal);
-    const rawLlmResponse = response.choices?.[0]?.message?.content;
+    }
+
+    if (!proxyClient) {
+      const thinkingOptions = buildThinkingRequestOptions(thinkingEnabled, baseURL, reasoningEffort);
+      const response = await this.createChatCompletionStream(
+        client,
+        {
+          model,
+          ...(temperature !== undefined ? { temperature } : {}),
+          messages: [{ role: "user", content: compactPrompt }],
+          ...thinkingOptions,
+        },
+        signal ? { signal } : undefined,
+        sessionId,
+        {
+          enabled: debugLogEnabled,
+          location: "SessionManager.compactSession",
+          baseURL,
+          params: { temperature, thinkingEnabled, reasoningEffort },
+        }
+      );
+      this.throwIfAborted(signal);
+      const content = response.choices?.[0]?.message?.content;
+      rawLlmResponse = typeof content === "string" ? content : undefined;
+      responseUsage = response.usage ?? null;
+    }
+
     const llmResponse = typeof rawLlmResponse === "string" ? rawLlmResponse : "";
     const compactedSummary = llmResponse.replace(/<analysis>[\s\S]*?<\/analysis>/gi, "").trim();
 
     const now = new Date().toISOString();
-    const responseUsage = response.usage ?? null;
     this.updateSessionEntry(sessionId, (entry) => ({
       ...entry,
       usage: accumulateUsage(entry.usage, responseUsage),
@@ -1576,6 +1649,7 @@ ${agentInstructions}
 
     index.entries = nextEntries;
     this.saveSessionsIndex(index);
+    this.cachedSessionMessages.delete(sessionId);
     this.cleanupSessionResources(sessionId, {
       removeMessages: true,
       processIds: this.getProcessIds(targetEntry?.processes ?? null),
@@ -1604,24 +1678,31 @@ ${agentInstructions}
     return true;
   }
 
-  listSessionMessages(sessionId: string): SessionMessage[] {
-    const messagePath = this.getSessionMessagesPath(sessionId);
-    if (!fs.existsSync(messagePath)) {
-      return [];
-    }
-
-    const raw = fs.readFileSync(messagePath, "utf8");
-    const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
-    const messages: SessionMessage[] = [];
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line) as SessionMessage;
-        messages.push(this.normalizeSessionMessage(parsed));
-      } catch {
-        // ignore malformed line
+  public listSessionMessages(sessionId: string): SessionMessage[] {
+    let messages: SessionMessage[];
+    if (this.cachedSessionMessages.has(sessionId)) {
+      messages = this.cachedSessionMessages.get(sessionId)!;
+    } else {
+      const messagePath = this.getSessionMessagesPath(sessionId);
+      if (!fs.existsSync(messagePath)) {
+        messages = [];
+      } else {
+        const payload = fs.readFileSync(messagePath, "utf8");
+        messages = payload
+          .split(/\r?\n/)
+          .filter(Boolean)
+          .map((line) => {
+            try {
+              return JSON.parse(line) as SessionMessage;
+            } catch {
+              return null;
+            }
+          })
+          .filter((msg): msg is SessionMessage => msg !== null);
       }
+      this.cachedSessionMessages.set(sessionId, messages);
     }
-    return messages;
+    return messages.map((msg) => this.normalizeSessionMessage(msg));
   }
 
   listUndoTargets(sessionId: string): UndoTarget[] {
@@ -1792,11 +1873,15 @@ ${agentInstructions}
   }
 
   private loadSessionsIndex(): SessionsIndex {
+    if (this.cachedSessionsIndex) {
+      return this.cachedSessionsIndex;
+    }
     const { sessionsIndexPath } = this.getProjectStorage();
     this.ensureProjectDir();
 
     if (!fs.existsSync(sessionsIndexPath)) {
-      return { version: 1, entries: [], originalPath: this.projectRoot };
+      this.cachedSessionsIndex = { version: 1, entries: [], originalPath: this.projectRoot };
+      return this.cachedSessionsIndex;
     }
 
     try {
@@ -1805,17 +1890,20 @@ ${agentInstructions}
       const entries = Array.isArray(parsed.entries)
         ? parsed.entries.map((entry) => this.normalizeSessionEntry(entry))
         : [];
-      return {
+      this.cachedSessionsIndex = {
         version: 1,
         entries,
         originalPath: parsed.originalPath || this.projectRoot,
       };
+      return this.cachedSessionsIndex;
     } catch {
-      return { version: 1, entries: [], originalPath: this.projectRoot };
+      this.cachedSessionsIndex = { version: 1, entries: [], originalPath: this.projectRoot };
+      return this.cachedSessionsIndex;
     }
   }
 
   private saveSessionsIndex(index: SessionsIndex): void {
+    this.cachedSessionsIndex = index;
     const { sessionsIndexPath } = this.getProjectStorage();
     this.ensureProjectDir();
     const normalized = {
@@ -1826,7 +1914,8 @@ ${agentInstructions}
       })),
       originalPath: this.projectRoot,
     };
-    fs.writeFileSync(sessionsIndexPath, JSON.stringify(normalized, null, 2), "utf8");
+    const payload = JSON.stringify(normalized, null, 2);
+    globalFileWriteQueue.enqueue(() => fsPromises.writeFile(sessionsIndexPath, payload, "utf8"));
   }
 
   private getSessionMessagesPath(sessionId: string): string {
@@ -1874,16 +1963,24 @@ ${agentInstructions}
   }
 
   private appendSessionMessage(sessionId: string, message: SessionMessage): void {
+    if (!this.cachedSessionMessages.has(sessionId)) {
+      this.listSessionMessages(sessionId); // Ensure loaded
+    }
+    this.cachedSessionMessages.get(sessionId)!.push(message);
+
     this.ensureProjectDir();
     const messagePath = this.getSessionMessagesPath(sessionId);
-    fs.appendFileSync(messagePath, `${JSON.stringify(message)}\n`, "utf8");
+    const payload = `${JSON.stringify(message)}\n`;
+    globalFileWriteQueue.enqueue(() => fsPromises.appendFile(messagePath, payload, "utf8"));
   }
 
   private saveSessionMessages(sessionId: string, messages: SessionMessage[]): void {
+    this.cachedSessionMessages.set(sessionId, [...messages]);
     this.ensureProjectDir();
     const messagePath = this.getSessionMessagesPath(sessionId);
     const payload = messages.map((message) => JSON.stringify(message)).join("\n");
-    fs.writeFileSync(messagePath, payload ? `${payload}\n` : "", "utf8");
+    const writePayload = payload ? `${payload}\n` : "";
+    globalFileWriteQueue.enqueue(() => fsPromises.writeFile(messagePath, writePayload, "utf8"));
   }
 
   private updateSessionEntry(sessionId: string, updater: (entry: SessionEntry) => SessionEntry): SessionEntry | null {

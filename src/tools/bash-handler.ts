@@ -65,7 +65,7 @@ export async function handleBashTool(
   }
 
   const execution = await executeShellCommand(shellPath, shellArgs, startCwd, command, context);
-  const result = buildToolCommandResult(
+  const result = await buildToolCommandResult(
     execution.stdout,
     execution.stderr,
     marker,
@@ -73,6 +73,8 @@ export async function handleBashTool(
     execution.signal,
     shellPath,
     startCwd,
+    command,
+    context.projectRoot,
     execution.timedOut,
     execution.timeoutMs,
     execution.deadlineAtMs
@@ -317,17 +319,19 @@ function startBackgroundShellCommand(
     error = spawnError.message;
   });
 
-  child.on("close", (code, signal) => {
+  child.on("close", async (code, signal) => {
     const markerResult = stripMarker(stdout, marker);
     const finalOutput = joinOutput(markerResult.output, stderr);
-    const result = buildToolCommandResult(
+    const result = await buildToolCommandResult(
       stdout,
       stderr,
       marker,
       typeof code === "number" ? code : null,
       signal ?? null,
       shellPath,
-      cwd
+      cwd,
+      command,
+      context.projectRoot
     );
     updateSessionCwd(context.sessionId, cwd, result.cwd);
     writeFinalBackgroundOutput(outputPath, finalOutput);
@@ -406,7 +410,7 @@ function buildMarker(): string {
   return `__ANNG_PWD__${token}__`;
 }
 
-function buildToolCommandResult(
+async function buildToolCommandResult(
   stdout: string,
   stderr: string,
   marker: string,
@@ -414,13 +418,15 @@ function buildToolCommandResult(
   signal: string | null,
   shellPath: string,
   startCwd: string,
+  command: string,
+  projectRoot: string,
   timedOut: boolean = false,
   timeoutMs?: number,
   deadlineAtMs?: number
-): ToolCommandResult {
+): Promise<ToolCommandResult> {
   const { output: cleanedStdout, cwd } = stripMarker(stdout, marker);
   const combined = joinOutput(cleanedStdout, stderr);
-  const { text, truncated } = truncateOutput(combined);
+  const { text, truncated } = await truncateOutput(combined, command, projectRoot);
   return {
     ok: exitCode === 0 && signal === null,
     output: text,
@@ -464,17 +470,62 @@ function stripMarker(stdout: string, marker: string): { output: string; cwd: str
 function joinOutput(stdout: string, stderr: string): string {
   const trimmedStdout = stdout ?? "";
   const trimmedStderr = stderr ?? "";
+  let combined = trimmedStdout;
   if (trimmedStdout && trimmedStderr) {
-    return `${trimmedStdout}\n${trimmedStderr}`;
+    combined = `${trimmedStdout}\n${trimmedStderr}`;
+  } else if (!trimmedStdout && trimmedStderr) {
+    combined = trimmedStderr;
   }
-  return trimmedStdout || trimmedStderr;
+  return combined
+    .replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, "")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
-function truncateOutput(output: string): { text: string; truncated: boolean } {
+async function truncateOutput(
+  output: string,
+  command: string,
+  projectRoot: string
+): Promise<{ text: string; truncated: boolean }> {
   if (output.length <= MAX_OUTPUT_CHARS) {
     return { text: output, truncated: false };
   }
-  return { text: output.slice(0, MAX_OUTPUT_CHARS), truncated: true };
+
+  try {
+    const { createProxyClient } = await import("../common/openai-client");
+    const { resolveCurrentSettings } = await import("../settings");
+    const client = createProxyClient(projectRoot);
+    const settings = resolveCurrentSettings(projectRoot);
+    if (client) {
+      const res = await client.chat.completions.create({
+        model: settings.proxyModel || "deepseek-v4-flash-free",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert developer assistant. Summarize this long terminal output to save tokens. Discard noisy progress bars and successful compilations. Keep the core error messages and stack traces. VERY IMPORTANT: At the very end of your summary, append a brief 'Proxy Hint: [your analysis]' suggesting the root cause or next steps to fix the error. Keep the total output under 15000 chars.",
+          },
+          { role: "user", content: `Command: ${command}\n\nOutput:\n${output}` },
+        ],
+      });
+      const compressed = res.choices[0]?.message?.content || "";
+      if (compressed) {
+        return {
+          text: compressed + "\n\n(Note: This output was compressed by an LLM to save tokens)",
+          truncated: true,
+        };
+      }
+    }
+  } catch (_err) {
+    // silently fallback to text truncation on LLM error
+  }
+
+  const half = Math.floor(MAX_OUTPUT_CHARS / 2);
+  const head = output.slice(0, half);
+  const tail = output.slice(-half);
+  return {
+    text: `${head}\n\n...[OUTPUT TRUNCATED: ${output.length - MAX_OUTPUT_CHARS} chars omitted]...\n\n${tail}`,
+    truncated: true,
+  };
 }
 
 function buildErrorMessage(exitCode: number | null, signal: string | null, error?: string, timedOut = false): string {

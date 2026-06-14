@@ -6,7 +6,7 @@ import * as os from "os";
 import * as path from "path";
 import { GitFileHistory } from "../common/file-history";
 import { clearSessionState } from "../common/state";
-import { getProjectCode, SessionManager, type SessionMessage, type SkillInfo } from "../session";
+import { getProjectCode, SessionManager, globalFileWriteQueue, type SessionMessage, type SkillInfo } from "../session";
 import { buildAssistantMessage } from "../session/message-factory";
 
 const originalFetch = globalThis.fetch;
@@ -630,6 +630,8 @@ test("SessionManager excludes disabled skills by resolved skill name", async () 
         "renamed-disabled": false,
         "anng-self-refer": false,
         "skill-digester": false,
+        codegraph: false,
+        "github-pr": false,
         plan: false,
         "enabled-skill": true,
       },
@@ -2292,6 +2294,7 @@ test("SessionManager preserves permission_denied status when sessions are reload
 
   const sessionId = await manager.createSession({ text: "search todos" });
   manager.denySessionPermission(sessionId);
+  await globalFileWriteQueue.awaitIdle();
 
   const reloadedManager = createPermissionSessionManager(workspace, [], permissions);
   const reloadedSession = reloadedManager.getSession(sessionId);

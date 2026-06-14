@@ -283,4 +283,6 @@ export type LlmStreamProgress = {
   estimatedTokens: number;
   formattedTokens: string;
   phase: "start" | "update" | "end";
+  text?: string;
+  reasoningText?: string;
 };

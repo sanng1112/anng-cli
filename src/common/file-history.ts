@@ -24,10 +24,25 @@ export type FileHistoryCheckpointResult = {
 };
 
 export class GitFileHistory {
-  constructor(
-    _projectRoot: string,
-    private readonly gitDir: string
-  ) {}
+  private readonly projectRoot: string;
+  private readonly gitDir: string;
+
+  constructor(projectRoot: string, gitDir: string) {
+    this.projectRoot = projectRoot;
+    this.gitDir = gitDir;
+    if (fs.existsSync(this.gitDir)) {
+      setTimeout(() => this.gc(), 5000);
+    }
+  }
+
+  gc(): void {
+    if (!fs.existsSync(this.gitDir)) return;
+    try {
+      this.runGit(["gc", "--auto", "--prune=now"]);
+    } catch {
+      // Ignore background errors
+    }
+  }
 
   ensureSession(sessionId: string): string | undefined {
     const branchRef = this.getSessionBranchRef(sessionId);

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import OpenAI from "openai";
+import { OpenAI } from "openai";
 import { Agent, fetch as undiciFetch } from "undici";
 import { resolveCurrentSettings, type ResolvedDeepcodingSettings } from "../settings";
 import { KeyRotator } from "./key-rotator";
@@ -91,6 +91,80 @@ export function maybeRotateApiKeyOnError(providerKey: string, error: unknown): b
   }
 
   return false;
+}
+
+let proxyRotator: KeyRotator | null = null;
+
+export function createProxyClient(projectRoot: string = process.cwd()): OpenAI | null {
+  const settings = resolveCurrentSettings(projectRoot);
+  if (!settings.proxyApiKey) {
+    return null;
+  }
+  if (!proxyRotator || proxyRotator.getKeyCount() === 0) {
+    proxyRotator = new KeyRotator(settings.proxyApiKey);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fetchWithRotation = async (url: any, init: any): Promise<any> => {
+    let lastError: unknown;
+    const maxRetries = Math.max(2, proxyRotator!.getKeyCount());
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      proxyRotator!.rotate();
+      const currentKey = proxyRotator!.getCurrentKey();
+
+      const headers = new Headers(init.headers);
+      headers.set("authorization", `Bearer ${currentKey}`);
+
+      const ac = new AbortController();
+      let abortedByCaller = false;
+
+      if (init.signal) {
+        init.signal.addEventListener("abort", () => {
+          abortedByCaller = true;
+          ac.abort(init.signal.reason);
+        });
+        if (init.signal.aborted) {
+          throw new Error("Aborted");
+        }
+      }
+
+      const timeoutId = setTimeout(() => {
+        if (!abortedByCaller) {
+          ac.abort(new Error("TimeoutAfter10s"));
+        }
+      }, 10000);
+
+      try {
+        const response = await undiciFetch(url, {
+          ...init,
+          headers,
+          signal: ac.signal,
+          dispatcher: keepAliveAgent,
+        });
+        clearTimeout(timeoutId);
+
+        if (response.status === 429 || response.status === 401) {
+          throw new Error(`ApiError${response.status}`);
+        }
+
+        return response;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        lastError = err;
+        if (abortedByCaller) {
+          throw err;
+        }
+      }
+    }
+    throw lastError;
+  };
+
+  return new OpenAI({
+    apiKey: "dummy-key-overridden-in-fetch",
+    baseURL: settings.proxyBaseURL || "https://opencode.ai/zen/v1",
+    fetch: fetchWithRotation,
+  });
 }
 
 export function createOpenAIClient(projectRoot: string = process.cwd()): {

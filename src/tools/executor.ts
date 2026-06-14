@@ -6,6 +6,9 @@ import { handleEditTool } from "./edit-handler";
 import { handleReadTool } from "./read-handler";
 import { handleUpdatePlanTool } from "./update-plan-handler";
 import { handleWebSearchTool } from "./web-search-handler";
+import { handleAnalyzeProjectTool } from "./analyze-project-handler";
+
+import { handleProxyReadTool } from "./proxy-read-handler";
 import { handleWriteTool } from "./write-handler";
 import type { McpManager } from "../mcp/mcp-manager";
 
@@ -149,18 +152,51 @@ export class ToolExecutor {
       .filter((toolCall): toolCall is ToolCall => Boolean(toolCall));
 
     const executions: ToolCallExecution[] = [];
-    for (const toolCall of parsedCalls) {
-      if (hooks?.shouldStop?.()) {
-        break;
+    const safeTools = new Set(["read", "ProxyRead", "WebSearch", "AnalyzeProject"]);
+
+    const batches: ToolCall[][] = [];
+    for (const call of parsedCalls) {
+      if (batches.length === 0) {
+        batches.push([call]);
+      } else {
+        const currentBatch = batches[batches.length - 1];
+        if (safeTools.has(call.function.name) && currentBatch.every((c) => safeTools.has(c.function.name))) {
+          currentBatch.push(call);
+        } else {
+          batches.push([call]);
+        }
       }
-      const result = await this.executeToolCall(sessionId, toolCall, hooks);
-      executions.push({
-        toolCallId: toolCall.id,
-        content: this.formatToolResult(result),
-        result,
-      });
-      if (hooks?.shouldStop?.()) {
-        break;
+    }
+
+    for (const batch of batches) {
+      if (hooks?.shouldStop?.()) break;
+
+      if (batch.length === 1 || !safeTools.has(batch[0].function.name)) {
+        for (const call of batch) {
+          if (hooks?.shouldStop?.()) break;
+          const result = await this.executeToolCall(sessionId, call, hooks);
+          executions.push({
+            toolCallId: call.id,
+            content: this.formatToolResult(result),
+            result,
+          });
+        }
+      } else {
+        const batchResults = await Promise.all(
+          batch.map(async (call) => {
+            if (hooks?.shouldStop?.()) return null;
+            const result = await this.executeToolCall(sessionId, call, hooks);
+            return {
+              toolCallId: call.id,
+              content: this.formatToolResult(result),
+              result,
+            };
+          })
+        );
+
+        for (const res of batchResults) {
+          if (res) executions.push(res);
+        }
       }
     }
     return executions;
@@ -174,6 +210,9 @@ export class ToolExecutor {
     this.toolHandlers.set("AskUserQuestion", handleAskUserQuestionTool);
     this.toolHandlers.set("UpdatePlan", handleUpdatePlanTool);
     this.toolHandlers.set("WebSearch", handleWebSearchTool);
+    this.toolHandlers.set("AnalyzeProject", handleAnalyzeProjectTool as unknown as ToolHandler);
+
+    this.toolHandlers.set("ProxyRead", handleProxyReadTool as unknown as ToolHandler);
   }
 
   private parseToolCall(toolCall: unknown): ToolCall | null {

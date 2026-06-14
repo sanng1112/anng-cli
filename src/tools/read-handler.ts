@@ -284,6 +284,36 @@ export async function handleReadTool(
     }
 
     const textResult = await readTextFile(filePath, offset.value, limit.value);
+
+    // HYBRID AUTOPILOT: If no explicit offset was requested and the file is massive (truncated)
+    if (!args.offset && textResult.isPartialView) {
+      try {
+        const { createProxyClient } = await import("../common/openai-client");
+        const { resolveCurrentSettings } = await import("../settings");
+        const client = createProxyClient(context.projectRoot);
+        const settings = resolveCurrentSettings(context.projectRoot);
+        if (client) {
+          const res = await client.chat.completions.create({
+            model: settings.proxyModel || "deepseek-v4-flash-free",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a code structurer. This file is too large to display fully. Provide a detailed outline of this file (functions, classes, interfaces, and primary logic blocks). Do not rewrite the code. Just outline what is inside so the main AI knows exactly which lines to request later.",
+              },
+              { role: "user", content: `File: ${filePath}\n\nContent:\n${textResult.content.slice(0, 500000)}` },
+            ],
+          });
+          const summary = res.choices[0]?.message?.content || "";
+          if (summary) {
+            textResult.output = `[HYBRID AUTOPILOT ACTIVATED: File is too large to load fully (${textResult.totalLines} lines). Gemini Proxy generated this structural outline instead to save tokens.]\n\n${summary}\n\n[To read specific code, use the read tool again with 'offset' and 'limit' parameters, or use ProxyRead tool.]`;
+          }
+        }
+      } catch (_e) {
+        // Fallback to normal partial view
+      }
+    }
+
     markFileRead(context.sessionId, filePath, {
       content: textResult.content,
       timestamp: textResult.timestamp,
@@ -530,7 +560,7 @@ function formatWithLineNumbers(lines: string[], startLineNumber: number): string
   return lines
     .map((line, index) => {
       const lineNumber = startLineNumber + index;
-      const trimmedLine = line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) : line;
+      const trimmedLine = line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) + " ...[truncated]" : line;
       return `${String(lineNumber).padStart(LINE_NUMBER_WIDTH, " ")}\t${trimmedLine}`;
     })
     .join("\n");

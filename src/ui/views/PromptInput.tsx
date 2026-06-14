@@ -71,7 +71,7 @@ export type PromptSubmission = {
   selectedSkills?: SkillInfo[];
   permissions?: UserToolPermission[];
   alwaysAllows?: PermissionScope[];
-  command?: "new" | "resume" | "continue" | "undo" | "mcp" | "exit" | "team" | "custom-agents";
+  command?: "new" | "resume" | "continue" | "undo" | "mcp" | "exit" | "team" | "custom-agents" | "settings";
 };
 
 export type PromptDraft = {
@@ -733,6 +733,11 @@ export const PromptInput = React.memo(function PromptInput({
     }
     if (item.kind === "custom-agents") {
       onSubmit({ text: "/custom-agents", imageUrls: [], command: "custom-agents" });
+      resetPromptInput();
+      return;
+    }
+    if (item.kind === "settings") {
+      onSubmit({ text: "/settings", imageUrls: [], command: "settings" });
       resetPromptInput();
       return;
     }

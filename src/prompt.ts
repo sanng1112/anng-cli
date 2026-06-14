@@ -476,6 +476,43 @@ export function getTools(_options: PromptToolOptions = {}, externalTools: ToolDe
     {
       type: "function",
       function: {
+        name: "AnalyzeProject",
+        description:
+          "Analyze the current project directory structure and dependencies using a proxy model to generate a high-level architecture map. Use this when starting work on a large unknown project.",
+        parameters: {
+          type: "object",
+          properties: {
+            depth: { type: "number", description: "The depth of the directory tree to scan. Default is 3." },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+
+    {
+      type: "function",
+      function: {
+        name: "ProxyRead",
+        description:
+          "Uses the Gemini Proxy to read a very large file and extract only the relevant logic, functions, or classes based on your query, instead of returning thousands of lines of code. Saves a massive amount of tokens.",
+        parameters: {
+          type: "object",
+          properties: {
+            file_path: { type: "string", description: "Absolute path to the large file." },
+            query: {
+              type: "string",
+              description:
+                "What you are looking for in the file (e.g. 'find the login function' or 'extract the database schema').",
+            },
+          },
+          required: ["file_path", "query"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
         name: "bash",
         description: "Execute shell commands in a persistent bash session.",
         parameters: {

@@ -7,3 +7,4 @@ dist/
 *.log
 .deepcode/settings.json
 .commandcode/
+.anng/

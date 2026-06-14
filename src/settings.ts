@@ -15,6 +15,9 @@ export type DeepcodingEnv = Record<string, string | undefined> & {
   TELEMETRY_ENABLED?: string;
   GEMINI_API_KEY?: string;
   GEMINI_BASE_URL?: string;
+  PROXY_API_KEY?: string;
+  PROXY_BASE_URL?: string;
+  PROXY_MODEL?: string;
 };
 
 export type ReasoningEffort = "high" | "max";
@@ -68,6 +71,9 @@ export type DeepcodingSettings = {
   // Multi-provider support
   geminiApiKey?: string;
   geminiBaseURL?: string;
+  proxyApiKey?: string;
+  proxyBaseURL?: string;
+  proxyModel?: string;
   // Team orchestration
   team?: TeamSettings;
   autoLinter?: string;
@@ -96,6 +102,9 @@ export type ResolvedDeepcodingSettings = {
   // Multi-provider support
   geminiApiKey?: string;
   geminiBaseURL?: string;
+  proxyApiKey?: string;
+  proxyBaseURL?: string;
+  proxyModel?: string;
   autoLinter?: string;
 };
 
@@ -446,14 +455,35 @@ export function resolveSettingsSources(
       trimString(projectEnv.GEMINI_API_KEY) ||
       trimString(userSettings?.geminiApiKey) ||
       trimString(userEnv.GEMINI_API_KEY) ||
-      undefined,
+      "",
     geminiBaseURL:
       trimString(systemEnv.GEMINI_BASE_URL) ||
       trimString(projectSettings?.geminiBaseURL) ||
       trimString(projectEnv.GEMINI_BASE_URL) ||
       trimString(userSettings?.geminiBaseURL) ||
       trimString(userEnv.GEMINI_BASE_URL) ||
-      "https://generativelanguage.googleapis.com/v1beta/openai/",
+      "",
+    proxyApiKey:
+      trimString(systemEnv.PROXY_API_KEY) ||
+      trimString(projectSettings?.proxyApiKey) ||
+      trimString(projectEnv.PROXY_API_KEY) ||
+      trimString(userSettings?.proxyApiKey) ||
+      trimString(userEnv.PROXY_API_KEY) ||
+      undefined,
+    proxyBaseURL:
+      trimString(systemEnv.PROXY_BASE_URL) ||
+      trimString(projectSettings?.proxyBaseURL) ||
+      trimString(projectEnv.PROXY_BASE_URL) ||
+      trimString(userSettings?.proxyBaseURL) ||
+      trimString(userEnv.PROXY_BASE_URL) ||
+      "https://opencode.ai/zen/v1",
+    proxyModel:
+      trimString(systemEnv.PROXY_MODEL) ||
+      trimString(projectSettings?.proxyModel) ||
+      trimString(projectEnv.PROXY_MODEL) ||
+      trimString(userSettings?.proxyModel) ||
+      trimString(userEnv.PROXY_MODEL) ||
+      "deepseek-v4-flash-free",
   };
 }
 
@@ -500,7 +530,7 @@ export function applyModelConfigSelection(
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_MODEL = "deepseek-v4-pro";
-export const DEFAULT_BASE_URL = "https://api.deepseek.com";
+export const DEFAULT_BASE_URL = "https://opencode.ai/zen/go/v1";
 
 // ---------------------------------------------------------------------------
 // Settings file I/O

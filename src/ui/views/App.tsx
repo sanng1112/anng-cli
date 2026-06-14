@@ -48,10 +48,11 @@ import { SessionManager } from "../../session";
 import { TeamOrchestrator } from "../../team/team-orchestrator";
 import type { TeamUIEvent, TeamResult, AgentConfig } from "../../team/types";
 import { AgentsConfigView } from "./AgentsConfigView";
+import { SettingsView } from "./SettingsView";
 import * as fs from "fs";
 import * as path from "path";
 
-type View = "chat" | "session-list" | "undo" | "mcp-status" | "agents-config";
+type View = "chat" | "session-list" | "undo" | "mcp-status" | "agents-config" | "settings";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -396,6 +397,10 @@ function App({
       }
       if (submission.command === "custom-agents") {
         navigateToSubView("agents-config");
+        return;
+      }
+      if (submission.command === "settings") {
+        navigateToSubView("settings");
         return;
       }
 
@@ -909,6 +914,25 @@ function App({
           );
         }}
       </Static>
+      {streamProgress && (streamProgress.text || streamProgress.reasoningText) ? (
+        <MessageView
+          key={`stream-${streamProgress.requestId}`}
+          message={{
+            id: `stream-${streamProgress.requestId}`,
+            sessionId: streamProgress.sessionId ?? "",
+            role: "assistant",
+            content: streamProgress.text ?? "",
+            contentParams: null,
+            messageParams: streamProgress.reasoningText ? { reasoning_content: streamProgress.reasoningText } : null,
+            compacted: false,
+            visible: true,
+            createTime: streamProgress.startedAt,
+            updateTime: new Date().toISOString(),
+          }}
+          collapsed={false}
+          width={screenWidth}
+        />
+      ) : null}
       {busy || statusLine ? <StatusLine busy={busy} text={statusLine} /> : null}
       {errorLine ? (
         <Box>
@@ -961,6 +985,14 @@ function App({
         />
       ) : view === "agents-config" ? (
         <AgentsConfigView projectRoot={projectRoot} onExit={() => navigateToSubView("chat")} />
+      ) : view === "settings" ? (
+        <SettingsView
+          projectRoot={projectRoot}
+          onExit={() => {
+            setResolvedSettings(resolveCurrentSettings(projectRoot));
+            navigateToSubView("chat");
+          }}
+        />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
         <AskUserQuestionPrompt
           questions={pendingQuestion.questions}
