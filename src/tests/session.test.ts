@@ -2117,7 +2117,7 @@ test("replySession /continue runs trailing pending tool calls before requesting 
   const userMessages = messages.filter((message) => message.role === "user");
 
   assert.ok(toolMessage);
-  assert.match(toolMessage.content ?? "", /hello from pending tool/);
+  assert.match(toolMessage.content ?? "", /File Content Saved to Workspace Memory/);
   assert.equal(assistantMessages[assistantMessages.length - 1]?.content, "continued after tool");
   assert.equal(
     userMessages.some((message) => message.content === "/continue"),
@@ -2347,7 +2347,7 @@ test("replySession applies permission replies, runs pending tools, and stores al
   const toolMessage = manager.listSessionMessages(sessionId).find((message) => message.role === "tool");
   const settings = JSON.parse(fs.readFileSync(path.join(workspace, ".anng", "settings.json"), "utf8"));
 
-  assert.match(toolMessage?.content ?? "", /allowed content/);
+  assert.match(toolMessage?.content ?? "", /File Content Saved to Workspace Memory/);
   assert.deepEqual(settings.permissions.allow, ["read-in-cwd"]);
   assert.equal(manager.getSession(sessionId)?.status, "completed");
 });

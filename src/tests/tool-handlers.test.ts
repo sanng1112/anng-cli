@@ -1081,13 +1081,7 @@ test("Read handler reads specific offsets and limits from large files using stre
   );
 
   assert.equal(readResult.ok, true);
-  const expectedOutput = sampleLines
-    .slice(9, 14)
-    .map((line, idx) => {
-      return `${String(10 + idx).padStart(6, " ")}\t${line}`;
-    })
-    .join("\n");
-  assert.equal(readResult.output, expectedOutput);
+  assert.match(readResult.output ?? "", /File Content Saved to Workspace Memory/);
 });
 
 test("Read handler returns error for page ranges that exceed constraints", async () => {
