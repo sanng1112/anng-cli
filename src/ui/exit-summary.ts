@@ -73,8 +73,8 @@ export function buildExitSummaryText(input: ExitSummaryInput): string {
   const innerWidth = 98;
   const contentWidth = innerWidth - 4; // "│  " prefix + "  │" suffix → 4 chars padding
 
-  const borderColor = chalk.hex("#229ac3e6");
-  const titleColor = gradientString("#229ac3e6", "rgb(125 51 247 / 0.7)");
+  const borderColor = chalk.hex("#D4704Be6");
+  const titleColor = gradientString("#D4704Be6", "rgb(125 51 247 / 0.7)");
   const line = (text: string) => `${borderColor("│")}  ${padRight(text, contentWidth)}  ${borderColor("│")}`;
 
   const header = chalk.bold(titleColor("Goodbye!"));

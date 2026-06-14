@@ -276,7 +276,7 @@ export function SessionList({ sessions, onSelect, onCancel, onDelete, onRename }
             <Text bold color="cyanBright">
               Resume a session
             </Text>
-            <Text bold color="#229ac3">
+            <Text bold color="#D4704B">
               {" "}
               ({sessions.length} total
               {hasActiveSearch ? `, ${filteredSessions.length} matched` : ""})
@@ -315,7 +315,7 @@ export function SessionList({ sessions, onSelect, onCancel, onDelete, onRename }
               return (
                 <Box key={session.id} height={2} marginBottom={1}>
                   <Box>
-                    <Text color="#229ac3">{isSelected ? "> " : "  "}</Text>
+                    <Text color="#D4704B">{isSelected ? "> " : "  "}</Text>
                   </Box>
                   <Box flexDirection="column" flexGrow={1}>
                     <Box width={"100%"}>
@@ -326,7 +326,7 @@ export function SessionList({ sessions, onSelect, onCancel, onDelete, onRename }
                           {renameValue.slice(renameCursor)}
                         </Text>
                       ) : (
-                        <Text {...(isSelected ? { bold: true } : {})} color={isSelected ? "#229ac3" : undefined}>
+                        <Text {...(isSelected ? { bold: true } : {})} color={isSelected ? "#D4704B" : undefined}>
                           {formatSessionTitle(session.summary || "Untitled")}
                         </Text>
                       )}

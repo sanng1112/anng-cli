@@ -60,7 +60,7 @@ export function MessageView({ message, collapsed, width = 80 }: MessageViewProps
     return (
       <Box marginLeft={1} marginBottom={1} width={containerWidth} gap={1} marginY={0} flexDirection="row">
         <Box alignSelf="stretch">
-          <Text color="#229ac3">✦</Text>
+          <Text color="#D4704B">✦</Text>
         </Box>
         <Box flexGrow={1} width={contentWidth} flexDirection="column">
           {content
@@ -147,13 +147,13 @@ function PromptEchoLine({
   return (
     <Box marginBottom={1} marginY={0} width={Math.max(1, width)} flexDirection="row">
       <Box width={PROMPT_ECHO_PREFIX_WIDTH}>
-        <Text color="#229ac3">{"> "}</Text>
+        <Text color="#D4704B">{"> "}</Text>
       </Box>
       <Box flexGrow={1} flexShrink={1} width={contentWidth}>
-        <Text color="#229ac3" wrap="hard">
+        <Text color="#D4704B" wrap="hard">
           {text}
         </Text>
-        {attachmentCount > 0 ? <Text color="#229ac3">{`  📎 ${attachmentCount} image attachment(s)`}</Text> : null}
+        {attachmentCount > 0 ? <Text color="#D4704B">{`  📎 ${attachmentCount} image attachment(s)`}</Text> : null}
       </Box>
     </Box>
   );

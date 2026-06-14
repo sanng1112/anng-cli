@@ -107,7 +107,7 @@ const PROMPT_PREFIX_WIDTH = 2;
 const PromptPrefixLine = React.memo(function PromptPrefixLine(): React.ReactElement {
   return (
     <Box width={PROMPT_PREFIX_WIDTH}>
-      <Text color="#229ac3">{"> "}</Text>
+      <Text color="#D4704B">{"> "}</Text>
     </Box>
   );
 });

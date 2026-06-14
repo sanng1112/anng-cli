@@ -99,7 +99,7 @@ export function UndoSelector({ targets, onSelect, onCancel }: Props): React.Reac
     >
       <Box flexDirection="column" borderStyle="round" borderDimColor flexGrow={1} overflow="hidden">
         <Box paddingX={1}>
-          <Text bold color="#229ac3">
+          <Text bold color="#D4704B">
             Undo
           </Text>
           <Text dimColor> restore to the point before a prompt</Text>
@@ -122,9 +122,9 @@ export function UndoSelector({ targets, onSelect, onCancel }: Props): React.Reac
               const isActive = actualIndex === safeTargetIndex;
               return (
                 <Box key={target.message.id} height={2} marginBottom={1}>
-                  <Text color="#229ac3">{isActive ? "> " : "  "}</Text>
+                  <Text color="#D4704B">{isActive ? "> " : "  "}</Text>
                   <Box flexDirection="column" flexGrow={1}>
-                    <Text color={isActive ? "#229ac3" : undefined} bold={isActive}>
+                    <Text color={isActive ? "#D4704B" : undefined} bold={isActive}>
                       {formatUndoMessage(target.message.content)}
                     </Text>
                     <Text dimColor>

@@ -50,7 +50,7 @@ export function WelcomeScreen({ projectRoot, settings, skills, width }: WelcomeS
 
           <Box
             borderStyle={"round"}
-            borderColor={"#229ac3e6"}
+            borderColor={"#D4704Be6"}
             flexDirection="column"
             flexGrow={1}
             height={compact ? undefined : PANEL_CONTENT_HEIGHT}
@@ -58,7 +58,7 @@ export function WelcomeScreen({ projectRoot, settings, skills, width }: WelcomeS
             paddingX={1}
           >
             <Box flexGrow={1} marginBottom={compact ? 1 : 0}>
-              <Text color={"#229ac3e6"}>{">"}_ ANNG CLI </Text>
+              <Text color={"#D4704Be6"}>{">"}_ ANNG CLI </Text>
               <Text color="gray"> (v{version || "unknown"})</Text>
             </Box>
             {!compact ? <Text> </Text> : null}

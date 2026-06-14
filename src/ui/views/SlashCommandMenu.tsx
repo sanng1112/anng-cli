@@ -56,14 +56,14 @@ const SlashCommandMenu = React.memo(function SlashCommandMenu({
         return (
           <Box key={item.label} gap={2} flexDirection="row" flexGrow={1}>
             <Box width={labelColumnWidth} flexShrink={0} gap={2}>
-              <Text color={actualIndex === activeIndex ? "#229ac3" : undefined} wrap="truncate-end">
+              <Text color={actualIndex === activeIndex ? "#D4704B" : undefined} wrap="truncate-end">
                 {actualIndex === activeIndex ? "> " : "  "}
                 <Text bold>{formatSlashCommandLabel(item)}</Text>
               </Text>
               {item.args ? <Text dimColor>{item.args.join(ARGS_SEPARATOR)}</Text> : null}
             </Box>
             <Box flexGrow={1}>
-              <Text color={actualIndex === activeIndex ? "#229ac3" : undefined} wrap="truncate-end" dimColor>
+              <Text color={actualIndex === activeIndex ? "#D4704B" : undefined} wrap="truncate-end" dimColor>
                 {formatSlashCommandDescription(item.description)}
               </Text>
             </Box>
