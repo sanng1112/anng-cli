@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Frontend Worker",
+    "prompt": "",
+    "model": "deepseek-v4-pro",
+    "thinkingEnabled": true,
+    "reasoningEffort": "high"
+  },
+  {
+    "name": "Backend Worker",
+    "prompt": "",
+    "model": ""
+  },
+  {
+    "name": "Database Expert",
+    "prompt": "",
+    "model": ""
+  },
+  {
+    "name": "QA/Reviewer",
+    "prompt": "",
+    "model": ""
+  },
+  {
+    "name": "tester",
+    "prompt": "",
+    "model": ""
+  }
+]
