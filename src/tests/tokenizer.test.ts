@@ -37,13 +37,13 @@ describe("countMessagesTokens", () => {
 });
 
 describe("getCompactThreshold", () => {
-  it("returns 512k for deepseek models", () => {
-    assert.strictEqual(getCompactThreshold("deepseek-v4-pro"), 512 * 1024);
-    assert.strictEqual(getCompactThreshold("deepseek-v4-flash"), 512 * 1024);
+  it("returns 48k for deepseek models", () => {
+    assert.strictEqual(getCompactThreshold("deepseek-v4-pro"), 48 * 1024);
+    assert.strictEqual(getCompactThreshold("deepseek-v4-flash"), 48 * 1024);
   });
 
-  it("returns 128k for unknown models", () => {
-    assert.strictEqual(getCompactThreshold("gpt-4"), 128 * 1024);
-    assert.strictEqual(getCompactThreshold(""), 128 * 1024);
+  it("returns 32k for unknown models", () => {
+    assert.strictEqual(getCompactThreshold("gpt-4"), 32 * 1024);
+    assert.strictEqual(getCompactThreshold(""), 32 * 1024);
   });
 });
