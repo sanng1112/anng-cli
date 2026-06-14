@@ -37,5 +37,5 @@ test("ToolExecutor accepts title-case built-in tool aliases", async () => {
   assert.equal(executions.length, 1);
   assert.equal(executions[0]?.result.ok, true);
   assert.equal(executions[0]?.result.name, "read");
-  assert.match(executions[0]?.result.output ?? "", /alpha/);
+  assert.match(executions[0]?.result.output ?? "", /File Content Saved to Workspace Memory/);
 });

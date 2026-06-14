@@ -329,7 +329,7 @@ export async function handleReadTool(
     return {
       ok: true,
       name: "read",
-      output: textResult.output,
+      output: `[File Content Saved to Workspace Memory]\nSnippet ID: ${snippet?.id}`,
       metadata: snippet
         ? {
             snippet: {

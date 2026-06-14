@@ -34,7 +34,7 @@ import { logApiError } from "../common/error-logger";
 import { logOpenAIChatCompletionDebug, normalizeDebugError } from "../common/debug-logger";
 import { killProcessTree } from "../common/process-tree";
 import { GitFileHistory, type FileHistoryCheckpointResult } from "../common/file-history";
-import { clearSessionState, getSnippet, rebuildSessionStateFromHistory } from "../common/state";
+import { clearSessionState, getSnippet, getSessionSnippets, rebuildSessionStateFromHistory } from "../common/state";
 import {
   appendProjectPermissionAllows,
   buildPermissionToolExecution,
@@ -1237,11 +1237,41 @@ ${agentInstructions}
           await this.compactSession(sessionId, compactionDecision, sessionController.signal);
         }
 
-        const messages = this.messageConverter.buildMessages(
-          this.listSessionMessages(sessionId),
-          thinkingEnabled,
-          model
-        );
+        let activeMessages = this.listSessionMessages(sessionId);
+        const pinnedSnippets = getSessionSnippets(sessionId);
+        if (pinnedSnippets.length > 0) {
+          const pinnedContent = pinnedSnippets
+            .map(
+              (s) => `[Pinned Snippet: ${s.id} from ${s.filePath} (Lines ${s.startLine}-${s.endLine})]\n${s.preview}`
+            )
+            .join("\n\n");
+
+          const workspaceMessage: SessionMessage = {
+            id: `workspace_state_${Date.now()}`,
+            sessionId,
+            role: "system",
+            content: `<WORKSPACE_STATE>\nThe following files are currently pinned in your workspace memory. You do not need to read them again unless you need a different part of the file.\n\n${pinnedContent}\n</WORKSPACE_STATE>`,
+            contentParams: null,
+            messageParams: null,
+            compacted: false,
+            visible: false,
+            createTime: new Date().toISOString(),
+            updateTime: new Date().toISOString(),
+          };
+
+          const firstNonSystemIndex = activeMessages.findIndex((m) => m.role !== "system");
+          if (firstNonSystemIndex >= 0) {
+            activeMessages = [
+              ...activeMessages.slice(0, firstNonSystemIndex),
+              workspaceMessage,
+              ...activeMessages.slice(firstNonSystemIndex),
+            ];
+          } else {
+            activeMessages = [...activeMessages, workspaceMessage];
+          }
+        }
+
+        const messages = this.messageConverter.buildMessages(activeMessages, thinkingEnabled, model);
         const thinkingOptions = buildThinkingRequestOptions(thinkingEnabled, baseURL, reasoningEffort);
         const response = await this.createChatCompletionStream(
           client,
