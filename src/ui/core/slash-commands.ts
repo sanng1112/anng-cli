@@ -23,6 +23,8 @@ export type SlashCommandItem = {
   description: string;
   skill?: SkillInfo;
   args?: string[];
+  group?: string;
+  isGroupStart?: boolean;
 };
 
 export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
@@ -108,14 +110,23 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
 ];
 
 export function buildSlashCommands(skills: SkillInfo[]): SlashCommandItem[] {
-  const skillItems: SlashCommandItem[] = skills.map((skill) => ({
+  const builtIns: SlashCommandItem[] = BUILTIN_SLASH_COMMANDS.map((c, i) => ({
+    ...c,
+    group: "Built-in Commands",
+    isGroupStart: i === 0,
+  }));
+
+  const skillItems: SlashCommandItem[] = skills.map((skill, i) => ({
     kind: "skill",
     name: skill.name,
     label: `/${skill.name}`,
     description: skill.description || "(no description)",
     skill,
+    group: "Custom & Loaded Skills",
+    isGroupStart: i === 0,
   }));
-  return [...skillItems, ...BUILTIN_SLASH_COMMANDS];
+
+  return [...builtIns, ...skillItems];
 }
 
 export function filterSlashCommands(items: SlashCommandItem[], token: string): SlashCommandItem[] {
@@ -123,10 +134,21 @@ export function filterSlashCommands(items: SlashCommandItem[], token: string): S
     return [];
   }
   const query = token.slice(1).toLowerCase();
-  if (!query) {
-    return items;
+
+  let filtered = items;
+  if (query) {
+    filtered = items.filter((item) => item.name.toLowerCase().includes(query));
   }
-  return items.filter((item) => item.name.toLowerCase().includes(query));
+
+  // Re-assign isGroupStart based on filtered results
+  let currentGroup = "";
+  return filtered.map((item) => {
+    const isGroupStart = item.group !== currentGroup;
+    if (isGroupStart) {
+      currentGroup = item.group || "";
+    }
+    return { ...item, isGroupStart };
+  });
 }
 
 export function findExactSlashCommand(items: SlashCommandItem[], token: string): SlashCommandItem | null {

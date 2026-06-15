@@ -286,6 +286,13 @@ export function getSnippet(sessionId: string, snippetId: string): FileSnippet | 
   return snippetsBySession.get(sessionId)?.get(snippetId) ?? null;
 }
 
+export function removeSnippet(sessionId: string, snippetId: string): void {
+  if (!sessionId || !snippetId) {
+    return;
+  }
+  snippetsBySession.get(sessionId)?.delete(snippetId);
+}
+
 export function getSessionSnippets(sessionId: string): FileSnippet[] {
   if (!sessionId) return [];
   const sessionSnippets = snippetsBySession.get(sessionId);

@@ -54,20 +54,29 @@ const SlashCommandMenu = React.memo(function SlashCommandMenu({
       {visibleItems.map((item, idx) => {
         const actualIndex = visibleStart + idx;
         return (
-          <Box key={item.label} gap={2} flexDirection="row" flexGrow={1}>
-            <Box width={labelColumnWidth} flexShrink={0} gap={2}>
-              <Text color={actualIndex === activeIndex ? "#D4704B" : undefined} wrap="truncate-end">
-                {actualIndex === activeIndex ? "> " : "  "}
-                <Text bold>{formatSlashCommandLabel(item)}</Text>
-              </Text>
-              {item.args ? <Text dimColor>{item.args.join(ARGS_SEPARATOR)}</Text> : null}
+          <React.Fragment key={item.label}>
+            {item.isGroupStart ? (
+              <Box marginLeft={2} marginBottom={0} marginTop={actualIndex === 0 ? 0 : 1}>
+                <Text bold dimColor>
+                  --- {item.group} ---
+                </Text>
+              </Box>
+            ) : null}
+            <Box gap={2} flexDirection="row" flexGrow={1}>
+              <Box width={labelColumnWidth} flexShrink={0} gap={2}>
+                <Text color={actualIndex === activeIndex ? "#D4704B" : undefined} wrap="truncate-end">
+                  {actualIndex === activeIndex ? "> " : "  "}
+                  <Text bold>{formatSlashCommandLabel(item)}</Text>
+                </Text>
+                {item.args ? <Text dimColor>{item.args.join(ARGS_SEPARATOR)}</Text> : null}
+              </Box>
+              <Box flexGrow={1}>
+                <Text color={actualIndex === activeIndex ? "#D4704B" : undefined} wrap="truncate-end" dimColor>
+                  {formatSlashCommandDescription(item.description)}
+                </Text>
+              </Box>
             </Box>
-            <Box flexGrow={1}>
-              <Text color={actualIndex === activeIndex ? "#D4704B" : undefined} wrap="truncate-end" dimColor>
-                {formatSlashCommandDescription(item.description)}
-              </Text>
-            </Box>
-          </Box>
+          </React.Fragment>
         );
       })}
       <Box marginLeft={2} flexDirection="column">

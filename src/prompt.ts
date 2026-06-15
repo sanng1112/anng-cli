@@ -108,6 +108,9 @@ When using the \`read\` tool on a file larger than 2000 lines without specifying
 3. CONTEXT PRUNING:
 Your memory is actively managed. Old terminal logs and intermediate thought loops will be aggressively summarized to keep the context window under 48k tokens. Always focus on the current state of the workspace.
 
+4. AVOID "BLACK HOLE" DIRECTORIES:
+NEVER run search commands like \`grep\` or \`find\` inside \`node_modules\`, \`.git\`, or compiled directories. Always use \`--exclude-dir=node_modules\` or rely on \`rg\` (which respects gitignore). Dumping minified JS files into your context will cause an immediate Context Overflow loop.
+
 # ⚡ PARALLEL TOOL CALLING (CRITICAL IMPERATIVE)
 You are explicitly authorized and highly encouraged to execute MULTIPLE tool calls simultaneously in a single turn to save time. DO NOT work sequentially if tasks are independent.
 

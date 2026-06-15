@@ -511,8 +511,18 @@ async function truncateOutput(
   const tailLines = lines.slice(-50).join("\n");
   const omittedCount = lines.length - 100;
 
+  let text = `${headLines}\n\n...[OUTPUT TRUNCATED: ${omittedCount} lines omitted]...\n\n${tailLines}`;
+
+  // Safeguard against extremely long lines (e.g. minified files in node_modules)
+  if (text.length > MAX_OUTPUT_CHARS) {
+    const half = Math.floor(MAX_OUTPUT_CHARS / 2);
+    const head = text.slice(0, half);
+    const tail = text.slice(-half);
+    text = `${head}\n\n...[OUTPUT TRUNCATED: ${text.length - MAX_OUTPUT_CHARS} chars omitted]...\n\n${tail}`;
+  }
+
   return {
-    text: `${headLines}\n\n...[OUTPUT TRUNCATED: ${omittedCount} lines omitted]...\n\n${tailLines}`,
+    text,
     truncated: true,
   };
 }
