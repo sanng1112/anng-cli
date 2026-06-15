@@ -14,10 +14,10 @@ const skills: SkillInfo[] = [
   { name: "code-review", path: "~/.agents/skills/code-review/SKILL.md", description: "Review code" },
 ];
 
-test("buildSlashCommands prefixes skills before built-ins", () => {
+test("buildSlashCommands prefixes built-ins before skills", () => {
   const items = buildSlashCommands(skills);
-  assert.equal(items[0].kind, "skill");
-  assert.equal(items[0].name, "skill-writer");
+  const firstSkillIndex = items.findIndex((i) => i.kind === "skill");
+  assert.equal(items[firstSkillIndex].name, "skill-writer");
   const builtinNames = items.filter((i) => i.kind !== "skill").map((i) => i.name);
   assert.deepEqual(builtinNames, [
     "skills",
@@ -39,7 +39,7 @@ test("buildSlashCommands prefixes skills before built-ins", () => {
 test("filterSlashCommands matches partial prefixes", () => {
   const items = buildSlashCommands(skills);
   const matched = filterSlashCommands(items, "/skil").map((i) => i.name);
-  assert.deepEqual(matched, ["skill-writer", "skills"]);
+  assert.deepEqual(matched, ["skills", "skill-writer"]);
 });
 
 test("filterSlashCommands returns all entries on bare slash", () => {
@@ -126,6 +126,9 @@ test("formatSlashCommandLabel marks loaded skills", () => {
     { name: "fresh", path: "/skills/fresh/SKILL.md", description: "Fresh skill" },
   ]);
 
-  assert.equal(formatSlashCommandLabel(items[0]), "/loaded ✓");
-  assert.equal(formatSlashCommandLabel(items[1]), "/fresh");
+  const loadedItem = items.find((i) => i.name === "loaded")!;
+  const freshItem = items.find((i) => i.name === "fresh")!;
+
+  assert.equal(formatSlashCommandLabel(loadedItem), "/loaded ✓");
+  assert.equal(formatSlashCommandLabel(freshItem), "/fresh");
 });

@@ -34,7 +34,13 @@ import { logApiError } from "../common/error-logger";
 import { logOpenAIChatCompletionDebug, normalizeDebugError } from "../common/debug-logger";
 import { killProcessTree } from "../common/process-tree";
 import { GitFileHistory, type FileHistoryCheckpointResult } from "../common/file-history";
-import { clearSessionState, getSnippet, getSessionSnippets, rebuildSessionStateFromHistory } from "../common/state";
+import {
+  clearSessionState,
+  getSnippet,
+  getSessionSnippets,
+  removeSnippet,
+  rebuildSessionStateFromHistory,
+} from "../common/state";
 import {
   appendProjectPermissionAllows,
   buildPermissionToolExecution,
@@ -49,6 +55,7 @@ import {
 import { clearSessionWorkingDir } from "../tools/bash-handler";
 import { reportNewPrompt } from "../common/telemetry";
 import { shouldCompactContext } from "./compacter";
+import { countMessagesTokens } from "../common/tokenizer";
 import { OpenAIMessageConverter } from "../common/openai-message-converter";
 
 import {
@@ -1238,8 +1245,28 @@ ${agentInstructions}
         }
 
         let activeMessages = this.listSessionMessages(sessionId);
-        const pinnedSnippets = getSessionSnippets(sessionId);
+        let pinnedSnippets = getSessionSnippets(sessionId);
         if (pinnedSnippets.length > 0) {
+          const MAX_WORKSPACE_CHARS = 40000;
+          let totalChars = 0;
+          const keptSnippets: typeof pinnedSnippets = [];
+
+          // Prune from oldest to newest (oldest are at the beginning of the array).
+          // We iterate backwards to keep the most recently pinned items.
+          for (let i = pinnedSnippets.length - 1; i >= 0; i--) {
+            const snippet = pinnedSnippets[i];
+            const snippetChars = snippet.preview.length + snippet.filePath.length + 100;
+            if (totalChars + snippetChars > MAX_WORKSPACE_CHARS && keptSnippets.length > 0) {
+              for (let j = 0; j <= i; j++) {
+                removeSnippet(sessionId, pinnedSnippets[j].id);
+              }
+              break;
+            }
+            totalChars += snippetChars;
+            keptSnippets.unshift(snippet);
+          }
+          pinnedSnippets = keptSnippets;
+
           const pinnedContent = pinnedSnippets
             .map(
               (s) => `[Pinned Snippet: ${s.id} from ${s.filePath} (Lines ${s.startLine}-${s.endLine})]\n${s.preview}`
@@ -1269,6 +1296,28 @@ ${agentInstructions}
           } else {
             activeMessages = [...activeMessages, workspaceMessage];
           }
+        }
+
+        // --- Cache Shock Absorber ---
+        // If the active messages (after compaction attempt and pinned files) are still too large (e.g. > 40k tokens),
+        // we inject a system prompt forcing the model to output a very short response. This accelerates
+        // the transition of the massive block into "old history" so it can be successfully pruned in the next turn.
+        const remainingTokens = countMessagesTokens(activeMessages);
+        if (remainingTokens > 40000) {
+          const shockAbsorberMessage: SessionMessage = {
+            id: `shock_absorber_${Date.now()}`,
+            sessionId,
+            role: "system",
+            content:
+              "CRITICAL: The context window is currently overflowing due to a massive tool output or data block. DO NOT use long reasoning or chain-of-thought. Output a VERY SHORT response or an immediate tool call so we can flush this output into the compacted history.",
+            contentParams: null,
+            messageParams: null,
+            compacted: false,
+            visible: false,
+            createTime: new Date().toISOString(),
+            updateTime: new Date().toISOString(),
+          };
+          activeMessages.push(shockAbsorberMessage);
         }
 
         const messages = this.messageConverter.buildMessages(activeMessages, thinkingEnabled, model);
@@ -2230,19 +2279,21 @@ ${agentInstructions}
     const parsedToolCalls = toolCalls
       .map((toolCall) => parseToolCallForPermissions(toolCall))
       .filter((toolCall): toolCall is PermissionToolCall => Boolean(toolCall));
-    const toolExecutions: ToolCallExecution[] = [];
+
+    const executionPromises: Promise<ToolCallExecution[]>[] = [];
     for (const toolCall of parsedToolCalls) {
       if (hooks.shouldStop?.()) {
         break;
       }
       const blockedResult = buildPermissionToolExecution(toolCall, options);
       if (blockedResult) {
-        toolExecutions.push(blockedResult);
+        executionPromises.push(Promise.resolve([blockedResult]));
         continue;
       }
-      const executions = await this.toolExecutor.executeToolCalls(sessionId, [toolCall], hooks);
-      toolExecutions.push(...executions);
+      executionPromises.push(this.toolExecutor.executeToolCalls(sessionId, [toolCall], hooks));
     }
+    const executionResults = await Promise.all(executionPromises);
+    const toolExecutions = executionResults.flat();
     if (this.isInterrupted(sessionId)) {
       return { waitingForUser: false };
     }

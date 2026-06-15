@@ -14,121 +14,133 @@ import { RawMode, useRawModeContext } from "../../contexts";
 
 const PROMPT_ECHO_PREFIX_WIDTH = 2;
 
-export function MessageView({ message, collapsed, width = 80 }: MessageViewProps): React.ReactElement | null {
-  const { mode } = useRawModeContext();
-  if (!message.visible) {
-    return null;
-  }
+export const MessageView = React.memo(
+  function MessageView({ message, collapsed, width = 80 }: MessageViewProps): React.ReactElement | null {
+    const { mode } = useRawModeContext();
+    if (!message.visible) {
+      return null;
+    }
 
-  if (message.role === "user") {
-    const text = message.content || "(no content)";
-    return (
-      <PromptEchoLine
-        text={text}
-        width={width}
-        attachmentCount={Array.isArray(message.contentParams) ? message.contentParams.length : 0}
-      />
-    );
-  }
+    if (message.role === "user") {
+      const text = message.content || "(no content)";
+      return (
+        <PromptEchoLine
+          text={text}
+          width={width}
+          attachmentCount={Array.isArray(message.contentParams) ? message.contentParams.length : 0}
+        />
+      );
+    }
 
-  if (message.role === "assistant") {
-    const isThinking = Boolean(message.meta?.asThinking);
-    const content = (message.content || "").trim();
+    if (message.role === "assistant") {
+      const isThinking = Boolean(message.meta?.asThinking);
+      const content = (message.content || "").trim();
 
-    if (isThinking) {
-      const summary = buildThinkingSummary(content, message.messageParams, mode);
-      if (collapsed !== false) {
+      if (isThinking) {
+        const summary = buildThinkingSummary(content, message.messageParams, mode);
+        if (collapsed !== false) {
+          return (
+            <Box marginLeft={1} marginBottom={0} marginY={0}>
+              <StatusLine width={width} bulletColor="gray" name="Thinking" params={summary} />
+            </Box>
+          );
+        }
         return (
-          <Box marginLeft={1} marginBottom={1} marginY={0}>
-            <StatusLine width={width} bulletColor="gray" name="Thinking" params={summary} />
+          <Box marginLeft={1} flexDirection="column" marginBottom={0} marginY={0}>
+            <StatusLine width={width} bulletColor="gray" name="Thinking" params={content ? "" : summary} />
+            <Box flexDirection="column" marginLeft={2}>
+              {content ? <Text dimColor>{renderMarkdown(content)}</Text> : null}
+            </Box>
           </Box>
         );
       }
+
+      const containerWidth = Math.max(1, width - 2);
+      const contentWidth = Math.max(1, width - 4);
+
       return (
-        <Box marginLeft={1} flexDirection="column" marginBottom={1} marginY={0}>
-          <StatusLine width={width} bulletColor="gray" name="Thinking" params={content ? "" : summary} />
-          <Box flexDirection="column" marginLeft={2}>
-            {content ? <Text dimColor>{renderMarkdown(content)}</Text> : null}
+        <Box marginLeft={1} marginBottom={1} width={containerWidth} gap={1} marginY={0} flexDirection="row">
+          <Box alignSelf="stretch">
+            <Text color="#D4704B">✦</Text>
+          </Box>
+          <Box flexGrow={1} width={contentWidth} flexDirection="column">
+            {content
+              ? renderMarkdownSegments(content, Math.max(20, contentWidth - 4)).map((seg, i) => {
+                  if (seg.kind === "table") {
+                    return (
+                      <Box key={i} flexDirection="column">
+                        {seg.body.split("\n").map((line, lineIndex) => (
+                          <Text key={lineIndex} wrap="truncate-end">
+                            {line}
+                          </Text>
+                        ))}
+                      </Box>
+                    );
+                  }
+                  return <Text key={i}>{seg.body}</Text>;
+                })
+              : null}
           </Box>
         </Box>
       );
     }
 
-    const containerWidth = Math.max(1, width - 2);
-    const contentWidth = Math.max(1, width - 4);
-
-    return (
-      <Box marginLeft={1} marginBottom={1} width={containerWidth} gap={1} marginY={0} flexDirection="row">
-        <Box alignSelf="stretch">
-          <Text color="#D4704B">✦</Text>
-        </Box>
-        <Box flexGrow={1} width={contentWidth} flexDirection="column">
-          {content
-            ? renderMarkdownSegments(content, Math.max(20, contentWidth - 4)).map((seg, i) => {
-                if (seg.kind === "table") {
-                  return (
-                    <Box key={i} flexDirection="column">
-                      {seg.body.split("\n").map((line, lineIndex) => (
-                        <Text key={lineIndex} wrap="truncate-end">
-                          {line}
-                        </Text>
-                      ))}
-                    </Box>
-                  );
-                }
-                return <Text key={i}>{seg.body}</Text>;
-              })
-            : null}
-        </Box>
-      </Box>
-    );
-  }
-
-  if (message.role === "tool") {
-    const summary = buildToolSummary(message);
-    const diffLines = getToolDiffPreviewLines(summary);
-    const planLines = getUpdatePlanPreviewLines(summary);
-    return (
-      <Box flexDirection="column" marginLeft={1} marginBottom={1} marginY={0}>
-        <StatusLine
-          width={width}
-          bulletColor={summary.ok ? "green" : "red"}
-          name={formatStatusName(summary.name)}
-          params={formatToolStatusParams(summary)}
-        />
-        {diffLines.length > 0 ? <DiffPreview lines={diffLines} /> : null}
-        {planLines.length > 0 ? <PlanPreview lines={planLines} /> : null}
-      </Box>
-    );
-  }
-
-  if (message.role === "system") {
-    // Render model change messages in the same style as user commands.
-    if (message.meta?.isModelChange) {
-      return <PromptEchoLine text={message.content || ""} width={width} />;
-    }
-
-    if (message.meta?.skill) {
+    if (message.role === "tool") {
+      const summary = buildToolSummary(message);
+      const diffLines = getToolDiffPreviewLines(summary);
+      const planLines = getUpdatePlanPreviewLines(summary);
       return (
-        <Box marginY={0} marginLeft={1} marginBottom={1}>
-          <Text color="magenta">⚡ Loaded skill: {message.meta.skill.name}</Text>
+        <Box flexDirection="column" marginLeft={1} marginBottom={0} marginY={0}>
+          <StatusLine
+            width={width}
+            bulletColor={summary.ok ? "#D4704B" : "red"}
+            name={formatStatusName(summary.name)}
+            params={formatToolStatusParams(summary)}
+          />
+          {diffLines.length > 0 ? <DiffPreview lines={diffLines} /> : null}
+          {planLines.length > 0 ? <PlanPreview lines={planLines} /> : null}
         </Box>
       );
     }
-    if (message.meta?.isSummary) {
-      return (
-        <Box marginY={0} marginLeft={1} marginBottom={1}>
-          <Text dimColor italic>
-            (conversation summary inserted)
-          </Text>
-        </Box>
-      );
+
+    if (message.role === "system") {
+      // Render model change messages in the same style as user commands.
+      if (message.meta?.isModelChange) {
+        return <PromptEchoLine text={message.content || ""} width={width} />;
+      }
+
+      if (message.meta?.skill) {
+        return (
+          <Box marginY={0} marginLeft={1} marginBottom={0}>
+            <Text color="#D4704B">⚡ Loaded skill: {message.meta.skill.name}</Text>
+          </Box>
+        );
+      }
+      if (message.meta?.isSummary) {
+        return (
+          <Box marginY={0} marginLeft={1} marginBottom={0}>
+            <Text dimColor italic>
+              (conversation summary inserted)
+            </Text>
+          </Box>
+        );
+      }
+      return null;
     }
+
     return null;
+  },
+  (prev, next) => {
+    return (
+      prev.collapsed === next.collapsed &&
+      prev.width === next.width &&
+      prev.message.id === next.message.id &&
+      prev.message.updateTime === next.message.updateTime &&
+      prev.message.visible === next.message.visible &&
+      prev.message.content === next.message.content
+    );
   }
-
-  return null;
-}
+);
 
 export function getPromptEchoContentWidth(width: number): number {
   return Math.max(1, width - PROMPT_ECHO_PREFIX_WIDTH);
@@ -165,7 +177,7 @@ function StatusLine({
   params,
   width,
 }: {
-  bulletColor: "gray" | "green" | "red";
+  bulletColor: string;
   name: string;
   params: string;
   width: number;
@@ -177,12 +189,12 @@ function StatusLine({
     <Box gap={1} width={containerWidth}>
       <Box alignSelf="stretch">
         <Text key="bullet" color={bulletColor}>
-          ✧
+          ├─
         </Text>
       </Box>
       <Box flexGrow={1} width={contentWidth} gap={1}>
         <Text wrap={mode === RawMode.Lite ? "truncate-end" : "wrap"}>
-          <Text key="name" bold>
+          <Text key="name" color={bulletColor}>
             {name}
           </Text>
           {params ? (
@@ -199,8 +211,8 @@ function StatusLine({
 function DiffPreview({ lines }: { lines: DiffPreviewLine[] }): React.ReactElement {
   return (
     <Box flexDirection="column" marginLeft={2}>
-      <Text dimColor>└ Changes</Text>
-      <Box flexDirection="column" marginLeft={2}>
+      <Text dimColor>│ └ Changes</Text>
+      <Box flexDirection="column" marginLeft={4}>
         {lines.map((line, index) => (
           <Text key={`${index}-${line.marker}-${line.content}`} wrap="truncate-end">
             <Text color={line.kind === "added" ? "green" : line.kind === "removed" ? "red" : "gray"}>
@@ -219,8 +231,8 @@ function DiffPreview({ lines }: { lines: DiffPreviewLine[] }): React.ReactElemen
 function PlanPreview({ lines }: { lines: string[] }): React.ReactElement {
   return (
     <Box flexDirection="column" marginLeft={2}>
-      <Text dimColor>└ Plan</Text>
-      <Box flexDirection="column" marginLeft={2}>
+      <Text dimColor>│ └ Plan</Text>
+      <Box flexDirection="column" marginLeft={4}>
         {lines.map((line, index) => (
           <Text key={`${index}-${line}`} wrap="wrap">
             {line}

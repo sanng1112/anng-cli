@@ -182,13 +182,20 @@ function App({
         setActiveStatus(entry.status);
         setActiveAskPermissions(entry.askPermissions);
       },
-      onLlmStreamProgress: (progress) => {
-        if (progress.phase === "end") {
-          setStreamProgress(null);
-          return;
-        }
-        setStreamProgress(progress);
-      },
+      onLlmStreamProgress: (() => {
+        let lastUpdate = 0;
+        return (progress: LlmStreamProgress) => {
+          if (progress.phase === "end") {
+            setStreamProgress(null);
+            return;
+          }
+          const now = Date.now();
+          if (now - lastUpdate > 66) {
+            lastUpdate = now;
+            setStreamProgress(progress);
+          }
+        };
+      })(),
       onMcpStatusChanged: () => {
         // When MCP status changes, refresh display if currently viewing MCP status page
         setMcpStatuses(sessionManager.getMcpStatus());
