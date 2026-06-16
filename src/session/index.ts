@@ -14,7 +14,6 @@ import { readTextFileWithMetadata } from "../common/file-utils";
 import {
   buildSkillDocumentsPrompt,
   getCompactPrompt,
-  getDefaultSkillPrompt,
   getExtensionRoot,
   getRuntimeContext,
   getSystemPrompt,
@@ -59,6 +58,7 @@ import { shouldCompactContext } from "./compacter";
 import { countMessagesTokens } from "../common/tokenizer";
 import { OpenAIMessageConverter } from "../common/openai-message-converter";
 import type { ExecutionContext } from "../common/execution-context";
+import { globalCapabilityRegistry } from "../team/capability-registry";
 
 import {
   buildSystemMessage as buildSysMsg,
@@ -1077,10 +1077,10 @@ ${agentInstructions}
     const systemMessage = buildSysMsg(sessionId, systemPrompt);
     this.appendSessionMessage(sessionId, systemMessage);
 
-    const defaultSkillPrompt = getDefaultSkillPrompt();
-    if (defaultSkillPrompt) {
-      const defaultSkillMessage = buildSysMsg(sessionId, defaultSkillPrompt);
-      this.appendSessionMessage(sessionId, defaultSkillMessage);
+    const capabilityPrompt = globalCapabilityRegistry.buildPrompt(this.executionContext);
+    if (capabilityPrompt) {
+      const capabilityMessage = buildSysMsg(sessionId, capabilityPrompt);
+      this.appendSessionMessage(sessionId, capabilityMessage);
     }
 
     const runtimeContextPrompt = getRuntimeContext(this.projectRoot, promptToolOptions.model);

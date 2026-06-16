@@ -4,13 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { fileURLToPath } from "url";
-import {
-  buildSkillDocumentsPrompt,
-  getDefaultSkillPrompt,
-  getRuntimeContext,
-  getSystemPrompt,
-  getTools,
-} from "../prompt";
+import { buildSkillDocumentsPrompt, getRuntimeContext, getSystemPrompt, getTools } from "../prompt";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const tempDirs: string[] = [];
@@ -77,15 +71,6 @@ test("getSystemPrompt does not include runtime context", () => {
   const prompt = getSystemPrompt("/tmp/project");
   assert.equal(prompt.includes("# Local Workspace Environment"), false);
   assert.equal(prompt.includes('"root path": "/tmp/project"'), false);
-});
-
-test("getDefaultSkillPrompt loads the default skill template", () => {
-  const prompt = getDefaultSkillPrompt();
-
-  assert.equal(prompt.includes("<unified-guidelines-skill>"), true);
-  assert.equal(prompt.includes("# Unified Engineering Guidelines"), true);
-  assert.equal(prompt.includes("Use the skill documents below to assist the user:"), true);
-  assert.equal(prompt.includes('path="templates/skills/'), false);
 });
 
 test("buildSkillDocumentsPrompt excludes SKILL.md frontmatter metadata", () => {

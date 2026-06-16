@@ -11,6 +11,8 @@ import { handleAnalyzeProjectTool } from "./analyze-project-handler";
 import { handleProxyReadTool } from "./proxy-read-handler";
 import { handleWriteTool } from "./write-handler";
 import type { McpManager } from "../mcp/mcp-manager";
+import type { ExecutionContext } from "../common/execution-context";
+import { globalCapabilityRegistry } from "../team/capability-registry";
 
 export type CreateOpenAIClient = () => {
   client: OpenAI | null;
@@ -50,6 +52,7 @@ export type ToolExecutionContext = {
   onAfterFileMutation?: (filePath: string) => void;
   bashTimeoutMs?: number;
   bashMinTimeoutMs?: number;
+  executionContext?: ExecutionContext;
 };
 
 export type ToolExecutionHooks = {
@@ -61,6 +64,7 @@ export type ToolExecutionHooks = {
   onBeforeFileMutation?: (filePath: string) => void;
   onAfterFileMutation?: (filePath: string) => void;
   shouldStop?: () => boolean;
+  executionContext?: ExecutionContext;
 };
 
 export type BackgroundProcessCompletion = {
@@ -259,13 +263,8 @@ export class ToolExecutor {
     const toolName = toolCall.function.name;
     const handlerName = BUILT_IN_TOOL_NAME_ALIASES.get(toolName) ?? toolName;
     const handler = this.toolHandlers.get(handlerName);
-    if (!handler) {
-      // Try MCP tools
-      if (this.mcpManager?.isMcpTool(toolName)) {
-        const parsedArgs = this.parseToolArguments(toolCall.function.arguments);
-        const args = parsedArgs.ok ? parsedArgs.args : {};
-        return this.mcpManager.executeMcpTool(toolName, args);
-      }
+
+    if (!handler && !this.mcpManager?.isMcpTool(toolName)) {
       return {
         ok: false,
         name: toolName,
@@ -273,37 +272,72 @@ export class ToolExecutor {
       };
     }
 
-    const parsedArgs = this.parseToolArguments(toolCall.function.arguments);
-    if (!parsedArgs.ok) {
+    const parsedArgsResult = this.parseToolArguments(toolCall.function.arguments);
+    if (!parsedArgsResult.ok) {
       return {
         ok: false,
         name: toolName,
-        error: parsedArgs.error,
+        error: parsedArgsResult.error,
       };
     }
+    const parsedArgs = parsedArgsResult.args;
 
+    if (hooks?.executionContext) {
+      const activeCaps = globalCapabilityRegistry.getActiveCapabilities(hooks.executionContext);
+      for (const cap of activeCaps) {
+        try {
+          cap.beforeToolExecution(toolName, parsedArgs, hooks.executionContext);
+        } catch (e: unknown) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          return { ok: false, name: toolName, error: errMsg };
+        }
+      }
+    }
+
+    const executionContext: ToolExecutionContext = {
+      sessionId,
+      projectRoot: this.projectRoot,
+      toolCall,
+      createOpenAIClient: this.createOpenAIClient,
+      onProcessStart: hooks?.onProcessStart,
+      onProcessExit: hooks?.onProcessExit,
+      onProcessStdout: hooks?.onProcessStdout,
+      onProcessTimeoutControl: hooks?.onProcessTimeoutControl,
+      onBackgroundProcessComplete: hooks?.onBackgroundProcessComplete,
+      onBeforeFileMutation: hooks?.onBeforeFileMutation,
+      onAfterFileMutation: hooks?.onAfterFileMutation,
+      bashMinTimeoutMs: 1000,
+      executionContext: hooks?.executionContext,
+    };
+
+    let result: ToolExecutionResult;
     try {
-      return await handler(parsedArgs.args, {
-        sessionId,
-        projectRoot: this.projectRoot,
-        toolCall,
-        createOpenAIClient: this.createOpenAIClient,
-        onProcessStart: hooks?.onProcessStart,
-        onProcessExit: hooks?.onProcessExit,
-        onProcessStdout: hooks?.onProcessStdout,
-        onProcessTimeoutControl: hooks?.onProcessTimeoutControl,
-        onBackgroundProcessComplete: hooks?.onBackgroundProcessComplete,
-        onBeforeFileMutation: hooks?.onBeforeFileMutation,
-        onAfterFileMutation: hooks?.onAfterFileMutation,
-      });
+      if (handler) {
+        result = await handler(parsedArgs, executionContext);
+      } else {
+        result = await this.mcpManager!.executeMcpTool(toolName, parsedArgs);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return {
+      result = {
         ok: false,
         name: toolName,
         error: message,
       };
     }
+
+    if (hooks?.executionContext && result.ok) {
+      const activeCaps = globalCapabilityRegistry.getActiveCapabilities(hooks.executionContext);
+      for (const cap of activeCaps) {
+        try {
+          cap.afterToolExecution(toolName, result, hooks.executionContext);
+        } catch (e: unknown) {
+          console.error(`Capability ${cap.id} failed in afterToolExecution:`, e);
+        }
+      }
+    }
+
+    return result;
   }
 
   private parseToolArguments(

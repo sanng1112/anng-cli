@@ -110,7 +110,6 @@ type PromptToolOptions = {
   autoAccept?: boolean;
 };
 
-const DEFAULT_SKILL_TEMPLATES = ["unified-guidelines.md"];
 const DEFAULT_SKILL_RESOURCE_FILE_LIMIT = 50;
 const SKILL_RESOURCE_EXCLUDED_DIRS = new Set([
   ".cache",
@@ -164,30 +163,6 @@ function readToolDocs(extensionRoot: string, options: PromptToolOptions = {}): s
     .filter((content) => content.length > 0);
 
   return docs.join("\n\n");
-}
-
-function readDefaultSkillDocs(extensionRoot: string): Array<{ name: string; content: string }> {
-  const skillsDir = path.join(extensionRoot, "templates", "skills");
-  return DEFAULT_SKILL_TEMPLATES.map((entry) => {
-    const fullPath = path.join(skillsDir, entry);
-    try {
-      return {
-        name: path.basename(entry, ".md"),
-        content: fs.readFileSync(fullPath, "utf8").trim(),
-      };
-    } catch {
-      return null;
-    }
-  }).filter((skill): skill is { name: string; content: string } => Boolean(skill?.content));
-}
-
-export function getDefaultSkillPrompt(): string {
-  const skillDocs = readDefaultSkillDocs(getExtensionRoot());
-  if (skillDocs.length === 0) {
-    return "";
-  }
-
-  return buildSkillDocumentsPrompt(skillDocs);
 }
 
 export function buildSkillDocumentsPrompt(skills: SkillPromptDocument[]): string {
