@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ToolExecutionContext, ToolExecutionResult } from "../tools/executor";
+import { globalLockManager } from "./lock-manager";
 
 export type ValidationResult = { ok: true; input: Record<string, unknown> } | { ok: false; error: string };
 
@@ -58,6 +59,24 @@ export async function executeValidatedTool<TSchema extends z.ZodType<Record<stri
       name,
       error: `InputValidationError: ${formatZodError(parsed.error)}`,
     };
+  }
+
+  const data = parsed.data as Record<string, unknown>;
+  const filePath = typeof data.file_path === "string" ? data.file_path : null;
+
+  if (filePath) {
+    if (!globalLockManager.acquireLock(filePath, context.sessionId)) {
+      return {
+        ok: false,
+        name,
+        error: `ConcurrencyViolationError: File ${filePath} is locked by another task.`,
+      };
+    }
+    try {
+      return await handler(parsed.data, context);
+    } finally {
+      globalLockManager.releaseLock(filePath, context.sessionId);
+    }
   }
 
   return handler(parsed.data, context);

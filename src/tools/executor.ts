@@ -14,6 +14,7 @@ import type { McpManager } from "../mcp/mcp-manager";
 import type { ExecutionContext } from "../common/execution-context";
 import { globalCapabilityRegistry } from "../team/capability-registry";
 import { PolicyEngine } from "../team/policy-engine";
+import { globalAuditLogger } from "../common/audit-logger";
 
 export type CreateOpenAIClient = () => {
   client: OpenAI | null;
@@ -303,6 +304,14 @@ export class ToolExecutor {
       const activeCaps = globalCapabilityRegistry.getActiveCapabilities(hooks.executionContext);
       for (const cap of activeCaps) {
         try {
+          globalAuditLogger.log({
+            correlationId: hooks.executionContext.sessionId,
+            eventType: "CAPABILITY_ACTIVATION",
+            actorId: hooks.executionContext.activeAgentId ?? "unknown",
+            resource: cap.id,
+            action: "beforeToolExecution",
+            contextSnapshot: hooks.executionContext,
+          });
           cap.beforeToolExecution(toolName, parsedArgs, hooks.executionContext);
         } catch (e: unknown) {
           const errMsg = e instanceof Error ? e.message : String(e);
@@ -352,6 +361,18 @@ export class ToolExecutor {
           console.error(`Capability ${cap.id} failed in afterToolExecution:`, e);
         }
       }
+    }
+
+    if (hooks?.executionContext) {
+      globalAuditLogger.log({
+        correlationId: sessionId,
+        eventType: "TOOL_EXECUTION",
+        actorId: hooks.executionContext.activeAgentId ?? "unknown",
+        resource: toolName,
+        action: "execute",
+        reason: result.ok ? "Success" : `Failed: ${result.error}`,
+        contextSnapshot: hooks.executionContext,
+      });
     }
 
     return result;

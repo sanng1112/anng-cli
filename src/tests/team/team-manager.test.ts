@@ -53,9 +53,9 @@ describe("TeamManager", () => {
       coordinator: { name: "c", role: "coordinator" },
       workers: [{ name: "w", role: "worker" }],
     });
-    manager.updateTeamStatus(team.teamId, "running");
+    manager.updateTeamStatus(team.teamId, "waiting_for_decomposition");
     const updated = manager.getTeam(team.teamId);
-    assert.equal(updated?.status, "running");
+    assert.equal(updated?.status, "waiting_for_decomposition");
   });
 
   it("cập nhật worker state", () => {

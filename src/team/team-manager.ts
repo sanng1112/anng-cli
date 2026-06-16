@@ -1,9 +1,11 @@
 import type { TeamDefinition, TeamSession, WorkerState, TeamStatus, TeamTask } from "./types";
 import { TeamDefinitionSchema } from "./types";
+import { transitionTeamState, transitionTaskState, transitionWorkerState } from "./state-machine";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as crypto from "crypto";
+import { globalAuditLogger } from "../common/audit-logger";
 
 function getTeamStorageDir(): string {
   return path.join(os.homedir(), ".anng", "teams");
@@ -56,7 +58,20 @@ export class TeamManager {
   updateTeamStatus(teamId: string, status: TeamStatus, detail?: string): void {
     const team = this.activeTeams.get(teamId);
     if (!team) return;
-    team.status = status;
+    const oldStatus = team.status;
+    team.status = transitionTeamState(team.status, status);
+
+    if (oldStatus !== team.status) {
+      globalAuditLogger.log({
+        correlationId: teamId,
+        eventType: "STATE_TRANSITION",
+        actorId: "system",
+        resource: "team",
+        action: `${oldStatus} -> ${team.status}`,
+        reason: detail,
+      });
+    }
+
     team.updatedAt = new Date().toISOString();
     team.onStatusChange?.(status, detail);
     this.persistTeam(team);
@@ -67,6 +82,19 @@ export class TeamManager {
     if (!team) return;
     const worker = team.workers.get(workerName);
     if (!worker) return;
+    if (update.status) {
+      const oldStatus = worker.status;
+      update.status = transitionWorkerState(worker.status, update.status);
+      if (oldStatus !== update.status) {
+        globalAuditLogger.log({
+          correlationId: teamId,
+          eventType: "STATE_TRANSITION",
+          actorId: "system",
+          resource: `worker:${workerName}`,
+          action: `${oldStatus} -> ${update.status}`,
+        });
+      }
+    }
     Object.assign(worker, update);
     team.updatedAt = new Date().toISOString();
     team.onWorkerUpdate?.(workerName, worker);
@@ -75,6 +103,28 @@ export class TeamManager {
   upsertTask(teamId: string, task: TeamTask): void {
     const team = this.activeTeams.get(teamId);
     if (!team) return;
+    const existingTask = team.tasks.get(task.id);
+    if (existingTask) {
+      const oldStatus = existingTask.status;
+      task.status = transitionTaskState(existingTask.status, task.status);
+      if (oldStatus !== task.status) {
+        globalAuditLogger.log({
+          correlationId: teamId,
+          eventType: "STATE_TRANSITION",
+          actorId: "system",
+          resource: `task:${task.id}`,
+          action: `${oldStatus} -> ${task.status}`,
+        });
+      }
+    } else {
+      globalAuditLogger.log({
+        correlationId: teamId,
+        eventType: "STATE_TRANSITION",
+        actorId: "system",
+        resource: `task:${task.id}`,
+        action: `none -> ${task.status}`,
+      });
+    }
     team.tasks.set(task.id, task);
     team.updatedAt = new Date().toISOString();
     team.onTaskUpdate?.(task.id, task);
@@ -97,7 +147,7 @@ export class TeamManager {
     const team = this.activeTeams.get(teamId);
     if (!team) return;
     team.abortController.abort();
-    team.status = "interrupted";
+    team.status = transitionTeamState(team.status, "interrupted");
     team.updatedAt = new Date().toISOString();
     this.persistTeam(team);
   }

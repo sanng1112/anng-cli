@@ -1,4 +1,5 @@
 import type { ExecutionContext } from "../common/execution-context";
+import { globalAuditLogger } from "../common/audit-logger";
 
 export type PolicyDecisionType = "ALLOW" | "DENY" | "REQUIRE_APPROVAL";
 
@@ -29,6 +30,16 @@ export class PolicyEngine {
     if (context.mode === "planning") {
       const isMutating = ["bash", "write", "edit"].includes(toolName);
       if (isMutating) {
+        globalAuditLogger.log({
+          correlationId: request.context.sessionId,
+          eventType: "POLICY_DECISION",
+          actorId: request.context.activeAgentId ?? "unknown",
+          resource: request.toolName,
+          action: "evaluate",
+          decision: "DENY",
+          reason: `POLICY_DENY: You cannot use '${toolName}' in planning mode. Use 'UpdatePlan' instead.`,
+          contextSnapshot: request.context,
+        });
         return {
           type: "DENY",
           reason: `POLICY_DENY: You cannot use '${toolName}' in planning mode. Use 'UpdatePlan' instead.`,
@@ -47,6 +58,16 @@ export class PolicyEngine {
             (p) => filePath.includes(p) || p === "**/*" || p === "*"
           );
           if (!isAllowed) {
+            globalAuditLogger.log({
+              correlationId: request.context.sessionId,
+              eventType: "POLICY_DECISION",
+              actorId: request.context.activeAgentId ?? "unknown",
+              resource: filePath,
+              action: "evaluate_scope",
+              decision: "DENY",
+              reason: `POLICY_DENY: File '${filePath}' is outside your allowed scope: ${context.taskScope.allowedPaths.join(", ")}`,
+              contextSnapshot: request.context,
+            });
             return {
               type: "DENY",
               reason: `POLICY_DENY: File '${filePath}' is outside your allowed scope: ${context.taskScope.allowedPaths.join(", ")}`,
@@ -56,8 +77,16 @@ export class PolicyEngine {
       }
     }
 
-    // 3. Auto-Accept fallback
     if (context.permissions.autoAcceptTools) {
+      globalAuditLogger.log({
+        correlationId: request.context.sessionId,
+        eventType: "POLICY_DECISION",
+        actorId: request.context.activeAgentId ?? "unknown",
+        resource: request.toolName,
+        action: "evaluate",
+        decision: "ALLOW",
+        contextSnapshot: request.context,
+      });
       return { type: "ALLOW" };
     }
 
