@@ -13,6 +13,7 @@ import { handleWriteTool } from "./write-handler";
 import type { McpManager } from "../mcp/mcp-manager";
 import type { ExecutionContext } from "../common/execution-context";
 import { globalCapabilityRegistry } from "../team/capability-registry";
+import { PolicyEngine } from "../team/policy-engine";
 
 export type CreateOpenAIClient = () => {
   client: OpenAI | null;
@@ -283,6 +284,22 @@ export class ToolExecutor {
     const parsedArgs = parsedArgsResult.args;
 
     if (hooks?.executionContext) {
+      const policyEngine = new PolicyEngine();
+      const decision = policyEngine.evaluate({
+        toolName,
+        arguments: parsedArgs,
+        context: hooks.executionContext,
+        originalToolCallId: toolCall.id,
+      });
+
+      if (decision.type === "DENY") {
+        return {
+          ok: false,
+          name: toolName,
+          error: decision.reason || "PolicyEngine denied this tool call.",
+        };
+      }
+
       const activeCaps = globalCapabilityRegistry.getActiveCapabilities(hooks.executionContext);
       for (const cap of activeCaps) {
         try {

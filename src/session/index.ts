@@ -2320,6 +2320,7 @@ ${agentInstructions}
       onBeforeFileMutation: (filePath) => this.prepareFileMutationCheckpoint(sessionId, filePath),
       onAfterFileMutation: (filePath) => this.recordFileMutationCheckpoint(sessionId, filePath),
       shouldStop: () => this.isInterrupted(sessionId),
+      executionContext: this.executionContext,
     };
     const parsedToolCalls = toolCalls
       .map((toolCall) => parseToolCallForPermissions(toolCall))
