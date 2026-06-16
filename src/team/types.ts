@@ -20,12 +20,27 @@ export type TeamStatus =
   | "interrupted";
 
 // ============================================================
+// Agent Contract
+// ============================================================
+
+export type AgentRole = "coordinator" | "worker" | "reviewer";
+
+export interface AgentContract {
+  readonly id: string;
+  readonly role: AgentRole;
+  readonly authorityLevel: number; // 0 = lowest, 100 = highest
+  readonly scope: string[]; // Glob paths this agent is allowed to touch
+  readonly allowedCapabilities: string[]; // Which Capability IDs are active
+  readonly maxTurns: number; // Prevent infinite loops
+}
+
+// ============================================================
 // Agent Configuration
 // ============================================================
 
 export interface AgentConfig {
   name: string;
-  role: "coordinator" | "worker";
+  role: AgentRole;
   description?: string;
   model?: string;
   thinkingEnabled?: boolean;

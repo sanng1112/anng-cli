@@ -58,9 +58,6 @@ import { reportNewPrompt } from "../common/telemetry";
 import { shouldCompactContext } from "./compacter";
 import { countMessagesTokens } from "../common/tokenizer";
 import { OpenAIMessageConverter } from "../common/openai-message-converter";
-import { resolveSettings } from "../settings";
-import type { DeepcodingSettings } from "../settings";
-import { DefaultTaskDecomposer } from "../team/task-decomposer";
 import type { ExecutionContext } from "../common/execution-context";
 
 import {
@@ -231,6 +228,10 @@ export class SessionManager {
 
   public getExecutionContext(): ExecutionContext {
     return this.executionContext;
+  }
+
+  public setExecutionContext(context: ExecutionContext): void {
+    this.executionContext = context;
   }
 
   /**

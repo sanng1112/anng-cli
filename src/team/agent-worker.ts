@@ -1,7 +1,15 @@
 import { SessionManager } from "../session";
 import type { SessionManagerOptions, SessionEntry } from "../session/types";
 import type { CreateOpenAIClient } from "../tools/executor";
-import type { AgentConfig, TeamTask, TeamTaskResult, TeamArtifact, WorkerStatus, TeamWorkerEvent } from "./types";
+import type {
+  AgentConfig,
+  TeamTask,
+  TeamTaskResult,
+  TeamArtifact,
+  WorkerStatus,
+  TeamWorkerEvent,
+  AgentContract,
+} from "./types";
 import type { McpServerConfig, PermissionSettings } from "../settings";
 import { DEFAULT_MAX_TURNS } from "../common/constants";
 
@@ -78,6 +86,7 @@ export class AgentWorker {
     };
 
     this.sessionManager = new SessionManager(smOptions);
+
     await this.sessionManager.initMcpServers(this.options.mcpServers);
     this.status = "idle";
   }
@@ -96,6 +105,27 @@ export class AgentWorker {
       workerName: this.config.name,
       taskId: task.id,
       timestamp: new Date().toISOString(),
+    });
+
+    const contract: AgentContract = {
+      id: this.config.name,
+      role: this.config.role,
+      authorityLevel: this.config.role === "coordinator" ? 100 : 10,
+      scope: this.config.role === "coordinator" ? ["**/*", "*"] : (task.relatedFiles ?? []),
+      allowedCapabilities: this.config.skills ?? [],
+      maxTurns: this.config.maxTurns ?? DEFAULT_MAX_TURNS,
+    };
+
+    const ctx = this.sessionManager.getExecutionContext();
+    this.sessionManager.setExecutionContext({
+      ...ctx,
+      activeAgentId: contract.id,
+      taskScope: {
+        taskId: task.id,
+        allowedPaths: contract.scope,
+        readOnlyPaths: [],
+      },
+      activeCapabilities: contract.allowedCapabilities,
     });
 
     try {
