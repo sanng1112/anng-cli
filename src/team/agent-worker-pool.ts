@@ -1,10 +1,13 @@
 import { AgentWorker, type AgentWorkerOptions } from "./agent-worker";
 import type { AgentConfig, TeamTask, TeamTaskResult } from "./types";
 
+import type { TerminalMultiplexer } from "./integrations/terminal-multiplexer";
+
 export type AgentWorkerPoolOptions = {
   projectRoot: string;
   maxConcurrency: number;
   baseWorkerOptions: Omit<AgentWorkerOptions, "agentConfig">;
+  mux?: TerminalMultiplexer | null;
 };
 
 export class AgentWorkerPool {
@@ -21,6 +24,7 @@ export class AgentWorkerPool {
     const worker = new AgentWorker({
       ...this.options.baseWorkerOptions,
       agentConfig: config,
+      mux: this.options.mux,
     });
     await worker.initialize();
     this.workers.set(config.name, worker);

@@ -6,9 +6,12 @@ export interface ModelPrice {
 
 export const MODEL_PRICING: Record<string, ModelPrice> = {
   // Deepseek
+  "gemini-v4-pro": { inputPer1M: 0.14, outputPer1M: 0.28, cachedInputPer1M: 0.014 },
   "deepseek-v4-pro": { inputPer1M: 0.14, outputPer1M: 0.28, cachedInputPer1M: 0.014 },
   "deepseek-v4-flash": { inputPer1M: 0.05, outputPer1M: 0.1, cachedInputPer1M: 0.005 },
   // Gemini
+  "gemini-3.1-pro": { inputPer1M: 1.25, outputPer1M: 5.0, cachedInputPer1M: 0.625 },
+  "gemini-3.1-pro-low": { inputPer1M: 0.15, outputPer1M: 0.6, cachedInputPer1M: 0.075 },
   "gemini-3.5-flash": { inputPer1M: 0.075, outputPer1M: 0.3, cachedInputPer1M: 0.0375 },
   "gemini-3.1-flash-lite": { inputPer1M: 0.075, outputPer1M: 0.3, cachedInputPer1M: 0.0375 },
   "gemini-2.5-flash": { inputPer1M: 0.075, outputPer1M: 0.3, cachedInputPer1M: 0.0375 },

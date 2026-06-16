@@ -1128,8 +1128,8 @@ test("createSession appends default system prompts in prefix-cache-friendly orde
   assert.match(systemContents[0] ?? "", /# Available Tools/);
   assert.doesNotMatch(systemContents[0] ?? "", /# Local Workspace Environment/);
   assert.doesNotMatch(systemContents[0] ?? "", /The current LLM model is test-model/);
-  assert.match(systemContents[1] ?? "", /<karpathy-guidelines-skill>/);
-  assert.match(systemContents[1] ?? "", /# Karpathy Guidelines/);
+  assert.match(systemContents[1] ?? "", /<unified-guidelines-skill>/);
+  assert.match(systemContents[1] ?? "", /# Unified Engineering Guidelines/);
   assert.doesNotMatch(systemContents[1] ?? "", /path="templates\/skills\//);
   assert.doesNotMatch(systemContents[1] ?? "", /The current LLM model is test-model/);
   assert.match(systemContents[2] ?? "", /# Local Workspace Environment/);

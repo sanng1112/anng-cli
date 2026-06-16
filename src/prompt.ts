@@ -2,7 +2,6 @@ import { execFileSync, execSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import ejs from "ejs";
 import matter from "gray-matter";
 import { fileURLToPath } from "url";
 import type { SessionMessage } from "./session";
@@ -95,66 +94,23 @@ const SYSTEM_PROMPT_BASE = `# ROLE & OBJECTIVE
 You are an elite, autonomous Software Engineering AI Agent operating within a highly optimized CLI environment. Your goal is to solve complex programming tasks, debug errors, and refactor code with maximum efficiency and minimum latency.
 
 # SYSTEM CAPABILITIES & CONSTRAINTS
-You operate in an environment with strict I/O optimization to ensure speed and cost-efficiency. You must adapt your reasoning to the following system behaviors:
-
-1. TERMINAL TRUNCATION (Smart Slicing): 
-If you execute a \`bash\` command and the output exceeds 200 lines, the system will automatically hard-cut the middle. You will only see the FIRST 50 lines and the LAST 50 lines. 
--> Actionable: Do not panic if the output says "[...TRUNCATED...]". The root cause (command run) and the stack trace (error exit) are perfectly preserved in what you see. Use them to debug.
-
-2. HYBRID FILE READING (AST First): 
-When using the \`read\` tool on a file larger than 2000 lines without specifying \`offset\`/\`limit\`, the system will NOT return the full code. Instead, a Proxy Model will return a structural outline (Functions, Classes, Variables).
--> Actionable: Read this outline carefully to locate the exact coordinates of the logic you need. Then, make a second \`read\` call using precise \`offset\` and \`limit\` to extract only the necessary code block.
-
-3. CONTEXT PRUNING:
-Your memory is actively managed. Old terminal logs and intermediate thought loops will be aggressively summarized to keep the context window under 48k tokens. Always focus on the current state of the workspace.
-
-4. AVOID "BLACK HOLE" DIRECTORIES:
-NEVER run search commands like \`grep\` or \`find\` inside \`node_modules\`, \`.git\`, or compiled directories. Always use \`--exclude-dir=node_modules\` or rely on \`rg\` (which respects gitignore). Dumping minified JS files into your context will cause an immediate Context Overflow loop.
-
-# ⚡ PARALLEL TOOL CALLING (CRITICAL IMPERATIVE)
-You are explicitly authorized and highly encouraged to execute MULTIPLE tool calls simultaneously in a single turn to save time. DO NOT work sequentially if tasks are independent.
-
-- INSTEAD OF: Calling \`read\` for 'auth.ts' -> Waiting for response -> Calling \`read\` for 'user.ts' -> Waiting...
-- YOU MUST: Emit an array of tool calls in one go: [\`read('auth.ts')\`, \`read('user.ts')\`, \`bash('npm run lint')\`].
-
-Rules for Parallelism:
-- If you need to inspect multiple files to understand a bug, read them ALL in one parallel request.
-- If you need to check the status of a service and read a config file, do both simultaneously.
-- Only use sequential calls if the input of Step B strictly depends on the output of Step A.
+1. TERMINAL TRUNCATION: If you execute a \`bash\` command and the output exceeds 200 lines, the system will automatically hard-cut the middle. You will only see the FIRST 50 lines and the LAST 50 lines. Use them to debug.
+2. CONTEXT PRUNING: Your memory is actively managed. Old logs are summarized to keep context under limits. Focus on the current state.
+3. PARALLEL TOOL CALLING: You are explicitly authorized and highly encouraged to execute MULTIPLE tool calls simultaneously in a single turn to save time. DO NOT work sequentially if tasks are independent.
 
 # EXECUTION WORKFLOW
 1. Analyze the user's request.
 2. Determine the maximum number of independent tools you can fire simultaneously to gather information.
-3. Analyze the parallel responses (outlines, truncated logs, or precise file chunks).
-4. Formulate the solution and apply changes.
-
-# Native Capabilities
-You have native abilities to manage Git PRs and Semantic Code Graphs without needing external plugins.
-
-## GitHub PR Workflow
-If the user asks you to create a PR, review a PR, or manage GitHub:
-1. Verify \`gh\` CLI is installed using the bash tool (\`gh --version\`). If not, inform the user.
-2. Check \`git status\` and \`git diff\`.
-3. If there are uncommitted changes, ask the user if you should commit them first or if they want to review them.
-4. If changes are committed, write a comprehensive PR Title and Description.
-5. Use the bash tool to run \`gh pr create --title "<Title>" --body "<body>"\`.
-6. Inform the user of the newly created PR URL.
-
-## Codegraph Indexing
-If the user asks to index the workspace or generate a codegraph:
-1. Identify the primary language of the project (e.g. TypeScript, Python).
-2. Use tools like \`tree\` or \`npx madge\` to generate a dependency graph.
-3. Compile a concise \`Workspace Map\` detailing the architecture, key directories, and dependencies.
-4. Write this output to \`ANNG.md\` in the project root. This file acts as a permanent cache for all future sessions.
-
-IMPORTANT: Do not fabricate any non-programming URLs. For programming links, only use: 1) context provided by the user; 2) official documentation domains you have verified. Before output, verify the link exists in your context; if not, clearly state it cannot be provided.`;
+3. Formulate the solution and apply changes.`;
 
 type PromptToolOptions = {
   model?: string;
   webSearchEnabled?: boolean;
+  planMode?: boolean;
+  autoAccept?: boolean;
 };
 
-const DEFAULT_SKILL_TEMPLATES = ["karpathy-guidelines.md"];
+const DEFAULT_SKILL_TEMPLATES = ["unified-guidelines.md"];
 const DEFAULT_SKILL_RESOURCE_FILE_LIMIT = 50;
 const SKILL_RESOURCE_EXCLUDED_DIRS = new Set([
   ".cache",
@@ -188,15 +144,18 @@ function readToolDocs(extensionRoot: string, options: PromptToolOptions = {}): s
 
   const entries = fs.readdirSync(toolsDir);
   const docs = entries
-    .filter((entry) => entry.endsWith(".md") || entry.endsWith(".md.ejs"))
+    .filter((entry) => entry.endsWith(".md"))
     .sort()
     .map((entry) => {
       const fullPath = path.join(toolsDir, entry);
       try {
-        const template = fs.readFileSync(fullPath, "utf8");
-        const content = entry.endsWith(".ejs")
-          ? ejs.render(template, { supportsMultimodal: supportsMultimodal(options.model ?? "") })
-          : template;
+        let content = fs.readFileSync(fullPath, "utf8");
+        if (content.includes("{{multimodal_instruction}}")) {
+          const multimodalText = supportsMultimodal(options.model ?? "")
+            ? "- This tool allows you to read images (eg PNG, JPG, etc). When reading an image file the contents are presented visually as Deepseek is a multimodal LLM."
+            : "- This tool can inspect image files, but the current model is not multimodal, so image reads are not presented visually to the model.";
+          content = content.replace("{{multimodal_instruction}}", multimodalText);
+        }
         return content.trim();
       } catch {
         return "";
@@ -350,6 +309,17 @@ The current LLM model is ${model}. Switch models with the /model command.`
 export function getSystemPrompt(projectRoot: string, options: PromptToolOptions = {}): string {
   const toolDocs = readToolDocs(getExtensionRoot(), options);
   let prompt = toolDocs ? `${SYSTEM_PROMPT_BASE}\n\n# Available Tools\n\n${toolDocs}` : SYSTEM_PROMPT_BASE;
+
+  if (options.planMode) {
+    prompt += `\n\n# PLANNING MODE
+You are in planning mode. You cannot run mutating commands (bash, write, edit). They will be blocked. Focus on analysis.`;
+  } else if (options.autoAccept) {
+    prompt += `\n\n# AUTONOMOUS MODE
+You are in autonomous mode. You have full execution permission. Execute quickly without asking unnecessary questions.`;
+  } else {
+    prompt += `\n\n# INTERACTIVE MODE
+You are in interactive mode. Briefly explain your reasoning before taking major actions.`;
+  }
 
   try {
     const anngMdPath = path.join(projectRoot, "ANNG.md");
@@ -785,6 +755,18 @@ export function getTools(_options: PromptToolOptions = {}, externalTools: ToolDe
 
   for (const tool of externalTools) {
     tools.push(tool);
+  }
+
+  if (_options.planMode) {
+    const allowedPlanTools = new Set([
+      "AnalyzeProject",
+      "ProxyRead",
+      "AskUserQuestion",
+      "UpdatePlan",
+      "read",
+      "WebSearch",
+    ]);
+    return tools.filter((t) => allowedPlanTools.has(t.function.name));
   }
 
   return tools;

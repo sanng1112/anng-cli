@@ -1,10 +1,11 @@
 import * as fs from "fs";
 import { promises as fsPromises } from "fs";
 import * as path from "path";
+import { execSync } from "child_process";
+import { DEFAULT_MAX_TURNS, AUTO_LINTER_TIMEOUT_MS } from "../common/constants";
 import * as os from "os";
 import * as crypto from "crypto";
 import matter from "gray-matter";
-import ejs from "ejs";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { launchNotifyScript } from "../common/notify";
 import { maybeRotateApiKeyOnError } from "../common/openai-client";
@@ -126,6 +127,8 @@ export class SessionManager {
     mcpServers?: Record<string, McpServerConfig>;
     permissions?: Required<PermissionSettings>;
     enabledSkills?: Record<string, boolean>;
+    autoLinter?: string;
+    fullPowerMode?: boolean;
   };
   private readonly onAssistantMessage: (message: SessionMessage, shouldConnect: boolean) => void;
   private readonly onSessionEntryUpdated?: (entry: SessionEntry) => void;
@@ -158,7 +161,7 @@ export class SessionManager {
     this.onProcessStdout = options.onProcessStdout;
     this.autoAccept = options.autoAccept ?? false;
     this.planMode = options.planMode ?? false;
-    this.maxTurns = options.maxTurns ?? 25;
+    this.maxTurns = options.maxTurns ?? DEFAULT_MAX_TURNS;
     this.toolExecutor = new ToolExecutor(this.projectRoot, this.createOpenAIClient, this.mcpManager);
     this.mcpManager.prepare(this.getResolvedSettings().mcpServers);
     this.messageConverter = new OpenAIMessageConverter({
@@ -584,6 +587,16 @@ If none of the available skills match, respond with an empty array, i.e. \`{"ski
     }
     const candidateSkillNames = new Set(simpleSkills.map((skill) => skill.name));
 
+    const skillCommandRegex = /\/skill\s+([\w-]+)/g;
+    let match;
+    const explicitlyRequested: string[] = [];
+    while ((match = skillCommandRegex.exec(userPrompt)) !== null) {
+      explicitlyRequested.push(match[1]);
+    }
+    if (explicitlyRequested.length > 0) {
+      return explicitlyRequested.filter((name) => candidateSkillNames.has(name));
+    }
+
     const agentInstructions = this.loadAgentInstructions();
     if (agentInstructions) {
       systemPrompt += `Use the current agent instructions as additional context when deciding which skills match:\n
@@ -597,6 +610,11 @@ ${agentInstructions}
 
     // Try proxy model first (cheaper/faster for simple classification)
     try {
+      const { resolveCurrentSettings } = await import("../settings");
+      const settings = resolveCurrentSettings(this.projectRoot);
+      if (settings.fullPowerMode) {
+        throw new Error("Full-Power Mode enabled. Skipping proxy for skill matching.");
+      }
       const { createProxyClient } = await import("../common/openai-client");
       const proxyClient = createProxyClient(this.projectRoot);
       if (proxyClient) {
@@ -1032,8 +1050,11 @@ ${agentInstructions}
       this.appendSessionMessage(sessionId, defaultSkillMessage);
     }
 
-    const runtimeContextMessage = buildSysMsg(sessionId, getRuntimeContext(this.projectRoot, promptToolOptions.model));
-    this.appendSessionMessage(sessionId, runtimeContextMessage);
+    const runtimeContextPrompt = getRuntimeContext(this.projectRoot, promptToolOptions.model);
+    if (runtimeContextPrompt) {
+      const runtimeContextMessage = buildSysMsg(sessionId, runtimeContextPrompt);
+      this.appendSessionMessage(sessionId, runtimeContextMessage);
+    }
 
     const agentInstructions = this.loadAgentInstructions();
     if (agentInstructions) {
@@ -1533,64 +1554,51 @@ ${agentInstructions}
     });
 
     const compactPrompt = getCompactPrompt(sliceToCompact);
-    let rawLlmResponse: string | undefined = undefined;
+    let rawLlmResponse: string | undefined;
     let responseUsage: ModelUsage | null = null;
-    let proxyClient = null;
+
+    // For context compaction, ALWAYS use the main client to preserve high fidelity.
+    // Proxy models lose critical file paths and architecture details.
+    if (!client) {
+      return;
+    }
 
     try {
-      const { createProxyClient } = await import("../common/openai-client");
-      proxyClient = createProxyClient(this.projectRoot);
-    } catch (_err) {
-      // Ignored
-    }
-
-    if (proxyClient) {
-      try {
-        const { resolveCurrentSettings } = await import("../settings");
-        const settings = resolveCurrentSettings(this.projectRoot);
-        const res = await proxyClient.chat.completions.create(
-          {
-            model: settings.proxyModel || "deepseek-v4-flash-free",
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You are a proxy model assisting a main AI. Summarize the following conversation history briefly but without losing any important technical details, resolved issues, or pending goals. Keep it under 5000 characters.",
-              },
-              { role: "user", content: compactPrompt },
-            ],
-          },
-          { signal }
-        );
-        rawLlmResponse = res.choices[0]?.message?.content || "";
-      } catch (_err) {
-        proxyClient = null; // Fallback on error
-      }
-    }
-
-    if (!proxyClient) {
       const thinkingOptions = buildThinkingRequestOptions(thinkingEnabled, baseURL, reasoningEffort);
       const response = await this.createChatCompletionStream(
         client,
         {
           model,
           ...(temperature !== undefined ? { temperature } : {}),
-          messages: [{ role: "user", content: compactPrompt }],
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are the main AI. Your task is to compress the conversation history.\nCRITICAL RULES:\n1. Do not lose any technical details, precise file paths, class/function names, test logs, or specific technical decisions.\n2. Keep a structured log of files edited so far and their exact changes.\n3. Keep the output highly structured and detailed, under 15000 characters.",
+            },
+            { role: "user", content: compactPrompt },
+          ],
           ...thinkingOptions,
         },
         signal ? { signal } : undefined,
         sessionId,
         {
           enabled: debugLogEnabled,
-          location: "SessionManager.compactSession",
+          location: "SessionManager.compactContext",
           baseURL,
-          params: { temperature, thinkingEnabled, reasoningEffort },
+          params: { purpose: "compaction", temperature, thinkingEnabled, reasoningEffort },
         }
       );
       this.throwIfAborted(signal);
+
       const content = response.choices?.[0]?.message?.content;
       rawLlmResponse = typeof content === "string" ? content : undefined;
       responseUsage = response.usage ?? null;
+    } catch (_err) {
+      if (this.isAbortLikeError(_err) || signal?.aborted) {
+        throw _err;
+      }
+      // Silently ignore if compaction fails
     }
 
     const llmResponse = typeof rawLlmResponse === "string" ? rawLlmResponse : "";
@@ -2145,11 +2153,14 @@ ${agentInstructions}
   }
 
   private renderInitCommandPrompt(): string {
-    const templatePath = path.join(getExtensionRoot(), "templates", "prompts", "init_command.md.ejs");
+    const templatePath = path.join(getExtensionRoot(), "templates", "prompts", "init_command.md");
     const template = fs.readFileSync(templatePath, "utf8");
-    return ejs.render(template, {
-      agentsMdFile: this.getEffectiveProjectAgentsMdFile(),
-    });
+    const agentsMdFile = this.getEffectiveProjectAgentsMdFile();
+    const instruction =
+      agentsMdFile == null
+        ? "Generate a file named ./AGENTS.md that serves as a contributor guide for this repository."
+        : `Update ${agentsMdFile} to align it with repository changes made after the last time ${agentsMdFile} was modified.`;
+    return template.replace("{{agents_instruction}}", instruction);
   }
 
   private getEffectiveProjectAgentsMdFile(): string | null {
@@ -2333,17 +2344,17 @@ ${agentInstructions}
     }
 
     if (fileModified) {
-      const autoLinter = this.getResolvedSettings();
-      if (autoLinter) {
+      const settings = this.getResolvedSettings();
+      const autoLinterCmd = settings.autoLinter;
+      if (autoLinterCmd) {
         try {
-          const { execSync } = require("child_process");
-          execSync(autoLinter, { cwd: this.projectRoot, stdio: "pipe", timeout: 30000 });
+          execSync(autoLinterCmd, { cwd: this.projectRoot, stdio: "pipe", timeout: AUTO_LINTER_TIMEOUT_MS });
         } catch (e: unknown) {
           const err = e as { stdout?: Buffer; stderr?: Buffer; message?: string };
           const stdout = err.stdout ? err.stdout.toString() : "";
           const stderr = err.stderr ? err.stderr.toString() : "";
           const errorMsg = stdout || stderr || err.message;
-          const msg = `[Auto-Linter] Command "${autoLinter}" failed after your edits:\n\n${errorMsg}`;
+          const msg = `[Auto-Linter] Command "${autoLinterCmd}" failed after your edits:\n\n${errorMsg}`;
           followUpMessages.push(buildSysMsg(sessionId, msg, null));
         }
       }

@@ -164,7 +164,7 @@ export function computeToolCallPermissions(options: ComputeToolCallPermissionsOp
     return { permissions, askPermissions };
   }
 
-  // When planMode is active, ask for all tool calls
+  // When planMode is active, deny mutating tools, and ask for read tools
   if (options.planMode) {
     for (const rawToolCall of options.toolCalls) {
       const toolCall = parseToolCallForPermissions(rawToolCall);
@@ -178,14 +178,25 @@ export function computeToolCallPermissions(options: ComputeToolCallPermissionsOp
         readPermissionExemptPaths: options.readPermissionExemptPaths,
         resolveSnippetPath: options.resolveSnippetPath,
       });
-      permissions.push({ toolCallId: toolCall.id, permission: "ask" });
-      askPermissions.push({
-        toolCallId: toolCall.id,
-        scopes: request.scopes.length > 0 ? request.scopes : ["unknown"],
-        name: request.name,
-        command: request.command,
-        description: request.description,
-      });
+
+      const isMutating =
+        request.name === "bash" ||
+        request.name === "write" ||
+        request.name === "edit" ||
+        request.scopes.some((s) => s.startsWith("write-") || s.startsWith("delete-") || s === "mutate-git-log");
+
+      if (isMutating) {
+        permissions.push({ toolCallId: toolCall.id, permission: "deny" });
+      } else {
+        permissions.push({ toolCallId: toolCall.id, permission: "ask" });
+        askPermissions.push({
+          toolCallId: toolCall.id,
+          scopes: request.scopes.length > 0 ? request.scopes : ["unknown"],
+          name: request.name,
+          command: request.command,
+          description: request.description,
+        });
+      }
     }
     return { permissions, askPermissions };
   }

@@ -82,8 +82,8 @@ test("getSystemPrompt does not include runtime context", () => {
 test("getDefaultSkillPrompt loads the default skill template", () => {
   const prompt = getDefaultSkillPrompt();
 
-  assert.equal(prompt.includes("<karpathy-guidelines-skill>"), true);
-  assert.equal(prompt.includes("# Karpathy Guidelines"), true);
+  assert.equal(prompt.includes("<unified-guidelines-skill>"), true);
+  assert.equal(prompt.includes("# Unified Engineering Guidelines"), true);
   assert.equal(prompt.includes("Use the skill documents below to assist the user:"), true);
   assert.equal(prompt.includes('path="templates/skills/'), false);
 });
@@ -201,11 +201,11 @@ test("getSystemPrompt renders Read docs for non-multimodal models", () => {
 
 test("runtime prompt assets live under templates", () => {
   assert.equal(fs.existsSync(path.join(repoRoot, "templates", "tools", "web-search.md")), true);
-  assert.equal(fs.existsSync(path.join(repoRoot, "templates", "tools", "read.md.ejs")), true);
-  assert.equal(fs.existsSync(path.join(repoRoot, "templates", "prompts", "init_command.md.ejs")), true);
+  assert.equal(fs.existsSync(path.join(repoRoot, "templates", "tools", "read.md")), true);
+  assert.equal(fs.existsSync(path.join(repoRoot, "templates", "prompts", "init_command.md")), true);
   assert.equal(fs.existsSync(path.join(repoRoot, "templates", "skills", "agent-drift-guard.md")), true);
   assert.equal(fs.existsSync(path.join(repoRoot, "templates", "skills", "plan-and-execute.md")), true);
-  assert.equal(fs.existsSync(path.join(repoRoot, "templates", "tools", "read.md")), false);
+  assert.equal(fs.existsSync(path.join(repoRoot, "templates", "tools", "read.md.ejs")), false);
   assert.equal(fs.existsSync(path.join(repoRoot, "docs", "tools")), false);
   assert.equal(fs.existsSync(path.join(repoRoot, "docs", "prompts")), false);
 });

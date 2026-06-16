@@ -1,4 +1,5 @@
 import { defaultsToThinkingMode } from "./common/model-capabilities";
+import { DEFAULT_MAX_TURNS } from "./common/constants";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -18,6 +19,7 @@ export type DeepcodingEnv = Record<string, string | undefined> & {
   PROXY_API_KEY?: string;
   PROXY_BASE_URL?: string;
   PROXY_MODEL?: string;
+  FULL_POWER_MODE?: string;
 };
 
 export type ReasoningEffort = "high" | "max";
@@ -77,6 +79,7 @@ export type DeepcodingSettings = {
   // Team orchestration
   team?: TeamSettings;
   autoLinter?: string;
+  fullPowerMode?: boolean;
 };
 
 export type ResolvedDeepcodingSettings = {
@@ -99,6 +102,7 @@ export type ResolvedDeepcodingSettings = {
   planMode: boolean;
   maxTurns: number;
   headlessPrompt?: string;
+  fullPowerMode: boolean;
   // Multi-provider support
   geminiApiKey?: string;
   geminiBaseURL?: string;
@@ -106,6 +110,7 @@ export type ResolvedDeepcodingSettings = {
   proxyBaseURL?: string;
   proxyModel?: string;
   autoLinter?: string;
+  team?: TeamSettings;
 };
 
 export type ModelConfigSelection = {
@@ -446,7 +451,7 @@ export function resolveSettingsSources(
       parseBoolean(userSettings?.planMode) ??
       parseBoolean(userEnv.PLAN_MODE) ??
       false,
-    maxTurns: 25,
+    maxTurns: DEFAULT_MAX_TURNS,
     headlessPrompt: undefined,
     // Multi-provider
     geminiApiKey:
@@ -484,6 +489,14 @@ export function resolveSettingsSources(
       trimString(userSettings?.proxyModel) ||
       trimString(userEnv.PROXY_MODEL) ||
       "deepseek-v4-flash-free",
+    team: userSettings?.team ?? projectSettings?.team,
+    fullPowerMode:
+      parseBoolean(systemEnv.FULL_POWER_MODE) ??
+      parseBoolean(projectSettings?.fullPowerMode) ??
+      parseBoolean(projectEnv.FULL_POWER_MODE) ??
+      parseBoolean(userSettings?.fullPowerMode) ??
+      parseBoolean(userEnv.FULL_POWER_MODE) ??
+      false,
   };
 }
 

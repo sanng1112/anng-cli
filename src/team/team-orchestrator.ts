@@ -21,6 +21,8 @@ export type TeamOrchestratorOptions = {
   enabledSkills?: Record<string, boolean>;
   renderMarkdown: (text: string) => string;
   onUIEvent?: (event: TeamUIEvent) => void;
+  autoAccept?: boolean;
+  planMode?: boolean;
 };
 
 export class TeamOrchestrator {
@@ -81,8 +83,11 @@ export class TeamOrchestrator {
     this.workerPool = new AgentWorkerPool({
       projectRoot: this.options.projectRoot,
       maxConcurrency,
+      mux: this.mux,
       baseWorkerOptions: {
         projectRoot: this.options.projectRoot,
+        autoAccept: this.options.autoAccept,
+        planMode: this.options.planMode,
         createOpenAIClient: this.options.createOpenAIClient,
         mcpServers: this.options.mcpServers,
         permissions: this.options.permissions,
@@ -99,6 +104,7 @@ export class TeamOrchestrator {
       teamManager: this.teamManager,
       workerPool: this.workerPool,
       workflowEngine: workflow,
+      fileConflictResolver: this.fileConflictResolver,
       signal: session.abortController.signal,
       onTaskComplete: (taskId, result) => {
         this.options.onUIEvent?.({

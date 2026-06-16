@@ -3,11 +3,14 @@ import type { WorkflowEngine } from "./workflow-engine";
 import type { TeamManager } from "./team-manager";
 import type { TeamTask, TeamTaskResult, TeamResult } from "./types";
 
+import type { FileConflictResolver } from "./file-conflict-resolver";
+
 export type ParallelExecutorOptions = {
   teamId: string;
   teamManager: TeamManager;
   workerPool: AgentWorkerPool;
   workflowEngine: WorkflowEngine;
+  fileConflictResolver: FileConflictResolver;
   onTaskComplete?: (taskId: string, result: TeamTaskResult) => void;
   signal: AbortSignal;
 };
@@ -45,14 +48,36 @@ export class ParallelExecutor {
   }
 
   private async executeSingleTask(task: TeamTask): Promise<void> {
-    const { teamManager, workerPool, workflowEngine, signal } = this.options;
+    const { teamManager, workerPool, workflowEngine, signal, fileConflictResolver } = this.options;
+
+    // Try to acquire file locks first
+    const lockedFiles: string[] = [];
+    if (task.relatedFiles) {
+      for (const file of task.relatedFiles) {
+        if (!fileConflictResolver.acquireLock(file, task.id)) {
+          // Rollback acquired locks if we fail to get all of them
+          for (const lockedFile of lockedFiles) {
+            fileConflictResolver.releaseLock(lockedFile, task.id);
+          }
+          // Simple backoff wait, we skip execution for now
+          await this.delay(500 + Math.random() * 500);
+          return this.executeSingleTask(task); // Retry
+        }
+        lockedFiles.push(file);
+      }
+    }
 
     let worker = workerPool.acquireWorker();
     while (!worker && !signal.aborted) {
       await this.delay(200);
       worker = workerPool.acquireWorker();
     }
-    if (!worker || signal.aborted) return;
+    if (!worker || signal.aborted) {
+      for (const lockedFile of lockedFiles) {
+        fileConflictResolver.releaseLock(lockedFile, task.id);
+      }
+      return;
+    }
 
     const workerName = workerPool.getWorkerName(worker);
     workflowEngine.onTaskStart(task.id, workerName);
@@ -90,6 +115,9 @@ export class ParallelExecutor {
         error: "Worker execution failed",
       });
     } finally {
+      for (const lockedFile of lockedFiles) {
+        fileConflictResolver.releaseLock(lockedFile, task.id);
+      }
       workerPool.releaseWorker(worker);
       this.running.delete(task.id);
       teamManager.upsertTask(this.options.teamId, task);

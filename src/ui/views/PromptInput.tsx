@@ -99,7 +99,8 @@ type Props = {
   onInterrupt: () => void;
   onToggleProcessStdout?: () => void;
   executionMode?: "default" | "plan" | "autoAccept";
-  onToggleMode?: () => void;
+  onTogglePlanMode?: () => void;
+  onToggleAutoMode?: () => void;
 };
 
 const PROMPT_PREFIX_WIDTH = 2;
@@ -131,7 +132,8 @@ export const PromptInput = React.memo(function PromptInput({
   onToggleProcessStdout,
   onRawModeChange,
   executionMode = "default",
-  onToggleMode,
+  onTogglePlanMode,
+  onToggleAutoMode,
 }: Props): React.ReactElement {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -349,11 +351,13 @@ export const PromptInput = React.memo(function PromptInput({
         return;
       }
 
-      if (
-        (key.ctrl && (key.tab || input === "y" || input === "Y" || input === "p" || input === "P")) ||
-        (key.meta && (input === "m" || input === "M"))
-      ) {
-        onToggleMode?.();
+      if (key.ctrl && (input === "p" || input === "P")) {
+        onTogglePlanMode?.();
+        return;
+      }
+
+      if (key.ctrl && (input === "y" || input === "Y")) {
+        onToggleAutoMode?.();
         return;
       }
 
@@ -836,7 +840,7 @@ export const PromptInput = React.memo(function PromptInput({
           ) : (
             <Text dimColor>Default Mode </Text>
           )}
-          <Text dimColor>(Alt+M / Ctrl+Y / Ctrl+P to toggle)</Text>
+          <Text dimColor>(Ctrl+P for Plan / Ctrl+Y for Auto)</Text>
         </Box>
       </Box>
       <RawModelDropdown

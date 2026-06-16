@@ -25,5 +25,8 @@ export function countMessagesTokens(messages: Array<{ role: string; content: str
 }
 
 export function getCompactThreshold(model: string): number {
+  if (model === "gemini-v4-pro") return 500 * 1024;
+  if (model === "gemini-3.1-pro-low") return 32 * 1024; // Explicitly set bottleneck/constraint for "Low" variant
+  if (model === "gemini-3.1-pro") return 500 * 1024;
   return DEEPSEEK_V4_MODELS.has(model) ? 48 * 1024 : 32 * 1024;
 }

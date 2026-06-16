@@ -1,8 +1,4 @@
-<% if (agentsMdFile == null) { %>
-Generate a file named ./AGENTS.md that serves as a contributor guide for this repository.
-<% } else { %>
-Update <%= agentsMdFile %> to align it with repository changes made after the last time <%= agentsMdFile %> was modified.
-<% } %>
+{{agents_instruction}}
 Your goal is to produce a clear, concise, and well-structured document with descriptive headings and actionable explanations for each section.
 Follow the outline below, but adapt as needed — add sections if relevant, and omit those that do not apply to this project.
 

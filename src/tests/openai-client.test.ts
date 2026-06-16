@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { getProviderConfig, rotateApiKey, maybeRotateApiKeyOnError } from "../common/openai-client";
 import type { ResolvedDeepcodingSettings } from "../settings";
+import { DEFAULT_MAX_TURNS } from "../common/constants";
 
 function makeSettings(overrides: Partial<ResolvedDeepcodingSettings> = {}): ResolvedDeepcodingSettings {
   return {
@@ -28,8 +29,9 @@ function makeSettings(overrides: Partial<ResolvedDeepcodingSettings> = {}): Reso
     temperature: 0,
     autoAccept: false,
     planMode: false,
-    maxTurns: 25,
+    maxTurns: DEFAULT_MAX_TURNS,
     headlessPrompt: "",
+    fullPowerMode: false,
     ...overrides,
   };
 }

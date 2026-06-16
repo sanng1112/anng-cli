@@ -42,7 +42,6 @@
   },
   "dependencies": {
     "chalk": "^5.6.2",
-    "ejs": "^5.0.2",
     "gradient-string": "^3.0.0",
     "gray-matter": "^4.0.3",
     "ignore": "^7.0.5",
@@ -50,7 +49,6 @@
     "ink-gradient": "^4.0.1",
     "js-tiktoken": "^1.0.21",
     "openai": "^6.35.0",
-    "pdfjs-dist": "^3.9.179",
     "react": "^19.2.5",
     "undici": "^7.25.0",
     "unpdf": "^1.6.2",
@@ -58,7 +56,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@types/ejs": "^3.1.5",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "esbuild": "^0.28.0",

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 import React from "react";
 import { render } from "ink";
 import { setShellIfWindows } from "./common/shell-utils";
@@ -128,6 +129,29 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  // Headless worker execution for Tmux integration
+  if (args.includes("--worker") && initialPrompt) {
+    const { SessionManager } = await import("./session");
+    const { createOpenAIClient } = await import("./common/openai-client");
+    const { resolveCurrentSettings } = await import("./settings");
+
+    console.log(`[Worker] Starting task: ${initialPrompt}`);
+    const sm = new SessionManager({
+      projectRoot,
+      autoAccept: true,
+      planMode: false,
+      maxTurns: 25,
+      createOpenAIClient: () => createOpenAIClient(projectRoot),
+      getResolvedSettings: () => resolveCurrentSettings(projectRoot),
+      renderMarkdown: (text) => text,
+      onAssistantMessage: () => {},
+    });
+
+    await sm.handleUserPrompt({ text: initialPrompt });
+    console.log(`[Worker] Task completed.`);
+    process.exit(0);
+  }
+
   const restartRef: { current: (() => void) | null } = { current: null };
 
   function startApp(): void {
@@ -186,7 +210,11 @@ function configureWindowsShell(): void {
 
 function readPackageInfo(): PackageInfo {
   try {
-    const pkg = require("../package.json") as { name?: unknown; version?: unknown };
+    const currentFilePath = fileURLToPath(import.meta.url);
+    const currentDir = path.dirname(currentFilePath);
+    const pkgPath = path.resolve(currentDir, "../package.json");
+    const pkgContent = fs.readFileSync(pkgPath, "utf8");
+    const pkg = JSON.parse(pkgContent) as { name?: unknown; version?: unknown };
     return {
       name: typeof pkg.name === "string" ? pkg.name : "anng-cli",
       version: typeof pkg.version === "string" ? pkg.version : "",

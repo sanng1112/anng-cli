@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { WorkflowEngine } from "../../team/workflow-engine";
 import { ParallelExecutor } from "../../team/parallel-executor";
 import { TeamManager } from "../../team/team-manager";
+import { FileConflictResolver } from "../../team/file-conflict-resolver";
 import type { TeamTask, TeamTaskResult } from "../../team/types";
 
 function makeSuccessResult(): TeamTaskResult {
@@ -83,6 +84,7 @@ describe("ParallelExecutor", () => {
       teamManager,
       workerPool: makeMockPool("success") as any,
       workflowEngine: workflow,
+      fileConflictResolver: new FileConflictResolver(),
       signal: new AbortController().signal,
     });
 
@@ -109,6 +111,7 @@ describe("ParallelExecutor", () => {
       teamManager,
       workerPool: makeMockPool("fail") as any,
       workflowEngine: workflow,
+      fileConflictResolver: new FileConflictResolver(),
       signal: new AbortController().signal,
     });
 
@@ -141,6 +144,7 @@ describe("ParallelExecutor", () => {
       teamManager,
       workerPool: slowPool as any,
       workflowEngine: workflow,
+      fileConflictResolver: new FileConflictResolver(),
       signal: controller.signal,
     });
 
@@ -165,6 +169,7 @@ describe("ParallelExecutor", () => {
       teamManager,
       workerPool: makeMockPool("success") as any,
       workflowEngine: workflow,
+      fileConflictResolver: new FileConflictResolver(),
       signal: new AbortController().signal,
     });
 
@@ -189,6 +194,7 @@ describe("ParallelExecutor", () => {
       teamManager,
       workerPool: makeMockPool("success") as any,
       workflowEngine: workflow,
+      fileConflictResolver: new FileConflictResolver(),
       signal: new AbortController().signal,
     });
 
@@ -213,6 +219,7 @@ describe("ParallelExecutor", () => {
       teamManager,
       workerPool: makeMockPool("success") as any,
       workflowEngine: workflow,
+      fileConflictResolver: new FileConflictResolver(),
       signal: new AbortController().signal,
     });
 

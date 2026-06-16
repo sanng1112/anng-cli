@@ -6,7 +6,7 @@ export class FileConflictResolver {
   private strategy: ConflictResolutionStrategy;
   private fileLocks: Map<string, string> = new Map();
 
-  constructor(strategy: ConflictResolutionStrategy = "last-write-wins") {
+  constructor(strategy: ConflictResolutionStrategy = "fail-on-conflict") {
     this.strategy = strategy;
   }
 

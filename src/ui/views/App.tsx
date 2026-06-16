@@ -221,16 +221,21 @@ function App({
     sessionManager.setPlanMode(currentPlanMode);
   }, [currentAutoAccept, currentPlanMode, sessionManager]);
 
-  const handleToggleMode = useCallback(() => {
-    if (currentPlanMode) {
-      setCurrentPlanMode(false);
-      setCurrentAutoAccept(true);
-    } else if (currentAutoAccept) {
-      setCurrentAutoAccept(false);
-    } else {
-      setCurrentPlanMode(true);
-    }
-  }, [currentPlanMode, currentAutoAccept]);
+  const handleTogglePlanMode = useCallback(() => {
+    setCurrentPlanMode((p) => {
+      const next = !p;
+      if (next) setCurrentAutoAccept(false);
+      return next;
+    });
+  }, []);
+
+  const handleToggleAutoMode = useCallback(() => {
+    setCurrentAutoAccept((a) => {
+      const next = !a;
+      if (next) setCurrentPlanMode(false);
+      return next;
+    });
+  }, []);
 
   const executionMode = currentAutoAccept ? "autoAccept" : currentPlanMode ? "plan" : "default";
 
@@ -418,6 +423,8 @@ function App({
         try {
           const orchestrator = new TeamOrchestrator({
             projectRoot,
+            autoAccept: currentAutoAccept,
+            planMode: currentPlanMode,
             createOpenAIClient: () => createOpenAIClient(projectRoot),
             renderMarkdown: (text) => text,
             onUIEvent: (event: TeamUIEvent) => {
@@ -463,8 +470,17 @@ function App({
         return;
       }
 
+      const trimmedOriginalText = (submission.text ?? "").trim();
+      let processedText = submission.text;
+      if (trimmedOriginalText.startsWith("!")) {
+        const cmd = trimmedOriginalText.substring(1).trim();
+        if (cmd) {
+          processedText = `Execute the following bash command immediately and exactly as provided, and report back the output:\n\n\`\`\`bash\n${cmd}\n\`\`\``;
+        }
+      }
+
       const prompt: UserPromptContent = {
-        text: submission.text,
+        text: processedText,
         imageUrls: submission.imageUrls,
         skills:
           submission.selectedSkills && submission.selectedSkills.length > 0 ? submission.selectedSkills : undefined,
@@ -479,10 +495,9 @@ function App({
         prompt.alwaysAllows = permissionReply.alwaysAllows;
       }
 
-      const trimmedText = (submission.text ?? "").trim();
       const selectedSkillNames = submission.selectedSkills?.map((skill) => skill.name).filter(Boolean) ?? [];
       const userDisplayContent =
-        trimmedText ||
+        trimmedOriginalText ||
         (selectedSkillNames.length > 0 ? `Use skills: ${selectedSkillNames.join(", ")}` : "") ||
         (submission.imageUrls.length > 0 ? "[Image]" : "");
 
@@ -528,6 +543,8 @@ function App({
       resetToWelcome,
       initialTeamMode,
       projectRoot,
+      currentAutoAccept,
+      currentPlanMode,
       teamBusy,
       teamResult,
     ]
@@ -1034,7 +1051,8 @@ function App({
           onInterrupt={handleInterrupt}
           onToggleProcessStdout={handleToggleProcessStdout}
           executionMode={executionMode}
-          onToggleMode={handleToggleMode}
+          onTogglePlanMode={handleTogglePlanMode}
+          onToggleAutoMode={handleToggleAutoMode}
           placeholder="Type your message..."
         />
       )}

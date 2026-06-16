@@ -267,6 +267,8 @@ export type SessionManagerOptions = {
     mcpServers?: Record<string, McpServerConfig>;
     permissions?: Required<PermissionSettings>;
     enabledSkills?: Record<string, boolean>;
+    autoLinter?: string;
+    fullPowerMode?: boolean;
   };
   renderMarkdown: (text: string) => string;
   onAssistantMessage: (message: SessionMessage, shouldConnect: boolean) => void;
