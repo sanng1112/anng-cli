@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import type { DeepcodingSettings, PermissionScope, PermissionSettings } from "../settings";
 import { isAbsoluteFilePath, normalizeFilePath } from "./state";
+import { PolicyEngine, type PolicyRequest } from "../team/policy-engine";
+import type { ExecutionContext } from "./execution-context";
 
 export type BashPermissionScope = Exclude<PermissionScope, "mcp"> | "unknown";
 
@@ -64,6 +66,7 @@ export type ComputeToolCallPermissionsOptions = {
   readPermissionExemptPaths?: string[];
   autoAccept?: boolean;
   planMode?: boolean;
+  executionContext?: ExecutionContext;
 };
 
 export function parseToolCallForPermissions(toolCall: unknown): PermissionToolCall | null {
@@ -153,59 +156,29 @@ export function computeToolCallPermissions(options: ComputeToolCallPermissionsOp
   const permissions: MessageToolPermission[] = [];
   const askPermissions: AskPermissionRequest[] = [];
 
-  // When autoAccept is active, allow all tool calls without prompting
-  if (options.autoAccept) {
-    for (const rawToolCall of options.toolCalls) {
-      const toolCall = parseToolCallForPermissions(rawToolCall);
-      if (toolCall) {
-        permissions.push({ toolCallId: toolCall.id, permission: "allow" });
-      }
-    }
-    return { permissions, askPermissions };
-  }
+  const engine = new PolicyEngine();
 
-  // When planMode is active, deny mutating tools, and ask for read tools
-  if (options.planMode) {
-    for (const rawToolCall of options.toolCalls) {
-      const toolCall = parseToolCallForPermissions(rawToolCall);
-      if (!toolCall) {
-        continue;
-      }
-      const request = describeToolPermissionRequest({
-        sessionId: options.sessionId,
-        projectRoot: options.projectRoot,
-        toolCall,
-        readPermissionExemptPaths: options.readPermissionExemptPaths,
-        resolveSnippetPath: options.resolveSnippetPath,
-      });
-
-      const isMutating =
-        request.name === "bash" ||
-        request.name === "write" ||
-        request.name === "edit" ||
-        request.scopes.some((s) => s.startsWith("write-") || s.startsWith("delete-") || s === "mutate-git-log");
-
-      if (isMutating) {
-        permissions.push({ toolCallId: toolCall.id, permission: "deny" });
-      } else {
-        permissions.push({ toolCallId: toolCall.id, permission: "ask" });
-        askPermissions.push({
-          toolCallId: toolCall.id,
-          scopes: request.scopes.length > 0 ? request.scopes : ["unknown"],
-          name: request.name,
-          command: request.command,
-          description: request.description,
-        });
-      }
-    }
-    return { permissions, askPermissions };
-  }
+  // Shim ExecutionContext if not provided
+  const context: ExecutionContext = options.executionContext ?? {
+    sessionId: options.sessionId,
+    mode: options.planMode ? "planning" : "interactive",
+    phase: "executing",
+    permissions: {
+      canWrite: true,
+      canExecute: true,
+      autoAcceptTools: options.autoAccept ?? false,
+      requireUserApproval: [],
+    },
+    activeAgentId: "unknown",
+    workspaceRoot: options.projectRoot,
+    taskScope: null,
+    activeCapabilities: [],
+  };
 
   for (const rawToolCall of options.toolCalls) {
     const toolCall = parseToolCallForPermissions(rawToolCall);
-    if (!toolCall) {
-      continue;
-    }
+    if (!toolCall) continue;
+
     const request = describeToolPermissionRequest({
       sessionId: options.sessionId,
       projectRoot: options.projectRoot,
@@ -213,17 +186,40 @@ export function computeToolCallPermissions(options: ComputeToolCallPermissionsOp
       readPermissionExemptPaths: options.readPermissionExemptPaths,
       resolveSnippetPath: options.resolveSnippetPath,
     });
-    const permission = evaluatePermissionScopes(request.scopes, options.settings);
-    permissions.push({ toolCallId: toolCall.id, permission });
-    if (permission === "ask") {
-      const askScopes = getPermissionScopesRequiringAsk(request.scopes, options.settings);
-      askPermissions.push({
-        toolCallId: toolCall.id,
-        scopes: askScopes.length > 0 ? askScopes : request.scopes,
-        name: request.name,
-        command: request.command,
-        description: request.description,
-      });
+
+    const parsedArgs = parseToolArgumentsForPermissions(toolCall.function.arguments);
+
+    const policyReq: PolicyRequest = {
+      toolName: toolCall.function.name,
+      arguments: parsedArgs,
+      context,
+      originalToolCallId: toolCall.id,
+    };
+
+    const decision = engine.evaluate(policyReq);
+
+    if (decision.type === "DENY") {
+      permissions.push({ toolCallId: toolCall.id, permission: "deny" });
+    } else if (decision.type === "ALLOW") {
+      permissions.push({ toolCallId: toolCall.id, permission: "allow" });
+    } else {
+      // REQUIRE_APPROVAL
+      let permission = evaluatePermissionScopes(request.scopes, options.settings);
+      if (context.mode === "planning") {
+        permission = "ask";
+      }
+      permissions.push({ toolCallId: toolCall.id, permission });
+
+      if (permission === "ask") {
+        const askScopes = getPermissionScopesRequiringAsk(request.scopes, options.settings);
+        askPermissions.push({
+          toolCallId: toolCall.id,
+          scopes: askScopes.length > 0 ? askScopes : request.scopes,
+          name: request.name,
+          command: request.command,
+          description: request.description,
+        });
+      }
     }
   }
 

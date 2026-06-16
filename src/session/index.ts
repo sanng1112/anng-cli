@@ -58,6 +58,10 @@ import { reportNewPrompt } from "../common/telemetry";
 import { shouldCompactContext } from "./compacter";
 import { countMessagesTokens } from "../common/tokenizer";
 import { OpenAIMessageConverter } from "../common/openai-message-converter";
+import { resolveSettings } from "../settings";
+import type { DeepcodingSettings } from "../settings";
+import { DefaultTaskDecomposer } from "../team/task-decomposer";
+import type { ExecutionContext } from "../common/execution-context";
 
 import {
   buildSystemMessage as buildSysMsg,
@@ -135,8 +139,8 @@ export class SessionManager {
   private readonly onLlmStreamProgress?: (progress: LlmStreamProgress) => void;
   private readonly onMcpStatusChanged?: () => void;
   private readonly onProcessStdout?: (pid: number, chunk: string) => void;
-  private autoAccept: boolean;
-  private planMode: boolean;
+
+  private executionContext: ExecutionContext;
   private readonly maxTurns: number;
   private activeSessionId: string | null = null;
   private activePromptController: AbortController | null = null;
@@ -159,9 +163,24 @@ export class SessionManager {
     this.onLlmStreamProgress = options.onLlmStreamProgress;
     this.onMcpStatusChanged = options.onMcpStatusChanged;
     this.onProcessStdout = options.onProcessStdout;
-    this.autoAccept = options.autoAccept ?? false;
-    this.planMode = options.planMode ?? false;
     this.maxTurns = options.maxTurns ?? DEFAULT_MAX_TURNS;
+
+    this.executionContext = {
+      sessionId: "init", // will be updated when handling prompt
+      mode: options.planMode ? "planning" : "interactive",
+      phase: "initialized",
+      permissions: {
+        canWrite: true,
+        canExecute: true,
+        autoAcceptTools: options.autoAccept ?? false,
+        requireUserApproval: [],
+      },
+      activeAgentId: "system",
+      workspaceRoot: this.projectRoot,
+      taskScope: null,
+      activeCapabilities: [],
+    };
+
     this.toolExecutor = new ToolExecutor(this.projectRoot, this.createOpenAIClient, this.mcpManager);
     this.mcpManager.prepare(this.getResolvedSettings().mcpServers);
     this.messageConverter = new OpenAIMessageConverter({
@@ -186,19 +205,32 @@ export class SessionManager {
   };
 
   public setAutoAccept(value: boolean): void {
-    this.autoAccept = value;
+    this.executionContext = {
+      ...this.executionContext,
+      permissions: {
+        ...this.executionContext.permissions,
+        autoAcceptTools: value,
+      },
+    };
   }
 
   public getAutoAccept(): boolean {
-    return this.autoAccept;
+    return this.executionContext.permissions.autoAcceptTools;
   }
 
   public setPlanMode(value: boolean): void {
-    this.planMode = value;
+    this.executionContext = {
+      ...this.executionContext,
+      mode: value ? "planning" : "interactive",
+    };
   }
 
   public getPlanMode(): boolean {
-    return this.planMode;
+    return this.executionContext.mode === "planning";
+  }
+
+  public getExecutionContext(): ExecutionContext {
+    return this.executionContext;
   }
 
   /**
@@ -1384,8 +1416,9 @@ ${agentInstructions}
               settings: this.getResolvedSettings().permissions,
               readPermissionExemptPaths: this.getSkillScanRoots().map((entry) => entry.root),
               resolveSnippetPath: (id, snippetId) => getSnippet(id, snippetId)?.filePath,
-              autoAccept: this.autoAccept,
-              planMode: this.planMode,
+              autoAccept: this.getAutoAccept(),
+              planMode: this.getPlanMode(),
+              executionContext: { ...this.executionContext, sessionId, phase: "executing" },
             })
           : null;
         if (permissionPlan) {
