@@ -79,6 +79,9 @@ export class TeamOrchestrator {
       });
     }
 
+    // Transition: waiting_for_decomposition -> dispatching
+    this.teamManager.updateTeamStatus(session.teamId, "dispatching");
+
     const maxConcurrency = definition.maxParallelWorkers ?? 4;
     this.workerPool = new AgentWorkerPool({
       projectRoot: this.options.projectRoot,
@@ -98,6 +101,7 @@ export class TeamOrchestrator {
     });
     await this.workerPool.initializeAll(definition.workers);
 
+    // Transition: dispatching -> running
     this.teamManager.updateTeamStatus(session.teamId, "running");
     const executor = new ParallelExecutor({
       teamId: session.teamId,
