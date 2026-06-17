@@ -60,6 +60,19 @@ export class TmuxManager implements TerminalMultiplexer {
     this.exec(`tmux select-layout -t "${sessionName}" "${layout}"`);
   }
 
+  async splitPaneVertically(sessionName: string, targetPane?: string): Promise<string> {
+    const before = await this.listPanes(sessionName);
+    const target = targetPane ? `-t "${targetPane}" ` : "";
+    this.exec(`tmux split-window -h ${target}-c "${process.cwd()}"`);
+    const after = await this.listPanes(sessionName);
+    const newPane = after.find((p) => !before.includes(p));
+    return newPane ?? after[after.length - 1];
+  }
+
+  async setPaneTitle(paneId: string, title: string): Promise<void> {
+    this.exec(`tmux select-pane -t "${paneId}" -T "${title}"`);
+  }
+
   async listPanes(sessionName: string): Promise<string[]> {
     const output = execSync(`tmux list-panes -t "${sessionName}" -F "#{pane_id}"`, {
       encoding: "utf8",

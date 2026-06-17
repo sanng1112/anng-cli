@@ -31,6 +31,22 @@ export class DmuxAdapter implements TerminalMultiplexer {
     return this.tmux.killSession(`dmux-${sessionName}`);
   }
 
+  async selectLayout(sessionName: string, layout: string): Promise<void> {
+    return this.tmux.selectLayout(`dmux-${sessionName}`, layout);
+  }
+
+  async splitPaneVertically(sessionName: string, targetPane?: string): Promise<string> {
+    return this.tmux.splitPaneVertically(`dmux-${sessionName}`, targetPane);
+  }
+
+  async setPaneTitle(paneId: string, title: string): Promise<void> {
+    return this.tmux.setPaneTitle(paneId, title);
+  }
+
+  async listPanes(sessionName: string): Promise<string[]> {
+    return this.tmux.listPanes(`dmux-${sessionName}`);
+  }
+
   async writeState(sessionName: string, state: Record<string, unknown>): Promise<void> {
     const statePath = path.join(os.tmpdir(), `dmux-${sessionName}.json`);
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2), "utf8");
