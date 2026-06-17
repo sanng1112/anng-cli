@@ -8,8 +8,19 @@ import { ResultAggregator } from "./result-aggregator";
 import { FileConflictResolver } from "./file-conflict-resolver";
 import { TmuxManager } from "./integrations/tmux-manager";
 import { DmuxAdapter } from "./integrations/dmux-adapter";
+import { TeamTmuxLayout } from "./team-tmux-layout";
 import type { TerminalMultiplexer } from "./integrations/terminal-multiplexer";
-import type { TeamDefinition, TeamSession, TeamResult, TeamExecutionMode, TeamWorkerEvent, TeamUIEvent } from "./types";
+import type {
+  TeamDefinition,
+  TeamSession,
+  TeamResult,
+  TeamExecutionMode,
+  TeamWorkerEvent,
+  TeamUIEvent,
+  TmuxLayoutConfig,
+  TmuxLayoutResult,
+  AgentConfig,
+} from "./types";
 import type { CreateOpenAIClient } from "../tools/executor";
 import type { McpServerConfig, PermissionSettings } from "../settings";
 
@@ -33,6 +44,7 @@ export class TeamOrchestrator {
   private activeSession: TeamSession | null = null;
   private workerPool: AgentWorkerPool | null = null;
   private mux: TerminalMultiplexer | null = null;
+  private tmuxLayout: TeamTmuxLayout | null = null;
 
   constructor(private options: TeamOrchestratorOptions) {}
 
@@ -101,6 +113,11 @@ export class TeamOrchestrator {
     });
     await this.workerPool.initializeAll(definition.workers);
 
+    // If tmux mode, create the multi-pane team layout
+    if (definition.mode === "tmux" && this.mux) {
+      await this.createTmuxTeamLayout(session, definition.workers);
+    }
+
     // Transition: dispatching -> running
     this.teamManager.updateTeamStatus(session.teamId, "running");
     const executor = new ParallelExecutor({
@@ -125,7 +142,10 @@ export class TeamOrchestrator {
     this.teamManager.updateTeamStatus(session.teamId, result.status === "completed" ? "completed" : "failed");
 
     this.workerPool.disposeAll();
-    if (this.mux) {
+    if (this.tmuxLayout) {
+      await this.tmuxLayout.killTeamSession();
+      this.tmuxLayout = null;
+    } else if (this.mux) {
       await this.mux.killSession(`anng-${session.teamId}`);
     }
 
@@ -164,6 +184,34 @@ export class TeamOrchestrator {
       { name: "worker-1", role: "worker", description: "General purpose worker" },
       { name: "worker-2", role: "worker", description: "General purpose worker" },
     ];
+  }
+
+  async createTmuxTeamLayout(
+    _session: TeamSession,
+    workers: AgentConfig[]
+  ): Promise<{ layout: TeamTmuxLayout; result: TmuxLayoutResult } | null> {
+    if (!this.mux) return null;
+
+    const config: TmuxLayoutConfig = {
+      sessionName: `anng-${_session.teamId}`,
+      cwd: this.options.projectRoot,
+      coordinatorLabel: "Coordinator",
+      agents: workers.map((w) => ({
+        name: w.name,
+        command: this.buildWorkerCommand(w),
+      })),
+    };
+
+    const layout = new TeamTmuxLayout(this.mux, config);
+    const result = await layout.createTeamSession();
+    this.tmuxLayout = layout;
+    return { layout, result };
+  }
+
+  private buildWorkerCommand(worker: AgentConfig): string {
+    const parts = [`anng`, `--worker`, `-p`, `"${worker.systemPrompt ?? worker.name}"`];
+    if (worker.model) parts.push(`--model`, worker.model);
+    return parts.join(" ");
   }
 
   private async setupMultiplexer(mode: TeamExecutionMode): Promise<void> {
