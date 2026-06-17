@@ -3,8 +3,9 @@ import { Box, Text, useInput } from "ink";
 import path from "path";
 import fs from "fs";
 import DropdownMenu from "../components/DropdownMenu";
-import { MODEL_COMMAND_MODELS, MODEL_COMMAND_THINKING_OPTIONS } from "../components/ModelsDropdown";
-import { resolveCurrentSettings } from "../../settings";
+import { MODEL_COMMAND_THINKING_OPTIONS } from "../components/ModelsDropdown";
+import { loadModels, loadProviders, resolveModelProvider } from "../../team/provider-types";
+import type { ModelEntry } from "../../team/provider-types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,19 +28,6 @@ export interface TeamAgentRule {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const MODEL_OPTIONS = ["", "gpt-4", "deepseek-v4", "claude-3-opus", "claude-3-sonnet"];
-
-function modelLabel(m: string): string {
-  const labels: Record<string, string> = {
-    "": "Inherit",
-    "gpt-4": "GPT-4",
-    "deepseek-v4": "DeepSeek V4",
-    "claude-3-opus": "Claude 3 Opus",
-    "claude-3-sonnet": "Claude 3 Sonnet",
-  };
-  return labels[m] ?? m;
-}
 
 const DEFAULT_AGENTS: TeamAgentRule[] = [
   {
@@ -135,6 +123,9 @@ export function TeamCreateView({
   const agentsRef = useRef(agents);
   agentsRef.current = agents;
 
+  const [availableModels] = useState<ModelEntry[]>(() => loadModels(projectRoot));
+  useState(() => loadProviders(projectRoot)); // keep loaded for provider resolution via resolveModelProvider
+
   useEffect(() => {
     return () => {
       if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
@@ -152,14 +143,14 @@ export function TeamCreateView({
   const modelDropdownItems = useMemo(() => {
     return [
       { key: "inherit", label: "Inherit (Default)", selected: !agents[selectedIdx]?.model },
-      ...MODEL_COMMAND_MODELS.map((m) => ({
-        key: m,
-        label: m,
-        selected: agents[selectedIdx]?.model === m,
+      ...availableModels.map((m) => ({
+        key: m.name,
+        label: m.name,
+        selected: agents[selectedIdx]?.model === m.name,
       })),
       { key: "__custom__", label: "Custom model...", selected: false },
     ];
-  }, [agents, selectedIdx]);
+  }, [agents, selectedIdx, availableModels]);
 
   // ---- Handlers ----
 
@@ -189,7 +180,7 @@ export function TeamCreateView({
     const currentModel = agents[selectedIdx]?.model ?? "";
     let idx = 0;
     if (currentModel) {
-      const mi = MODEL_COMMAND_MODELS.findIndex((m) => m === currentModel);
+      const mi = availableModels.findIndex((m) => m.name === currentModel);
       idx = mi >= 0 ? mi + 1 : 0;
     }
     setConfigModelIdx(idx);
@@ -197,7 +188,7 @@ export function TeamCreateView({
     setConfigPendingApiKey(null);
     setConfigPendingBaseUrl(null);
     setConfigStep("model");
-  }, [agents, selectedIdx]);
+  }, [agents, selectedIdx, availableModels]);
 
   const applyModelConfig = useCallback(
     (
@@ -236,16 +227,6 @@ export function TeamCreateView({
   const startEditPrompt = useCallback(() => {
     setEditing("prompt");
     setEditBuffer(agents[selectedIdx]?.prompt ?? "");
-  }, [agents, selectedIdx]);
-
-  const startEditApiKey = useCallback(() => {
-    setEditing("apiKey");
-    setEditBuffer(agents[selectedIdx]?.apiKey ?? "");
-  }, [agents, selectedIdx]);
-
-  const startEditBaseUrl = useCallback(() => {
-    setEditing("baseURL");
-    setEditBuffer(agents[selectedIdx]?.baseURL ?? "");
   }, [agents, selectedIdx]);
 
   const commitEdit = useCallback(() => {
@@ -294,8 +275,22 @@ export function TeamCreateView({
       flash("Type a task description first.");
       return;
     }
+    // Resolve provider apiKey/baseURL for each agent when model is known
+    const enrichedAgents = agentsRef.current.map((a) => {
+      if (a.model) {
+        const resolved = resolveModelProvider(projectRoot, a.model);
+        if (resolved.provider) {
+          return {
+            ...a,
+            apiKey: a.apiKey || resolved.provider.apiKey || undefined,
+            baseURL: a.baseURL || resolved.provider.baseURL || undefined,
+          };
+        }
+      }
+      return a;
+    });
     saveAgents(projectRoot, agentsRef.current);
-    onStartTeam(trimmed, agentsRef.current);
+    onStartTeam(trimmed, enrichedAgents);
   }, [taskInput, projectRoot, onStartTeam, flash]);
 
   // ---- Input ----
@@ -564,23 +559,18 @@ export function TeamCreateView({
             : `${prefix} ${i + 1}. ${agent.name}`;
 
         // Determine provider display
-        const modelDisplay = modelLabel(agent.model ?? "");
-        const providerMap: Record<string, string> = {
-          "gpt-4": "OpenAI",
-          "gpt-4o": "OpenAI",
-          "gpt-4o-mini": "OpenAI",
-          "deepseek-v4": "DeepSeek",
-          "deepseek-chat": "DeepSeek",
-          "claude-3-opus": "Anthropic",
-          "claude-3-sonnet": "Anthropic",
-          "claude-3-haiku": "Anthropic",
-          "claude-4": "Anthropic",
-          "gemini-pro": "Google",
-          "gemini-2.0-flash": "Google",
-        };
-        const provider = agent.model ? (providerMap[agent.model] ?? (agent.baseURL ? "Custom" : "Inherit")) : "Inherit";
+        const modelDisplay = agent.model ?? "Inherit";
+        let providerLabel = "Inherit";
+        if (agent.model) {
+          const resolved = resolveModelProvider(projectRoot, agent.model);
+          if (resolved.provider) {
+            providerLabel = resolved.provider.name;
+          } else {
+            providerLabel = agent.baseURL ? "Custom" : "Inherit";
+          }
+        }
         const hasCustomApi = agent.apiKey || agent.baseURL;
-        const providerTag = hasCustomApi ? `${provider} \u2605` : provider;
+        const providerTag = hasCustomApi ? `${providerLabel} \u2605` : providerLabel;
 
         return (
           <Box key={`agent-${i}`} marginLeft={1} flexDirection="column">
