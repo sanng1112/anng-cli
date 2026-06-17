@@ -54,6 +54,10 @@ const DEFAULT_AGENTS: TeamAgentRule[] = [
 
 const CONFIG_FILE = ".anng/team-agents.json";
 
+// Brand accent color — burnt copper, matching the design system
+const BRAND = "#D4704B";
+const BRAND_DIM = "#D4704Be6";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -295,7 +299,7 @@ export function TeamCreateView({
     <Box flexDirection="column" width={columnWidth} minWidth={80}>
       {/* Header */}
       <Box>
-        <Text bold color="cyan">
+        <Text bold color={BRAND}>
           {"\u2550".repeat(columnWidth > 120 ? 80 : 50)} Team Builder {"\u2550".repeat(columnWidth > 120 ? 80 : 50)}
         </Text>
       </Box>
@@ -304,25 +308,25 @@ export function TeamCreateView({
         <Text dimColor>Configure agents and type a task below. Press </Text>
         <Text color="green">Enter</Text>
         <Text dimColor> to run internally or </Text>
-        <Text color="yellow">S</Text>
+        <Text color={BRAND}>S</Text>
         <Text dimColor> to start in tmux.</Text>
       </Box>
 
       <Box marginTop={1}>
         <Text dimColor> Keys: </Text>
-        <Text color="yellow">↑↓</Text>
+        <Text color={BRAND}>↑↓</Text>
         <Text dimColor> Select </Text>
-        <Text color="yellow">A</Text>
+        <Text color={BRAND}>A</Text>
         <Text dimColor> Add </Text>
-        <Text color="yellow">D</Text>
+        <Text color={BRAND}>D</Text>
         <Text dimColor> Del </Text>
-        <Text color="yellow">N</Text>
+        <Text color={BRAND}>N</Text>
         <Text dimColor> Name </Text>
-        <Text color="yellow">P</Text>
+        <Text color={BRAND}>P</Text>
         <Text dimColor> Prompt </Text>
-        <Text color="yellow">M</Text>
+        <Text color={BRAND}>M</Text>
         <Text dimColor> Model </Text>
-        <Text color="yellow">Esc</Text>
+        <Text color={BRAND}>Esc</Text>
         <Text dimColor> Back </Text>
       </Box>
 
@@ -360,13 +364,13 @@ export function TeamCreateView({
         return (
           <Box key={`agent-${i}`} marginLeft={1} flexDirection="column">
             <Box>
-              <Text color={isSelected ? "cyan" : undefined} bold={isSelected}>
+              <Text color={isSelected ? BRAND : undefined} bold={isSelected}>
                 {label}
               </Text>
               <Text dimColor> — </Text>
               <Text color={agent.model ? "green" : "gray"}>{modelDisplay}</Text>
               <Text dimColor> · </Text>
-              <Text color={hasCustomApi ? "yellow" : "gray"}>{providerTag}</Text>
+              <Text color={hasCustomApi ? BRAND : "gray"}>{providerTag}</Text>
             </Box>
             {isSelected && !editing && (
               <Box marginLeft={2}>
@@ -375,7 +379,7 @@ export function TeamCreateView({
             )}
             {isSelected && !editing && hasCustomApi && (
               <Box marginLeft={2}>
-                <Text color="yellow" dimColor>
+                <Text color={BRAND_DIM}>
                   API: {agent.apiKey ? "***" + agent.apiKey.slice(-4) : "Inherit"}
                   {agent.baseURL
                     ? ` @ ${agent.baseURL.length > 40 ? agent.baseURL.slice(0, 38) + "…" : agent.baseURL}`
@@ -396,7 +400,7 @@ export function TeamCreateView({
       <Box marginTop={1} marginLeft={1}>
         {editing ? (
           <Text>
-            <Text color="yellow">Edit {editing}:</Text>{" "}
+            <Text color={BRAND}>Edit {editing}:</Text>{" "}
             <Text>{editing === "name" ? editBuffer : editBuffer.slice(0, 80)}</Text>
             <Text>_</Text>
           </Text>
@@ -418,9 +422,9 @@ export function TeamCreateView({
                   </Text>
                 </Box>
                 <Box marginTop={1}>
-                  <Text color="cyan">[Enter] Run internally</Text>
+                  <Text color={BRAND}>[Enter] Run internally</Text>
                   <Text> </Text>
-                  <Text color="yellow">[S] Start Team (tmux panels)</Text>
+                  <Text color={BRAND}>[S] Start Team (tmux panels)</Text>
                 </Box>
               </Box>
             ) : null}
@@ -431,7 +435,7 @@ export function TeamCreateView({
       {/* Status / Error */}
       {msg ? (
         <Box marginTop={1} marginLeft={1}>
-          <Text color="yellow">{msg}</Text>
+          <Text color={BRAND}>{msg}</Text>
         </Box>
       ) : null}
     </Box>
