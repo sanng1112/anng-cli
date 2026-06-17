@@ -142,21 +142,43 @@ export class AgentWorker {
       const contextPrompt = this.buildTaskPrompt(task);
 
       if (this.options.mux) {
-        // Fallback for demonstration: launch child process in tmux pane
-        const escapedPrompt = contextPrompt.replace(/"/g, '\\"').replace(/\n/g, " ");
+        // Launch worker in tmux pane with the full task prompt
+        const escapedPrompt = contextPrompt.replace(/"/g, '\\"').replace(/\n/g, "\\n");
         const paneId = await this.options.mux.createPane(
-          "anng-team",
+          `anng-${this.config.name}`,
           `anng --worker -p "${escapedPrompt}"`,
           this.options.projectRoot
         );
 
-        // Return dummy success immediately for the visual showcase
+        // Poll pane output to track completion
+        const pollIntervalMs = 2000;
+        const maxWaitMs = this.config.taskTimeoutMs ?? 600_000;
+        let waitedMs = 0;
+        let lastOutput = "";
+
+        while (waitedMs < maxWaitMs) {
+          await new Promise((r) => setTimeout(r, pollIntervalMs));
+          waitedMs += pollIntervalMs;
+
+          const currentOutput = await this.options.mux.capturePane(paneId);
+          if (currentOutput !== lastOutput) {
+            // Still producing output
+            lastOutput = currentOutput;
+            continue;
+          }
+
+          // Check if the shell prompt reappeared (process finished)
+          if (currentOutput.includes("$") || currentOutput.includes("#")) {
+            break;
+          }
+        }
+
         const result: TeamTaskResult = {
           ok: true,
-          summary: `Worker executed asynchronously in tmux pane ${paneId}.`,
+          summary: lastOutput.slice(-500) || `Executed in tmux pane ${paneId}.`,
           artifacts: [],
           usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-          durationMs: 1000,
+          durationMs: waitedMs,
           workerSessionId: paneId,
         };
 
