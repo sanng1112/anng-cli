@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo } from "react";
 import { Box, Text } from "ink";
 import { useTerminalInput } from "../hooks/useTerminalInput";
 import DropdownMenu, { type DropdownMenuItem } from "../components/DropdownMenu";
@@ -39,7 +39,6 @@ type InputPrompt =
   | "customProviderBaseUrl"
   | "customModelName"
   | "customModelProvider";
-type AddProviderStep = "id" | "name" | "apiKey" | "baseURL";
 
 const COMMON_BASE_URLS = [
   { label: "DeepSeek", url: "https://api.deepseek.com" },
@@ -68,6 +67,7 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
   });
   const [models, setModels] = useState<ModelEntry[]>(() => loadModels(projectRoot));
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [pendingProvider, setPendingProvider] = useState<Partial<Provider> | null>(null);
 
   // Separate active indices for different screens to preserve scroll position
   const [indices, setIndices] = useState<Record<Screen, number>>({
@@ -338,26 +338,73 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
         return;
       }
       if (key.return) {
-        if (inputPrompt === "customProvider") {
-          const newProviders = [
-            ...providers,
-            {
-              id: inputBuffer.trim() || `p${providers.length + 1}`,
-              name: inputBuffer.trim() || `Provider ${providers.length + 1}`,
-              apiKey: "",
-              baseURL: "https://opencode.ai/zen/v1",
-            },
-          ];
-          setProviders(newProviders);
-          saveProviders(projectRoot, newProviders);
-          setInputPrompt(null);
+        // --- Multi-step add provider ---
+        if (
+          inputPrompt === "customProvider" ||
+          inputPrompt === "customProviderName" ||
+          inputPrompt === "customProviderApiKey" ||
+          inputPrompt === "customProviderBaseUrl"
+        ) {
+          const val = inputBuffer.trim() || "";
+          if (inputPrompt === "customProvider") {
+            setPendingProvider({ id: val || `p${providers.length + 1}` });
+            setInputPrompt("customProviderName");
+            setInputBuffer(
+              val ? `${val.charAt(0).toUpperCase() + val.slice(1)} Key` : `Provider ${providers.length + 1}`
+            );
+          } else if (inputPrompt === "customProviderName") {
+            setPendingProvider((prev) => ({ ...prev, name: val || prev?.id || `Provider ${providers.length + 1}` }));
+            setInputPrompt("customProviderApiKey");
+            setInputBuffer("");
+          } else if (inputPrompt === "customProviderApiKey") {
+            setPendingProvider((prev) => ({ ...prev, apiKey: val }));
+            setInputPrompt("customProviderBaseUrl");
+            setInputBuffer("https://opencode.ai/zen/v1");
+          } else if (inputPrompt === "customProviderBaseUrl") {
+            const complete: Provider = {
+              id: pendingProvider?.id || `p${providers.length + 1}`,
+              name: pendingProvider?.name || `Provider ${providers.length + 1}`,
+              apiKey: pendingProvider?.apiKey || "",
+              baseURL: val || "https://opencode.ai/zen/v1",
+            };
+            const newProviders = [...providers, complete];
+            setProviders(newProviders);
+            saveProviders(projectRoot, newProviders);
+            setInputPrompt(null);
+            setPendingProvider(null);
+          }
           return;
-        } else if (inputPrompt === "customModelName" && inputBuffer.trim()) {
-          const providerId = providers.length > 0 ? providers[0].id : "unknown";
-          const newModels = [...models, { name: inputBuffer.trim(), providerId, tested: false }];
-          setModels(newModels);
-          saveModels(projectRoot, newModels);
+        }
+
+        // --- Multi-step add model ---
+        if (inputPrompt === "customModelName") {
+          const name = inputBuffer.trim();
+          if (name) {
+            if (providers.length > 0) {
+              // Store name, then show provider selection
+              setPendingProvider({ id: name }); // reuse pendingProvider to store model name
+              setInputPrompt("customModelProvider");
+              setInputBuffer("");
+            } else {
+              const newModels = [...models, { name, providerId: "unknown", tested: false }];
+              setModels(newModels);
+              saveModels(projectRoot, newModels);
+              setInputPrompt(null);
+            }
+          }
+          return;
+        }
+
+        if (inputPrompt === "customModelProvider") {
+          const name = pendingProvider?.id;
+          const providerId = inputBuffer.trim() || (providers[0]?.id ?? "unknown");
+          if (name) {
+            const newModels = [...models, { name, providerId, tested: false }];
+            setModels(newModels);
+            saveModels(projectRoot, newModels);
+          }
           setInputPrompt(null);
+          setPendingProvider(null);
           return;
         }
 
@@ -472,11 +519,43 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
     if (screen === "modelRegistry" && (input === "t" || input === "T")) {
       const item = currentItems[activeIndex];
       if (item && item.key !== "add_model") {
-        const newModels = models.map((m) => (m.name === item.key ? { ...m, tested: true } : m));
-        setModels(newModels);
-        saveModels(projectRoot, newModels);
-        setTestResult(`✅ ${item.key} tested successfully`);
-        setTimeout(() => setTestResult(null), 3000);
+        const modelName = item.key;
+        const modelEntry = models.find((m) => m.name === modelName);
+        if (!modelEntry) return;
+        const provider = providers.find((p) => p.id === modelEntry.providerId);
+        if (!provider || !provider.apiKey) {
+          setTestResult(`❌ ${modelName}: No API key configured for provider`);
+          setTimeout(() => setTestResult(null), 4000);
+          return;
+        }
+        // Show testing status
+        setTestResult(`⏳ Testing ${modelName}...`);
+        // Use OpenAI client to test
+        import("openai")
+          .then(({ default: OpenAI }) => {
+            const client = new OpenAI({
+              apiKey: provider.apiKey,
+              baseURL: provider.baseURL,
+              dangerouslyAllowBrowser: true,
+            });
+            return client.chat.completions.create({
+              model: modelName,
+              messages: [{ role: "user", content: "Respond with just the word OK" }],
+              max_tokens: 10,
+            });
+          })
+          .then(() => {
+            const newModels = models.map((m) => (m.name === modelName ? { ...m, tested: true } : m));
+            setModels(newModels);
+            saveModels(projectRoot, newModels);
+            setTestResult(`✅ ${modelName}: Response OK`);
+            setTimeout(() => setTestResult(null), 5000);
+          })
+          .catch((err) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            setTestResult(`❌ ${modelName}: ${msg}`);
+            setTimeout(() => setTestResult(null), 8000);
+          });
       }
       return;
     }
@@ -575,6 +654,12 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
         if (item.key === "add_provider") {
           setInputPrompt("customProvider");
           setInputBuffer("");
+        } else if (item.key !== "add_provider") {
+          // Enter on existing provider → cycle through fields to edit
+          // For now, prompt for new apiKey
+          setPendingProvider(providers.find((p) => p.id === item.key) ?? null);
+          setInputPrompt("customProviderApiKey");
+          setInputBuffer(providers.find((p) => p.id === item.key)?.apiKey ?? "");
         }
         return;
       }
@@ -620,19 +705,31 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
       ) : (
         <Box flexDirection="column" marginTop={1} paddingX={1}>
           <Text bold color={primaryColor}>
-            {inputPrompt === "customModel"
-              ? "Enter Custom Main Model Name:"
-              : inputPrompt === "customProxyModel"
-                ? "Enter Custom Proxy Model Name:"
-                : inputPrompt === "customBaseUrl"
-                  ? "Enter Custom Base URL:"
-                  : inputPrompt === "customEnvVar"
-                    ? "Add Environment Variable (Format: KEY=VALUE):"
-                    : inputPrompt === "customProvider"
-                      ? "Enter Provider ID (or leave empty for auto-generated):"
-                      : inputPrompt === "customModelName"
-                        ? "Enter Model Name (will be linked to first available provider):"
-                        : `Edit Value for ${editingEnvKey}:`}
+            {inputPrompt === "customProvider"
+              ? "Enter Provider ID (e.g., ds1):"
+              : inputPrompt === "customProviderName"
+                ? "Enter Provider Name (e.g., DeepSeek Key 1):"
+                : inputPrompt === "customProviderApiKey"
+                  ? pendingProvider?.id
+                    ? `Enter API Key for ${pendingProvider.id}:`
+                    : "Enter API Key:"
+                  : inputPrompt === "customProviderBaseUrl"
+                    ? "Enter Base URL (Enter for default):"
+                    : inputPrompt === "customModelName"
+                      ? "Enter Model Name (e.g., deepseek-v4-pro):"
+                      : inputPrompt === "customModelProvider"
+                        ? providers.length > 0
+                          ? `Enter Provider ID (available: ${providers.map((p) => p.id).join(", ")}):`
+                          : "No providers available. Add a provider first."
+                        : inputPrompt === "customModel"
+                          ? "Enter Custom Main Model Name:"
+                          : inputPrompt === "customProxyModel"
+                            ? "Enter Custom Proxy Model Name:"
+                            : inputPrompt === "customBaseUrl"
+                              ? "Enter Custom Base URL:"
+                              : inputPrompt === "customEnvVar"
+                                ? "Add Environment Variable (Format: KEY=VALUE):"
+                                : `Edit Value for ${editingEnvKey}:`}
           </Text>
           <Text>{inputBuffer}█</Text>
           <Box marginTop={1}>
