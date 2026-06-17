@@ -383,6 +383,10 @@ function App({
                 description: String(a.name),
                 systemPrompt: String(a.prompt),
                 model: a.model ? String(a.model) : undefined,
+                apiKey: a.apiKey ? String(a.apiKey) : undefined,
+                baseURL: a.baseURL ? String(a.baseURL) : undefined,
+                thinkingEnabled: typeof a.thinkingEnabled === "boolean" ? a.thinkingEnabled : undefined,
+                reasoningEffort: a.reasoningEffort ? String(a.reasoningEffort) : undefined,
               }));
             }
           }
