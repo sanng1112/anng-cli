@@ -183,6 +183,25 @@ export interface TeamSettings {
 }
 
 // ============================================================
+// Tmux Layout Types
+// ============================================================
+
+export interface TmuxLayoutConfig {
+  sessionName: string;
+  cwd: string;
+  coordinatorLabel: string;
+  agents: Array<{
+    name: string;
+    command: string;
+  }>;
+}
+
+export interface TmuxLayoutResult {
+  coordinatorPaneId: string;
+  agentPaneIds: string[];
+}
+
+// ============================================================
 // Event Types
 // ============================================================
 
