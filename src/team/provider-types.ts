@@ -77,19 +77,41 @@ export function loadModels(projectRoot: string): ModelEntry[] {
     const raw = fs.readFileSync(p, "utf-8");
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return [];
-    return data.filter(
+    const valid = data.filter(
       (x: unknown): x is ModelEntry => typeof x === "object" && x !== null && typeof (x as ModelEntry).name === "string"
     );
+    // Deduplicate by name (keep first occurrence)
+    const seen = new Set<string>();
+    const deduped: ModelEntry[] = [];
+    for (const m of valid) {
+      if (!seen.has(m.name)) {
+        seen.add(m.name);
+        deduped.push(m);
+      }
+    }
+    if (deduped.length !== valid.length) {
+      saveModels(projectRoot, deduped); // auto-fix duplicates on disk
+    }
+    return deduped;
   } catch {
     return [];
   }
 }
 
 export function saveModels(projectRoot: string, models: ModelEntry[]): void {
+  // Deduplicate before saving
+  const seen = new Set<string>();
+  const deduped: ModelEntry[] = [];
+  for (const m of models) {
+    if (!seen.has(m.name)) {
+      seen.add(m.name);
+      deduped.push(m);
+    }
+  }
   const p = modelsPath(projectRoot);
   const dir = path.dirname(p);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(p, JSON.stringify(models, null, 2), "utf-8");
+  fs.writeFileSync(p, JSON.stringify(deduped, null, 2), "utf-8");
 }
 
 // ---------------------------------------------------------------------------
