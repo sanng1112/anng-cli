@@ -28,7 +28,8 @@ export class TmuxManager implements TerminalMultiplexer {
   }
 
   async sendCommand(paneId: string, command: string): Promise<void> {
-    this.exec(`tmux send-keys -t "${paneId}" "${this.escapeCommand(command)}" Enter`);
+    const safe = `'${command.replace(/'/g, "'\"'\"'")}'`;
+    this.exec(`tmux send-keys -t "${paneId}" ${safe} Enter`);
   }
 
   async capturePane(paneId: string): Promise<string> {
@@ -94,6 +95,6 @@ export class TmuxManager implements TerminalMultiplexer {
   }
 
   private escapeCommand(command: string): string {
-    return command.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/;/g, "\\;");
+    return `'${command.replace(/'/g, "'\"'\"'")}'`;
   }
 }
