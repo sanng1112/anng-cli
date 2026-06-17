@@ -286,7 +286,7 @@ export function TeamCreateView({
     }
 
     // Only S when in task mode (or task has content)
-    if ((input === "s" || input === "S") && taskInput.trim()) {
+    if ((input === "s" || input === "S") && (key.ctrl || key.meta) && taskInput.trim()) {
       handleStartTeam();
       return;
     }
@@ -326,7 +326,7 @@ export function TeamCreateView({
         <Text dimColor>Configure agents and type a task below. Press </Text>
         <Text color="green">Enter</Text>
         <Text dimColor> to run internally or </Text>
-        <Text color={BRAND}>S</Text>
+        <Text color={BRAND}>Ctrl+S</Text>
         <Text dimColor> to start in tmux.</Text>
       </Box>
 
@@ -460,7 +460,7 @@ export function TeamCreateView({
                 <Box marginTop={1}>
                   <Text color={BRAND}>[Enter] Run internally</Text>
                   <Text> </Text>
-                  <Text color={BRAND}>[S] Start Team (tmux panels)</Text>
+                  <Text color={BRAND}>[Ctrl+S] Start Team (tmux panels)</Text>
                 </Box>
               </Box>
             ) : null}
