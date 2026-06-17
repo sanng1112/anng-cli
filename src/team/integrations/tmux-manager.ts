@@ -16,6 +16,11 @@ export class TmuxManager implements TerminalMultiplexer {
   }
 
   async createPane(sessionName: string, command: string, cwd: string): Promise<string> {
+    // Check if session exists; create it if not (workers auto-create on first use)
+    const paneCount = await this.getPaneCount(sessionName);
+    if (paneCount === 0) {
+      await this.createSession(sessionName, cwd);
+    }
     const paneIndex = await this.getPaneCount(sessionName);
     const cmd = `tmux split-window -t "${sessionName}" -c "${cwd}" "clear; echo '=== Worker starting ==='; ${command}; exec $SHELL"`;
     this.exec(cmd);
