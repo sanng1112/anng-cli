@@ -308,6 +308,12 @@ export function TeamCreateView({
       setTaskInput((prev) => prev.slice(0, -1));
       return;
     }
+    // When focus is "agents", don't add characters to task input —
+    // all agent operation keys are handled above.
+    if (focus === "agents") {
+      return;
+    }
+
     // Type characters → task input
     if (input && !key.ctrl && !key.meta) {
       setTaskInput((prev) => prev + input);
