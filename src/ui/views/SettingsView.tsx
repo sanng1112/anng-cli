@@ -367,7 +367,10 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
               apiKey: pendingProvider?.apiKey || "",
               baseURL: val || "https://opencode.ai/zen/v1",
             };
-            const newProviders = [...providers, complete];
+            // If provider already exists, UPDATE it; otherwise ADD it
+            const existingIdx = providers.findIndex((p) => p.id === complete.id);
+            const newProviders =
+              existingIdx >= 0 ? providers.map((p, i) => (i === existingIdx ? complete : p)) : [...providers, complete];
             setProviders(newProviders);
             saveProviders(projectRoot, newProviders);
             setInputPrompt(null);

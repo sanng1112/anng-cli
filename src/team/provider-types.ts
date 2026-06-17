@@ -60,10 +60,19 @@ export function loadProviders(projectRoot: string): Provider[] {
 }
 
 export function saveProviders(projectRoot: string, providers: Provider[]): void {
-  const p = providersPath(projectRoot);
-  const dir = path.dirname(p);
+  // Deduplicate by id before saving
+  const seen = new Set<string>();
+  const deduped: Provider[] = [];
+  for (const p of providers) {
+    if (!seen.has(p.id)) {
+      seen.add(p.id);
+      deduped.push(p);
+    }
+  }
+  const filePath = providersPath(projectRoot);
+  const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(p, JSON.stringify(providers, null, 2), "utf-8");
+  fs.writeFileSync(filePath, JSON.stringify(deduped, null, 2), "utf-8");
 }
 
 // ---------------------------------------------------------------------------
