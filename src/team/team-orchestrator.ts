@@ -209,8 +209,13 @@ export class TeamOrchestrator {
   }
 
   private buildWorkerCommand(worker: AgentConfig): string {
-    const parts = [`anng`, `--worker`, `-p`, `"${worker.systemPrompt ?? worker.name}"`];
-    if (worker.model) parts.push(`--model`, worker.model);
+    const parts = [`anng`, `--worker`, `-p`];
+    const prompt = worker.systemPrompt ?? worker.name;
+    // Use single-quote shell escaping to avoid double-quote nesting issues
+    parts.push(`'${prompt.replace(/'/g, "'\\''")}'`);
+    if (worker.model) {
+      parts.push(`--model`, worker.model);
+    }
     return parts.join(" ");
   }
 
