@@ -731,7 +731,8 @@ export const PromptInput = React.memo(function PromptInput({
       return;
     }
     if (item.kind === "team") {
-      onSubmit({ text: "/team", imageUrls: [], command: "team" });
+      const rawText = buffer.text.trim() || "/team";
+      onSubmit({ text: rawText, imageUrls: [], command: "team" });
       resetPromptInput();
       return;
     }

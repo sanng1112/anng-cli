@@ -48,11 +48,12 @@ import { SessionManager } from "../../session";
 import { TeamOrchestrator } from "../../team/team-orchestrator";
 import type { TeamUIEvent, TeamResult, AgentConfig } from "../../team/types";
 import { AgentsConfigView } from "./AgentsConfigView";
+import { TeamCreateView } from "./TeamCreateView";
 import { SettingsView } from "./SettingsView";
 import * as fs from "fs";
 import * as path from "path";
 
-type View = "chat" | "session-list" | "undo" | "mcp-status" | "agents-config" | "settings";
+type View = "chat" | "session-list" | "undo" | "mcp-status" | "agents-config" | "settings" | "team-create";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -152,6 +153,8 @@ function App({
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
   const [teamResult, setTeamResult] = useState<TeamResult | null>(null);
   const [teamBusy, setTeamBusy] = useState(false);
+  const [teamModeEnabled, setTeamModeEnabled] = useState(false);
+  const teamOrchestratorRef = useRef<TeamOrchestrator | null>(null);
 
   const initialAutoAccept = useRef(autoAccept).current;
   const initialPlanMode = useRef(planMode).current;
@@ -344,6 +347,60 @@ function App({
   }, [sessionManager]);
 
   writeRef.current = write;
+
+  const runTeamTask = async (taskText: string): Promise<void> => {
+    setTeamBusy(true);
+    setBusy(true);
+    try {
+      const orchestrator = new TeamOrchestrator({
+        projectRoot,
+        autoAccept: currentAutoAccept,
+        planMode: currentPlanMode,
+        createOpenAIClient: () => createOpenAIClient(projectRoot),
+        renderMarkdown: (text) => text,
+        onUIEvent: (event: TeamUIEvent) => {
+          if (event.type === "team_complete") {
+            setTeamResult(event.data as TeamResult);
+            setTeamBusy(false);
+            setBusy(false);
+            setMessages((prev) => [
+              ...prev,
+              buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
+            ]);
+          }
+        },
+      });
+      teamOrchestratorRef.current = orchestrator;
+      let workers: AgentConfig[] | undefined;
+      try {
+        const configPath = path.join(projectRoot, ".anng", "team-agents.json");
+        if (fs.existsSync(configPath)) {
+          const raw = fs.readFileSync(configPath, "utf-8");
+          const data = JSON.parse(raw);
+          if (Array.isArray(data) && data.length > 0) {
+            workers = data.map((a: Record<string, unknown>) => ({
+              name: String(a.name),
+              role: "worker" as const,
+              description: String(a.name),
+              systemPrompt: String(a.prompt),
+              model: a.model ? String(a.model) : undefined,
+            }));
+          }
+        }
+      } catch (_e) {
+        // Ignore config loading errors
+      }
+      const result = await orchestrator.executeTask(taskText, { workers });
+      setTeamResult(result);
+    } catch (error) {
+      setErrorLine(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTeamBusy(false);
+      setBusy(false);
+      teamOrchestratorRef.current = null;
+    }
+  };
+
   const handlePrompt = useCallback(
     async (submission: PromptSubmission) => {
       if (submission.command === "exit") {
@@ -397,14 +454,58 @@ function App({
         return;
       }
       if (submission.command === "team") {
-        if (teamResult) {
-          setMessages((prev) => [...prev, buildSyntheticUserMessage(`Team result: ${teamResult.executiveSummary}`, 0)]);
-          setTeamResult(null);
-        } else if (teamBusy) {
-          setErrorLine("Team is currently running. Wait for completion or interrupt.");
-        } else {
-          setErrorLine("No active team. Use --team flag or /team create.");
+        const parts = submission.text.trim().split(/\s+/);
+        const subCmd = parts[1]?.toLowerCase();
+        const taskText = parts.slice(2).join(" ");
+
+        if (subCmd === "create") {
+          if (taskText) {
+            await runTeamTask(taskText);
+          } else {
+            navigateToSubView("team-create");
+          }
+          return;
         }
+
+        if (subCmd === "status") {
+          if (teamBusy) {
+            setStatusLine("Team is currently running a task. Please wait.");
+          } else if (teamResult) {
+            setMessages((prev) => [
+              ...prev,
+              buildSyntheticUserMessage("Team result: " + teamResult.executiveSummary, 0),
+            ]);
+            setTeamResult(null);
+          } else {
+            setStatusLine("Team mode is " + (initialTeamMode || teamModeEnabled ? "active" : "inactive") + ".");
+          }
+          return;
+        }
+
+        if (subCmd === "kill" || subCmd === "stop") {
+          teamOrchestratorRef.current = null;
+          setTeamModeEnabled(false);
+          setTeamBusy(false);
+          setBusy(false);
+          setStatusLine("Team mode disabled.");
+          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team mode disabled by user.", 0)]);
+          return;
+        }
+
+        if (teamBusy) {
+          setErrorLine("Team is currently running. Wait for completion or interrupt.");
+          return;
+        }
+        if (teamResult) {
+          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team result: " + teamResult.executiveSummary, 0)]);
+          setTeamResult(null);
+          return;
+        }
+        if (initialTeamMode || teamModeEnabled) {
+          setStatusLine("Team mode is active. Type your task directly.");
+          return;
+        }
+        setErrorLine("No active team. Use --team flag, /team create, or /team create <task>.");
         return;
       }
       if (submission.command === "custom-agents") {
@@ -417,56 +518,8 @@ function App({
       }
 
       // Nếu team mode được bật và không phải command đặc biệt
-      if (initialTeamMode && submission.text.trim() && !submission.command) {
-        setTeamBusy(true);
-        setBusy(true);
-        try {
-          const orchestrator = new TeamOrchestrator({
-            projectRoot,
-            autoAccept: currentAutoAccept,
-            planMode: currentPlanMode,
-            createOpenAIClient: () => createOpenAIClient(projectRoot),
-            renderMarkdown: (text) => text,
-            onUIEvent: (event: TeamUIEvent) => {
-              if (event.type === "team_complete") {
-                setTeamResult(event.data as TeamResult);
-                setTeamBusy(false);
-                setBusy(false);
-                setMessages((prev) => [
-                  ...prev,
-                  buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
-                ]);
-              }
-            },
-          });
-          let workers: AgentConfig[] | undefined = undefined;
-          try {
-            const configPath = path.join(projectRoot, ".anng", "team-agents.json");
-            if (fs.existsSync(configPath)) {
-              const data = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-              if (Array.isArray(data) && data.length > 0) {
-                workers = data.map((a: Record<string, unknown>) => ({
-                  name: String(a.name),
-                  role: "worker",
-                  description: String(a.name),
-                  systemPrompt: String(a.prompt),
-                  model: a.model ? String(a.model) : undefined,
-                }));
-              }
-            }
-          } catch (_e) {
-            // Ignore config loading errors
-          }
-
-          const result = await orchestrator.executeTask(submission.text, { workers });
-          setTeamResult(result);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          setErrorLine(message);
-        } finally {
-          setTeamBusy(false);
-          setBusy(false);
-        }
+      if ((initialTeamMode || teamModeEnabled) && submission.text.trim() && !submission.command) {
+        await runTeamTask(submission.text);
         return;
       }
 
@@ -542,9 +595,8 @@ function App({
       navigateToSubView,
       resetToWelcome,
       initialTeamMode,
-      projectRoot,
-      currentAutoAccept,
-      currentPlanMode,
+      teamModeEnabled,
+      runTeamTask,
       teamBusy,
       teamResult,
     ]
@@ -1009,6 +1061,16 @@ function App({
         />
       ) : view === "agents-config" ? (
         <AgentsConfigView projectRoot={projectRoot} onExit={() => navigateToSubView("chat")} />
+      ) : view === "team-create" ? (
+        <TeamCreateView
+          projectRoot={projectRoot}
+          screenWidth={screenWidth}
+          onRunTask={(taskText: string) => {
+            navigateToSubView("chat");
+            void runTeamTask(taskText);
+          }}
+          onExit={() => navigateToSubView("chat")}
+        />
       ) : view === "settings" ? (
         <SettingsView
           projectRoot={projectRoot}
