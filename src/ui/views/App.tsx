@@ -348,58 +348,61 @@ function App({
 
   writeRef.current = write;
 
-  const runTeamTask = async (taskText: string): Promise<void> => {
-    setTeamBusy(true);
-    setBusy(true);
-    try {
-      const orchestrator = new TeamOrchestrator({
-        projectRoot,
-        autoAccept: currentAutoAccept,
-        planMode: currentPlanMode,
-        createOpenAIClient: () => createOpenAIClient(projectRoot),
-        renderMarkdown: (text) => text,
-        onUIEvent: (event: TeamUIEvent) => {
-          if (event.type === "team_complete") {
-            setTeamResult(event.data as TeamResult);
-            setTeamBusy(false);
-            setBusy(false);
-            setMessages((prev) => [
-              ...prev,
-              buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
-            ]);
-          }
-        },
-      });
-      teamOrchestratorRef.current = orchestrator;
-      let workers: AgentConfig[] | undefined;
+  const runTeamTask = useCallback(
+    async (taskText: string): Promise<void> => {
+      setTeamBusy(true);
+      setBusy(true);
       try {
-        const configPath = path.join(projectRoot, ".anng", "team-agents.json");
-        if (fs.existsSync(configPath)) {
-          const raw = fs.readFileSync(configPath, "utf-8");
-          const data = JSON.parse(raw);
-          if (Array.isArray(data) && data.length > 0) {
-            workers = data.map((a: Record<string, unknown>) => ({
-              name: String(a.name),
-              role: "worker" as const,
-              description: String(a.name),
-              systemPrompt: String(a.prompt),
-              model: a.model ? String(a.model) : undefined,
-            }));
+        const orchestrator = new TeamOrchestrator({
+          projectRoot,
+          autoAccept: currentAutoAccept,
+          planMode: currentPlanMode,
+          createOpenAIClient: () => createOpenAIClient(projectRoot),
+          renderMarkdown: (text) => text,
+          onUIEvent: (event: TeamUIEvent) => {
+            if (event.type === "team_complete") {
+              setTeamResult(event.data as TeamResult);
+              setTeamBusy(false);
+              setBusy(false);
+              setMessages((prev) => [
+                ...prev,
+                buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
+              ]);
+            }
+          },
+        });
+        teamOrchestratorRef.current = orchestrator;
+        let workers: AgentConfig[] | undefined;
+        try {
+          const configPath = path.join(projectRoot, ".anng", "team-agents.json");
+          if (fs.existsSync(configPath)) {
+            const raw = fs.readFileSync(configPath, "utf-8");
+            const data = JSON.parse(raw);
+            if (Array.isArray(data) && data.length > 0) {
+              workers = data.map((a: Record<string, unknown>) => ({
+                name: String(a.name),
+                role: "worker" as const,
+                description: String(a.name),
+                systemPrompt: String(a.prompt),
+                model: a.model ? String(a.model) : undefined,
+              }));
+            }
           }
+        } catch (_e) {
+          // Ignore config loading errors
         }
-      } catch (_e) {
-        // Ignore config loading errors
+        const result = await orchestrator.executeTask(taskText, { workers });
+        setTeamResult(result);
+      } catch (error) {
+        setErrorLine(error instanceof Error ? error.message : String(error));
+      } finally {
+        setTeamBusy(false);
+        setBusy(false);
+        teamOrchestratorRef.current = null;
       }
-      const result = await orchestrator.executeTask(taskText, { workers });
-      setTeamResult(result);
-    } catch (error) {
-      setErrorLine(error instanceof Error ? error.message : String(error));
-    } finally {
-      setTeamBusy(false);
-      setBusy(false);
-      teamOrchestratorRef.current = null;
-    }
-  };
+    },
+    [projectRoot, currentAutoAccept, currentPlanMode]
+  );
 
   const handlePrompt = useCallback(
     async (submission: PromptSubmission) => {

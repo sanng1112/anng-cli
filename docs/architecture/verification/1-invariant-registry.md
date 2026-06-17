@@ -23,10 +23,10 @@
 
 | Invariant ID | Description | Enforcement Location | Verification Status | Tests | Assertions | Telemetry |
 |---|---|---|---|---|---|---|
-| CONC-01 | File writes are serialized | Missing / None | Unverified (Insufficient Evidence) | None | None | None |
-| CONC-02 | Locks are eventually released | `FileConflictResolver` (Not enforced) | Unverified (Insufficient Evidence) | None | None | None |
-| CONC-03 | No lock leak after failure | Missing / None | Unverified (Insufficient Evidence) | None | None | None |
-| CONC-04 | No task executes without lock ownership | Missing / None | Unverified (Insufficient Evidence) | None | None | None |
+| CONC-01 | File writes are serialized | `src/common/lock-manager.ts` | Verified | `chaos.test.ts` (CONC-01, property-based) | None | None |
+| CONC-02 | Locks are eventually released | `src/common/lock-manager.ts`, `src/common/validate.ts` | Verified | `chaos.test.ts` (CONC-02, property-based) | None | None |
+| CONC-03 | No lock leak after failure | `src/common/lock-manager.ts` (finally blocks) | Verified | `chaos.test.ts` (CONC-03) | None | None |
+| CONC-04 | No task executes without lock ownership | `src/common/lock-manager.ts:assertLockOwnershipBeforeWrite` | Verified | `chaos.test.ts` (CONC-04, property-based) | None | None |
 
 *Note: `FileConflictResolver` exists but only detects overlap prior to execution. It does not enforce OS-level locking or runtime write synchronization during tool execution.*
 
