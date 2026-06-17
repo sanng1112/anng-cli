@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Box, Text } from "ink";
-import { useTerminalInput } from "../hooks/useTerminalInput";
+import { Box, Text, useInput } from "ink";
 import * as fs from "fs";
 import * as path from "path";
 import { MODEL_COMMAND_MODELS, MODEL_COMMAND_THINKING_OPTIONS } from "../components/ModelsDropdown";
@@ -51,8 +50,9 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
     }
   };
 
-  useTerminalInput((input, key) => {
-    if (key.escape) {
+  useInput((input, key) => {
+    // Escape handling: Ink's useInput reports escape as input === "\u001b"
+    if (input === "\u001b" || input === "\x1b") {
       if (editingField) {
         setEditingField(null);
       } else {
@@ -81,7 +81,7 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
         setInputBuffer((s) => s.slice(0, -1));
         return;
       }
-      if (input && !key.ctrl && !key.meta && !input.startsWith("\x1b")) {
+      if (input && !key.ctrl && !key.meta && input.length === 1) {
         setInputBuffer((s) => s + input.replace(/\r/g, ""));
       }
     } else {
