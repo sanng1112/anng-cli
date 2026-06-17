@@ -87,11 +87,18 @@ function saveAgents(projectRoot: string, agents: TeamAgentRule[]): void {
 interface TeamCreateViewProps {
   projectRoot: string;
   onRunTask: (taskText: string) => void;
+  onStartTeam: (agents: TeamAgentRule[]) => void;
   onExit: () => void;
   screenWidth: number;
 }
 
-export function TeamCreateView({ projectRoot, onRunTask, onExit, screenWidth }: TeamCreateViewProps): React.ReactNode {
+export function TeamCreateView({
+  projectRoot,
+  onRunTask,
+  onStartTeam,
+  onExit,
+  screenWidth,
+}: TeamCreateViewProps): React.ReactNode {
   const [agents, setAgents] = useState<TeamAgentRule[]>(() => loadAgents(projectRoot));
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [editing, setEditing] = useState<false | "name" | "prompt">(false);
@@ -188,6 +195,16 @@ export function TeamCreateView({ projectRoot, onRunTask, onExit, screenWidth }: 
     onRunTask(trimmed);
   }, [taskInput, projectRoot, onRunTask, flash]);
 
+  const handleStartTeam = useCallback(() => {
+    const trimmed = taskInput.trim();
+    if (!trimmed) {
+      flash("Type a task description first.");
+      return;
+    }
+    saveAgents(projectRoot, agentsRef.current);
+    onStartTeam(agentsRef.current);
+  }, [taskInput, projectRoot, onStartTeam, flash]);
+
   // ---- Input ----
 
   useInput((input, key) => {
@@ -236,6 +253,10 @@ export function TeamCreateView({ projectRoot, onRunTask, onExit, screenWidth }: 
     }
     if (input === "m" || input === "M") {
       cycleModel();
+      return;
+    }
+    if ((input === "s" || input === "S") && taskInput.trim()) {
+      handleStartTeam();
       return;
     }
     if (key.return) {
@@ -342,13 +363,20 @@ export function TeamCreateView({ projectRoot, onRunTask, onExit, screenWidth }: 
               {taskInput.length > 0 && <Text>_</Text>}
             </Box>
             {taskInput.trim() ? (
-              <Box marginTop={1}>
-                <Text dimColor>
-                  Running with {agents.length} agent{agents.length > 1 ? "s" : ""} on:{" "}
-                </Text>
-                <Text color="green" bold>
-                  {taskInput.length > 50 ? taskInput.slice(0, 48) + "\u2026" : taskInput}
-                </Text>
+              <Box marginTop={1} flexDirection="column">
+                <Box>
+                  <Text dimColor>
+                    Configured {agents.length} agent{agents.length > 1 ? "s" : ""} for:{" "}
+                  </Text>
+                  <Text color="green" bold>
+                    {taskInput.length > 50 ? taskInput.slice(0, 48) + "\u2026" : taskInput}
+                  </Text>
+                </Box>
+                <Box marginTop={1}>
+                  <Text color="cyan">[Enter] Run internally</Text>
+                  <Text> </Text>
+                  <Text color="yellow">[S] Start Team (tmux panels)</Text>
+                </Box>
               </Box>
             ) : null}
           </Box>

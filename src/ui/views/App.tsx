@@ -48,7 +48,7 @@ import { SessionManager } from "../../session";
 import { TeamOrchestrator } from "../../team/team-orchestrator";
 import type { TeamUIEvent, TeamResult, AgentConfig, TeamExecutionMode } from "../../team/types";
 import { AgentsConfigView } from "./AgentsConfigView";
-import { TeamCreateView } from "./TeamCreateView";
+import { TeamCreateView, type TeamAgentRule } from "./TeamCreateView";
 import { SettingsView } from "./SettingsView";
 import * as fs from "fs";
 import * as path from "path";
@@ -404,6 +404,53 @@ function App({
       }
     },
     [projectRoot, currentAutoAccept, currentPlanMode, teamConfig]
+  );
+
+  const startTeamWithTmux = useCallback(
+    async (agents: TeamAgentRule[]) => {
+      setTeamBusy(true);
+      setBusy(true);
+      try {
+        const orchestrator = new TeamOrchestrator({
+          projectRoot,
+          autoAccept: currentAutoAccept,
+          planMode: currentPlanMode,
+          createOpenAIClient: () => createOpenAIClient(projectRoot),
+          renderMarkdown: (text) => text,
+          onUIEvent: (event: TeamUIEvent) => {
+            if (event.type === "team_complete") {
+              setMessages((prev) => [
+                ...prev,
+                buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
+              ]);
+            }
+          },
+        });
+        teamOrchestratorRef.current = orchestrator;
+
+        const workers: AgentConfig[] = agents.map((a) => ({
+          name: a.name,
+          role: "worker" as const,
+          description: a.name,
+          systemPrompt: a.prompt,
+          model: a.model || undefined,
+        }));
+
+        const result = await orchestrator.executeTask("Team task", {
+          workers,
+          maxParallelWorkers: agents.length,
+          mode: "tmux",
+        });
+        setTeamResult(result);
+      } catch (error) {
+        setErrorLine(error instanceof Error ? error.message : String(error));
+      } finally {
+        setTeamBusy(false);
+        setBusy(false);
+        teamOrchestratorRef.current = null;
+      }
+    },
+    [projectRoot, currentAutoAccept, currentPlanMode]
   );
 
   const handlePrompt = useCallback(
@@ -1083,6 +1130,7 @@ function App({
             navigateToSubView("chat");
             void runTeamTask(taskText);
           }}
+          onStartTeam={startTeamWithTmux}
           onExit={() => navigateToSubView("chat")}
         />
       ) : view === "settings" ? (
