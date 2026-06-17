@@ -1,7 +1,9 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import path from "path";
 import fs from "fs";
+import DropdownMenu from "../components/DropdownMenu";
+import { MODEL_COMMAND_MODELS, MODEL_COMMAND_THINKING_OPTIONS } from "../components/ModelsDropdown";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,11 +119,14 @@ export function TeamCreateView({
 }: TeamCreateViewProps): React.ReactNode {
   const [agents, setAgents] = useState<TeamAgentRule[]>(() => loadAgents(projectRoot));
   const [selectedIdx, setSelectedIdx] = useState(0);
-  const [editing, setEditing] = useState<false | "name" | "prompt">(false);
+  const [editing, setEditing] = useState<false | "name" | "prompt" | "apiKey" | "baseURL" | "model">(false);
   const [editBuffer, setEditBuffer] = useState("");
   const [taskInput, setTaskInput] = useState("");
   const [focus, setFocus] = useState<"agents" | "task">("agents");
   const [msg, setMsg] = useState("");
+  const [configStep, setConfigStep] = useState<false | "model" | "thinking">(false);
+  const [configModelIdx, setConfigModelIdx] = useState(0);
+  const [configPendingModel, setConfigPendingModel] = useState<string | null>(null);
   const msgTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const agentsRef = useRef(agents);
   agentsRef.current = agents;
@@ -162,18 +167,33 @@ export function TeamCreateView({
     flash("Agent deleted.");
   }, [agents.length, selectedIdx, flash]);
 
-  const cycleModel = useCallback(() => {
-    setAgents((prev) => {
-      const next = [...prev];
-      const cur = next[selectedIdx];
-      const idx = MODEL_OPTIONS.indexOf(cur.model ?? "");
-      next[selectedIdx] = {
-        ...cur,
-        model: MODEL_OPTIONS[(idx + 1) % MODEL_OPTIONS.length] || undefined,
-      };
-      return next;
-    });
-  }, [selectedIdx]);
+  const openModelConfig = useCallback(() => {
+    const currentModel = agents[selectedIdx]?.model ?? "";
+    const allModels = ["", ...MODEL_COMMAND_MODELS];
+    const idx = allModels.indexOf(currentModel);
+    setConfigModelIdx(Math.max(0, idx));
+    setConfigPendingModel(null);
+    setConfigStep("model");
+  }, [agents, selectedIdx]);
+
+  const applyModelConfig = useCallback(
+    (model: string, thinkingEnabled?: boolean, reasoningEffort?: string) => {
+      setAgents((prev) => {
+        const next = [...prev];
+        next[selectedIdx] = {
+          ...next[selectedIdx],
+          model: model || undefined,
+          thinkingEnabled: thinkingEnabled ?? next[selectedIdx].thinkingEnabled,
+          reasoningEffort: reasoningEffort ?? next[selectedIdx].reasoningEffort,
+        };
+        return next;
+      });
+      setConfigStep(false);
+      setConfigPendingModel(null);
+      flash("Model updated.");
+    },
+    [selectedIdx, flash]
+  );
 
   const startEditName = useCallback(() => {
     setEditing("name");
@@ -185,6 +205,16 @@ export function TeamCreateView({
     setEditBuffer(agents[selectedIdx]?.prompt ?? "");
   }, [agents, selectedIdx]);
 
+  const startEditApiKey = useCallback(() => {
+    setEditing("apiKey");
+    setEditBuffer(agents[selectedIdx]?.apiKey ?? "");
+  }, [agents, selectedIdx]);
+
+  const startEditBaseUrl = useCallback(() => {
+    setEditing("baseURL");
+    setEditBuffer(agents[selectedIdx]?.baseURL ?? "");
+  }, [agents, selectedIdx]);
+
   const commitEdit = useCallback(() => {
     if (!editing) return;
     const val = editBuffer.trim();
@@ -194,12 +224,25 @@ export function TeamCreateView({
     }
     setAgents((prev) => {
       const next = [...prev];
-      next[selectedIdx] = { ...next[selectedIdx], [editing]: val };
+      if (editing === "apiKey" || editing === "baseURL") {
+        next[selectedIdx] = { ...next[selectedIdx], [editing]: val || undefined };
+      } else if (editing === "model") {
+        next[selectedIdx] = { ...next[selectedIdx], model: val || undefined };
+      } else {
+        next[selectedIdx] = { ...next[selectedIdx], [editing]: val };
+      }
       return next;
     });
     setEditing(false);
     setEditBuffer("");
-    flash(editing === "name" ? "Name updated." : "Prompt updated.");
+    const labels: Record<string, string> = {
+      name: "Name",
+      prompt: "Prompt",
+      apiKey: "API Key",
+      baseURL: "Base URL",
+      model: "Model",
+    };
+    flash(`${labels[editing] ?? editing} updated.`);
   }, [editing, editBuffer, selectedIdx, flash]);
 
   const handleRun = useCallback(() => {
@@ -225,6 +268,53 @@ export function TeamCreateView({
   // ---- Input ----
 
   useInput((input, key) => {
+    // ---------- Model/Thinking config mode ----------
+    if (configStep === "model" || configStep === "thinking") {
+      const options = configStep === "model" ? [...MODEL_COMMAND_MODELS, "__custom__"] : MODEL_COMMAND_THINKING_OPTIONS;
+      const optionCount = options.length;
+      if (key.upArrow) {
+        setConfigModelIdx((i) => (i - 1 + optionCount) % optionCount);
+        return;
+      }
+      if (key.downArrow) {
+        setConfigModelIdx((i) => (i + 1) % optionCount);
+        return;
+      }
+      if (key.escape || key.tab) {
+        setConfigStep(false);
+        setConfigPendingModel(null);
+        return;
+      }
+      if (input === " " || key.return) {
+        if (configStep === "model") {
+          const selectedModel = MODEL_COMMAND_MODELS[configModelIdx] ?? "";
+          if (configModelIdx >= MODEL_COMMAND_MODELS.length) {
+            // "Custom model..." option — switch to inline editing for model name
+            setEditing("model");
+            setEditBuffer(agents[selectedIdx]?.model ?? "");
+            setConfigStep(false);
+            return;
+          }
+          setConfigPendingModel(selectedModel || null);
+          // Move to thinking config step
+          setConfigStep("thinking");
+          setConfigModelIdx(0);
+        } else {
+          // configStep === "thinking"
+          const opt = MODEL_COMMAND_THINKING_OPTIONS[configModelIdx];
+          if (opt) {
+            applyModelConfig(
+              configPendingModel ?? agents[selectedIdx]?.model ?? "",
+              opt.thinkingEnabled,
+              opt.reasoningEffort
+            );
+          }
+        }
+        return;
+      }
+      return; // block all other keys during config
+    }
+
     // ---------- Edit mode ----------
     if (editing) {
       if (key.escape) {
@@ -277,8 +367,16 @@ export function TeamCreateView({
         startEditPrompt();
         return;
       }
-      if (input === "m" || input === "M") {
-        cycleModel();
+      if (input === "m" || input === "M" || key.rightArrow) {
+        openModelConfig();
+        return;
+      }
+      if (input === "k" || input === "K") {
+        startEditApiKey();
+        return;
+      }
+      if (input === "u" || input === "U") {
+        startEditBaseUrl();
         return;
       }
     }
@@ -355,8 +453,12 @@ export function TeamCreateView({
         <Text dimColor> Name </Text>
         <Text color={BRAND}>P</Text>
         <Text dimColor> Prompt </Text>
-        <Text color={BRAND}>M</Text>
+        <Text color={BRAND}>M/→</Text>
         <Text dimColor> Model </Text>
+        <Text color={BRAND}>K</Text>
+        <Text dimColor> API </Text>
+        <Text color={BRAND}>U</Text>
+        <Text dimColor> URL </Text>
         <Text color={BRAND}>Esc</Text>
         <Text dimColor> Back </Text>
       </Box>
@@ -436,6 +538,13 @@ export function TeamCreateView({
                 </Text>
               </Box>
             )}
+            {isSelected && !editing && agent.thinkingEnabled !== undefined && (
+              <Box marginLeft={2}>
+                <Text color={BRAND_DIM}>
+                  Thinking: {agent.thinkingEnabled ? (agent.reasoningEffort ?? "enabled") : "disabled"}
+                </Text>
+              </Box>
+            )}
           </Box>
         );
       })}
@@ -450,7 +559,11 @@ export function TeamCreateView({
         {editing ? (
           <Text>
             <Text color={BRAND}>Edit {editing}:</Text>{" "}
-            <Text>{editing === "name" ? editBuffer : editBuffer.slice(0, 80)}</Text>
+            <Text>
+              {editing === "name" || editing === "apiKey" || editing === "baseURL" || editing === "model"
+                ? editBuffer
+                : editBuffer.slice(0, 80)}
+            </Text>
             <Text>_</Text>
           </Text>
         ) : (
@@ -480,6 +593,46 @@ export function TeamCreateView({
           </Box>
         )}
       </Box>
+
+      {/* Model / Thinking Config UI */}
+      {configStep === "model" ? (
+        <Box marginTop={1}>
+          <DropdownMenu
+            width={columnWidth}
+            title="Select Model"
+            helpText="↑↓ navigate · Enter select · Space select · Esc/Tab cancel · 'Custom model...' to type any name"
+            items={[
+              { key: "inherit", label: "Inherit (Default)", selected: !agents[selectedIdx]?.model },
+              ...MODEL_COMMAND_MODELS.map((m) => ({
+                key: m,
+                label: m,
+                selected: agents[selectedIdx]?.model === m,
+              })),
+              { key: "__custom__", label: "Custom model...", selected: false },
+            ]}
+            activeIndex={configModelIdx}
+            activeColor={BRAND}
+            maxVisible={10}
+          />
+        </Box>
+      ) : configStep === "thinking" ? (
+        <Box marginTop={1}>
+          <DropdownMenu
+            width={columnWidth}
+            title="Select Thinking Mode"
+            helpText="↑↓ navigate · Enter/Space apply · Esc/Tab cancel"
+            items={MODEL_COMMAND_THINKING_OPTIONS.map((opt, i) => ({
+              key: opt.label,
+              label: opt.label,
+              description: opt.thinkingEnabled ? `reasoningEffort: ${opt.reasoningEffort}` : "thinking disabled",
+              selected: i === configModelIdx,
+            }))}
+            activeIndex={configModelIdx}
+            activeColor={BRAND}
+            maxVisible={6}
+          />
+        </Box>
+      ) : null}
 
       {/* Status / Error */}
       {msg ? (
