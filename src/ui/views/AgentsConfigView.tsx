@@ -11,6 +11,8 @@ type AgentRule = {
   model?: string;
   thinkingEnabled?: boolean;
   reasoningEffort?: string;
+  apiKey?: string;
+  baseURL?: string;
 };
 
 export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string; onExit: () => void }) {
@@ -21,7 +23,7 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
     { name: "QA/Reviewer", prompt: "", model: "" },
   ]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [editingField, setEditingField] = useState<"prompt" | "name" | null>(null);
+  const [editingField, setEditingField] = useState<"prompt" | "name" | "apiKey" | "baseURL" | null>(null);
   const [inputBuffer, setInputBuffer] = useState("");
 
   const configPath = path.join(projectRoot, ".anng", "team-agents.json");
@@ -65,6 +67,10 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
           next[selectedIndex].prompt = inputBuffer;
         } else if (editingField === "name") {
           next[selectedIndex].name = inputBuffer || "New Agent";
+        } else if (editingField === "apiKey") {
+          next[selectedIndex].apiKey = inputBuffer || undefined;
+        } else if (editingField === "baseURL") {
+          next[selectedIndex].baseURL = inputBuffer || undefined;
         }
         setAgents(next);
         saveConfig(next);
@@ -115,6 +121,12 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
         } else if (input === "n" || input === "N") {
           setInputBuffer(agents[selectedIndex].name);
           setEditingField("name");
+        } else if (input === "k" || input === "K") {
+          setInputBuffer(agents[selectedIndex].apiKey || "");
+          setEditingField("apiKey");
+        } else if (input === "u" || input === "U") {
+          setInputBuffer(agents[selectedIndex].baseURL || "");
+          setEditingField("baseURL");
         } else if (input === "d" || input === "D" || key.delete) {
           const next = agents.filter((_, i) => i !== selectedIndex);
           setAgents(next);
@@ -135,7 +147,8 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
       </Text>
       <Text dimColor>Saved to .anng/team-agents.json</Text>
       <Text dimColor>
-        ↑/↓: Select | Enter: Edit Rules | N: Edit Route/Name | A: Add | D: Delete | M: Cycle Model | R: Cycle Reasoning
+        ↑/↓: Select | Enter: Edit Rules | N: Edit Name | A: Add | D: Delete | M: Model | R: Reasoning | K: API Key | U:
+        Base URL
       </Text>
       <Box flexDirection="column" marginTop={1}>
         {agents.map((agent, i) => {
@@ -156,6 +169,13 @@ export function AgentsConfigView({ projectRoot, onExit }: { projectRoot: string;
                 Model: {agent.model || "Default"} {reasoningStr}
               </Text>
               <Text dimColor> Rules: {agent.prompt || "(No rules defined)"}</Text>
+              {agent.apiKey ? <Text dimColor> API: ***{agent.apiKey.slice(-4)}</Text> : null}
+              {agent.baseURL ? (
+                <Text dimColor>
+                  {" "}
+                  URL: {agent.baseURL.length > 50 ? agent.baseURL.slice(0, 48) + "…" : agent.baseURL}
+                </Text>
+              ) : null}
             </Box>
           );
         })}
