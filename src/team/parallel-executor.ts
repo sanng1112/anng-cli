@@ -86,6 +86,8 @@ export class ParallelExecutor {
       currentTaskId: task.id,
     });
     teamManager.upsertTask(this.options.teamId, task);
+    // Transition: assigned -> running before actual execution
+    workflowEngine.onTaskBegin(task.id);
     this.running.add(task.id);
 
     try {

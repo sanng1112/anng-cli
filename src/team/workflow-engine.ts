@@ -62,9 +62,15 @@ export class WorkflowEngine {
   onTaskStart(taskId: string, workerName: string): void {
     const task = this.tasks.get(taskId);
     if (!task) return;
-    task.status = "running";
+    task.status = "assigned";
     task.assignedTo = workerName;
     task.startedAt = new Date().toISOString();
+  }
+
+  onTaskBegin(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) return;
+    task.status = "running";
   }
 
   isComplete(): boolean {
