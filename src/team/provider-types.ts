@@ -82,13 +82,17 @@ export function saveProviders(projectRoot: string, providers: Provider[]): void 
 export function loadModels(projectRoot: string): ModelEntry[] {
   try {
     const p = modelsPath(projectRoot);
-    if (!fs.existsSync(p)) return [];
+    if (!fs.existsSync(p)) return createDefaultModels(projectRoot);
     const raw = fs.readFileSync(p, "utf-8");
     const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) return createDefaultModels(projectRoot);
     const valid = data.filter(
       (x: unknown): x is ModelEntry => typeof x === "object" && x !== null && typeof (x as ModelEntry).name === "string"
     );
+    // If too few models (corrupted), restore defaults
+    if (valid.length < MODEL_COMMAND_MODELS.length / 2) {
+      return createDefaultModels(projectRoot);
+    }
     // Deduplicate by name (keep first occurrence)
     const seen = new Set<string>();
     const deduped: ModelEntry[] = [];
@@ -99,12 +103,25 @@ export function loadModels(projectRoot: string): ModelEntry[] {
       }
     }
     if (deduped.length !== valid.length) {
-      saveModels(projectRoot, deduped); // auto-fix duplicates on disk
+      saveModels(projectRoot, deduped);
     }
     return deduped;
   } catch {
     return [];
   }
+}
+
+/** Create default models from MODEL_COMMAND_MODELS, linked to first available provider */
+function createDefaultModels(projectRoot: string): ModelEntry[] {
+  const providers = loadProviders(projectRoot);
+  const providerId = providers.length > 0 ? providers[0].id : "unknown";
+  const models: ModelEntry[] = MODEL_COMMAND_MODELS.map((m) => ({
+    name: m,
+    providerId,
+    tested: false,
+  }));
+  saveModels(projectRoot, models);
+  return models;
 }
 
 export function saveModels(projectRoot: string, models: ModelEntry[]): void {
