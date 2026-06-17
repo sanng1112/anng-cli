@@ -46,7 +46,7 @@ import type {
 } from "../../session";
 import { SessionManager } from "../../session";
 import { TeamOrchestrator } from "../../team/team-orchestrator";
-import type { TeamUIEvent, TeamResult, AgentConfig } from "../../team/types";
+import type { TeamUIEvent, TeamResult, AgentConfig, TeamExecutionMode } from "../../team/types";
 import { AgentsConfigView } from "./AgentsConfigView";
 import { TeamCreateView } from "./TeamCreateView";
 import { SettingsView } from "./SettingsView";
@@ -111,7 +111,7 @@ function App({
   headless: _headless = false,
   onRestart,
   teamMode = false,
-  teamConfig: _teamConfig,
+  teamConfig,
 }: AppProps): React.ReactElement {
   const { exit } = useApp();
   const { stdout, write } = useStdout();
@@ -361,9 +361,7 @@ function App({
           renderMarkdown: (text) => text,
           onUIEvent: (event: TeamUIEvent) => {
             if (event.type === "team_complete") {
-              setTeamResult(event.data as TeamResult);
-              setTeamBusy(false);
-              setBusy(false);
+              // Don't setTeamResult here — it's set after executeTask returns below.
               setMessages((prev) => [
                 ...prev,
                 buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
@@ -391,7 +389,11 @@ function App({
         } catch (_e) {
           // Ignore config loading errors
         }
-        const result = await orchestrator.executeTask(taskText, { workers });
+        const result = await orchestrator.executeTask(taskText, {
+          workers,
+          maxParallelWorkers: teamConfig?.maxParallelWorkers,
+          mode: (teamConfig?.mode ?? "internal") as TeamExecutionMode,
+        });
         setTeamResult(result);
       } catch (error) {
         setErrorLine(error instanceof Error ? error.message : String(error));
@@ -401,7 +403,7 @@ function App({
         teamOrchestratorRef.current = null;
       }
     },
-    [projectRoot, currentAutoAccept, currentPlanMode]
+    [projectRoot, currentAutoAccept, currentPlanMode, teamConfig]
   );
 
   const handlePrompt = useCallback(
@@ -679,6 +681,15 @@ function App({
     },
     [resetStaticView, sessionManager]
   );
+
+  // When --team is used without -p, show the Team Builder so the user can
+  // see/configure agents before typing a task.
+  useEffect(() => {
+    if (initialPrompt) return;
+    if (!initialTeamMode) return;
+    navigateToSubView("team-create");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (initialPromptSubmittedRef.current || !initialPrompt || !initialPrompt.trim()) {

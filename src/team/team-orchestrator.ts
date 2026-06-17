@@ -47,7 +47,7 @@ export class TeamOrchestrator {
       workers: teamDef?.workers ?? this.defaultWorkers(),
       maxParallelWorkers: teamDef?.maxParallelWorkers ?? Math.max(1, os.cpus().length - 1),
       strategy: teamDef?.strategy ?? "dependency-order",
-      mode: teamDef?.mode ?? "tmux",
+      mode: teamDef?.mode ?? "internal",
       maxRetriesPerTask: teamDef?.maxRetriesPerTask ?? 0,
     };
 

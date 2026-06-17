@@ -60,19 +60,29 @@ export class AgentWorker {
         }
         return base;
       },
-      getResolvedSettings: () => ({
-        model: this.config.model ?? "",
-        thinkingEnabled: this.config.thinkingEnabled,
-        reasoningEffort: this.config.reasoningEffort as "high" | "max" | undefined,
-        mcpServers: this.options.mcpServers,
-        permissions: this.options.permissions ?? {
-          allow: [],
-          deny: [],
-          ask: [],
-          defaultMode: "allowAll",
-        },
-        enabledSkills: this.options.enabledSkills,
-      }),
+      getResolvedSettings: () => {
+        // Resolve parent model as fallback when worker doesn't specify a model
+        let parentModel: string;
+        try {
+          const parent = this.options.createOpenAIClient();
+          parentModel = parent.model;
+        } catch {
+          parentModel = "";
+        }
+        return {
+          model: this.config.model || parentModel,
+          thinkingEnabled: this.config.thinkingEnabled,
+          reasoningEffort: this.config.reasoningEffort as "high" | "max" | undefined,
+          mcpServers: this.options.mcpServers,
+          permissions: this.options.permissions ?? {
+            allow: [],
+            deny: [],
+            ask: [],
+            defaultMode: "allowAll",
+          },
+          enabledSkills: this.options.enabledSkills,
+        };
+      },
       renderMarkdown: this.options.renderMarkdown,
       onAssistantMessage: (_message, _shouldConnect) => {
         // Worker messages không hiển thị lên UI chính

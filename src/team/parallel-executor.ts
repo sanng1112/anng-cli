@@ -59,7 +59,8 @@ export class ParallelExecutor {
           for (const lockedFile of lockedFiles) {
             fileConflictResolver.releaseLock(lockedFile, task.id);
           }
-          // Simple backoff wait, we skip execution for now
+          // Simple backoff wait, then retry — cleared lockedFiles so finally won't double-release
+          lockedFiles.length = 0;
           await this.delay(500 + Math.random() * 500);
           return this.executeSingleTask(task); // Retry
         }
@@ -76,6 +77,7 @@ export class ParallelExecutor {
       for (const lockedFile of lockedFiles) {
         fileConflictResolver.releaseLock(lockedFile, task.id);
       }
+      lockedFiles.length = 0;
       return;
     }
 
