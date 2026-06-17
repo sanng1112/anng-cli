@@ -4,8 +4,8 @@ import path from "path";
 import fs from "fs";
 import DropdownMenu from "../components/DropdownMenu";
 import { MODEL_COMMAND_THINKING_OPTIONS } from "../components/ModelsDropdown";
-import { loadModels } from "../../team/provider-types";
-import type { ModelEntry } from "../../team/provider-types";
+import { loadModels, loadProviders } from "../../team/provider-types";
+import type { ModelEntry, Provider } from "../../team/provider-types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,10 +113,11 @@ export function TeamCreateView({
   const [taskInput, setTaskInput] = useState("");
   const [focus, setFocus] = useState<"agents" | "task">("agents");
   const [msg, setMsg] = useState("");
-  const [configStep, setConfigStep] = useState<false | "model" | "apiKey" | "baseURL" | "thinking">(false);
+  const [configStep, setConfigStep] = useState<false | "model" | "provider" | "apiKey" | "baseURL" | "thinking">(false);
   const [configModelIdx, setConfigModelIdx] = useState(0);
   const [configPendingModel, setConfigPendingModel] = useState<string | null>(null);
   const [configBuffer, setConfigBuffer] = useState("");
+  const [configProviderIdx, setConfigProviderIdx] = useState(0);
   const [configPendingApiKey, setConfigPendingApiKey] = useState<string | null>(null);
   const [configPendingBaseUrl, setConfigPendingBaseUrl] = useState<string | null>(null);
   const msgTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -150,6 +151,21 @@ export function TeamCreateView({
       { key: "__custom__", label: "Custom model...", selected: false },
     ];
   }, [agents, selectedIdx, availableModels]);
+
+  // ---- Provider dropdown items ----
+  const [allProviders] = useState<Provider[]>(() => loadProviders(projectRoot));
+
+  const providerDropdownItems = useMemo(() => {
+    return [
+      { key: "inherit", label: "Inherit (Global)", selected: !configPendingApiKey && !configPendingBaseUrl },
+      ...allProviders.map((p) => ({
+        key: p.id,
+        label: `${p.id} - ${p.name}`,
+        description: `API: ***${p.apiKey.slice(-4)} @ ${p.baseURL.length > 40 ? p.baseURL.slice(0, 38) + "…" : p.baseURL}`,
+        selected: false,
+      })),
+    ];
+  }, [allProviders, configPendingApiKey, configPendingBaseUrl]);
 
   // ---- Handlers ----
 
@@ -307,8 +323,46 @@ export function TeamCreateView({
           return;
         }
         setConfigPendingModel(item.key === "inherit" ? null : item.key);
-        setConfigStep("apiKey");
-        setConfigBuffer(agents[selectedIdx]?.apiKey ?? "");
+        setConfigStep("provider");
+        setConfigProviderIdx(0);
+        return;
+      }
+      return;
+    }
+
+    if (configStep === "provider") {
+      const optionCount = providerDropdownItems.length;
+      if (key.upArrow) {
+        setConfigProviderIdx((i) => (i - 1 + optionCount) % optionCount);
+        return;
+      }
+      if (key.downArrow) {
+        setConfigProviderIdx((i) => (i + 1) % optionCount);
+        return;
+      }
+      if (key.escape || key.tab) {
+        setConfigStep("model");
+        setConfigPendingModel(null);
+        return;
+      }
+      if (input === " " || key.return) {
+        const item = providerDropdownItems[configProviderIdx];
+        if (item.key === "inherit") {
+          // Inherit from global — clear apiKey/baseURL
+          setConfigPendingApiKey(null);
+          setConfigPendingBaseUrl(null);
+          setConfigStep("thinking");
+          setConfigModelIdx(0);
+        } else {
+          // Found a specific provider
+          const provider = allProviders.find((p) => p.id === item.key);
+          if (provider) {
+            setConfigPendingApiKey(provider.apiKey);
+            setConfigPendingBaseUrl(provider.baseURL);
+            setConfigStep("thinking");
+            setConfigModelIdx(0);
+          }
+        }
         return;
       }
       return;
@@ -357,8 +411,8 @@ export function TeamCreateView({
         return;
       }
       if (key.escape || key.tab) {
-        setConfigStep("baseURL");
-        setConfigBuffer(agents[selectedIdx]?.baseURL ?? "");
+        setConfigStep("provider");
+        setConfigProviderIdx(0);
         return;
       }
       if (input === " " || key.return) {
@@ -639,6 +693,18 @@ export function TeamCreateView({
             helpText="↑↓ navigate · Enter select · Space select · Esc/Tab cancel · 'Custom model...' to type any name"
             items={modelDropdownItems}
             activeIndex={configModelIdx}
+            activeColor={BRAND}
+            maxVisible={10}
+          />
+        </Box>
+      ) : configStep === "provider" ? (
+        <Box marginTop={1}>
+          <DropdownMenu
+            width={columnWidth}
+            title="Select Provider"
+            helpText="↑↓ navigate · Enter/Space select · Esc/Tab back to model"
+            items={providerDropdownItems}
+            activeIndex={configProviderIdx}
             activeColor={BRAND}
             maxVisible={10}
           />

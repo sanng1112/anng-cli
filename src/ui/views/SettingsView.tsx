@@ -66,6 +66,7 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
   });
   const [models, setModels] = useState<ModelEntry[]>(() => loadModels(projectRoot));
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [pickProviderForModel, setPickProviderForModel] = useState<string | null>(null);
   const [pendingProvider, setPendingProvider] = useState<Partial<Provider> | null>(null);
 
   // Separate active indices for different screens to preserve scroll position
@@ -369,6 +370,15 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
               existingIdx >= 0 ? providers.map((p, i) => (i === existingIdx ? complete : p)) : [...providers, complete];
             setProviders(newProviders);
             saveProviders(projectRoot, newProviders);
+            // After saving new provider, if in pick mode, auto-select it
+            if (pickProviderForModel) {
+              const newSettings = scope === "project" ? { ...projectSettings } : { ...userSettings };
+              newSettings.model = pickProviderForModel;
+              newSettings.env = { ...(newSettings.env || {}), API_KEY: complete.apiKey, BASE_URL: complete.baseURL };
+              saveConfig(newSettings);
+              setPickProviderForModel(null);
+              setScreen("main");
+            }
             setInputPrompt(null);
             setPendingProvider(null);
           }
@@ -567,9 +577,9 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
           saveConfig(newSettings);
           setScreen("main");
         } else {
-          newSettings.model = item.key;
-          saveConfig(newSettings);
-          setScreen("main");
+          // After picking model, switch to provider picker
+          setPickProviderForModel(item.key);
+          setScreen("providers");
         }
         return;
       }
@@ -626,6 +636,17 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
         if (item.key === "add_provider") {
           setInputPrompt("customProvider");
           setInputBuffer("");
+        } else if (pickProviderForModel) {
+          // Pick mode: user chose a model first, now picking provider
+          const provider = providers.find((p) => p.id === item.key);
+          if (provider) {
+            const newSettings = scope === "project" ? { ...projectSettings } : { ...userSettings };
+            newSettings.model = pickProviderForModel;
+            newSettings.env = { ...(newSettings.env || {}), API_KEY: provider.apiKey, BASE_URL: provider.baseURL };
+            saveConfig(newSettings);
+            setPickProviderForModel(null);
+            setScreen("main");
+          }
         } else if (item.key !== "add_provider") {
           // Enter on existing provider → cycle through fields to edit
           // For now, prompt for new apiKey
@@ -664,7 +685,9 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
               : screen === "envVars"
                 ? "Enter to add/edit · D to delete · Esc to back"
                 : screen === "providers"
-                  ? "Enter to add · D to delete · Esc to back"
+                  ? pickProviderForModel
+                    ? `Pick a provider for model "${pickProviderForModel}" · Esc to cancel`
+                    : "Enter to add · D to delete · Esc to back"
                   : screen === "modelRegistry"
                     ? "Enter to add · D to delete · T to test · Esc to back"
                     : "Enter to select · Esc to back"
