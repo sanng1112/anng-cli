@@ -15,6 +15,10 @@ export interface TeamAgentRule {
   apiKey?: string;
   /** Custom base URL for this agent. Supports different providers (OpenAI, Anthropic, Gemini, Ollama). */
   baseURL?: string;
+  /** Enable thinking mode for this agent. */
+  thinkingEnabled?: boolean;
+  /** Reasoning effort level when thinking is enabled. */
+  reasoningEffort?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -75,6 +79,8 @@ function loadAgents(projectRoot: string): TeamAgentRule[] {
       model: a.model ? String(a.model) : undefined,
       apiKey: a.apiKey ? String(a.apiKey) : undefined,
       baseURL: a.baseURL ? String(a.baseURL) : undefined,
+      thinkingEnabled: typeof a.thinkingEnabled === "boolean" ? a.thinkingEnabled : undefined,
+      reasoningEffort: a.reasoningEffort ? String(a.reasoningEffort) : undefined,
     }));
   } catch {
     return DEFAULT_AGENTS.map((a) => ({ ...a }));
