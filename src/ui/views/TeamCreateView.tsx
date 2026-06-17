@@ -97,7 +97,7 @@ function saveAgents(projectRoot: string, agents: TeamAgentRule[]): void {
 interface TeamCreateViewProps {
   projectRoot: string;
   onRunTask: (taskText: string) => void;
-  onStartTeam: (agents: TeamAgentRule[]) => void;
+  onStartTeam: (taskText: string, agents: TeamAgentRule[]) => void;
   onExit: () => void;
   screenWidth: number;
 }
@@ -213,7 +213,7 @@ export function TeamCreateView({
       return;
     }
     saveAgents(projectRoot, agentsRef.current);
-    onStartTeam(agentsRef.current);
+    onStartTeam(trimmed, agentsRef.current);
   }, [taskInput, projectRoot, onStartTeam, flash]);
 
   // ---- Input ----

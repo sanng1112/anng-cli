@@ -407,7 +407,7 @@ function App({
   );
 
   const startTeamWithTmux = useCallback(
-    async (agents: TeamAgentRule[]) => {
+    async (taskText: string, agents: TeamAgentRule[]) => {
       setTeamBusy(true);
       setBusy(true);
       try {
@@ -438,7 +438,7 @@ function App({
           baseURL: a.baseURL || undefined,
         }));
 
-        const result = await orchestrator.executeTask("Team task", {
+        const result = await orchestrator.executeTask(taskText, {
           workers,
           maxParallelWorkers: agents.length,
           mode: "tmux",
@@ -1136,7 +1136,10 @@ function App({
             navigateToSubView("chat");
             void runTeamTask(taskText);
           }}
-          onStartTeam={startTeamWithTmux}
+          onStartTeam={(taskText: string, agents: TeamAgentRule[]) => {
+            navigateToSubView("chat");
+            void startTeamWithTmux(taskText, agents);
+          }}
           onExit={() => navigateToSubView("chat")}
         />
       ) : view === "settings" ? (
