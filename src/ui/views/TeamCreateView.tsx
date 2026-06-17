@@ -114,6 +114,7 @@ export function TeamCreateView({
   const [editing, setEditing] = useState<false | "name" | "prompt">(false);
   const [editBuffer, setEditBuffer] = useState("");
   const [taskInput, setTaskInput] = useState("");
+  const [focus, setFocus] = useState<"agents" | "task">("task");
   const [msg, setMsg] = useState("");
   const msgTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const agentsRef = useRef(agents);
@@ -241,34 +242,50 @@ export function TeamCreateView({
 
     // ---------- List mode ----------
 
-    if (key.upArrow) {
-      setSelectedIdx((i) => Math.max(0, i - 1));
+    if (focus === "agents") {
+      if (key.upArrow) {
+        setSelectedIdx((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.downArrow || (key.tab && selectedIdx < agents.length)) {
+        if (selectedIdx >= agents.length - 1) {
+          setFocus("task");
+        } else {
+          setSelectedIdx((i) => Math.min(agents.length - 1, i + 1));
+        }
+        return;
+      }
+      if (input === "a" || input === "A") {
+        addAgent();
+        return;
+      }
+      if (input === "d" || input === "D") {
+        deleteAgent();
+        return;
+      }
+      if (input === "n" || input === "N") {
+        startEditName();
+        return;
+      }
+      if (input === "p" || input === "P") {
+        startEditPrompt();
+        return;
+      }
+      if (input === "m" || input === "M") {
+        cycleModel();
+        return;
+      }
+    }
+
+    // ---------- Task mode / global keys ----------
+
+    if (key.upArrow && focus === "task") {
+      setFocus("agents");
+      setSelectedIdx(agents.length - 1);
       return;
     }
-    if (key.downArrow || (key.tab && selectedIdx < agents.length - 1)) {
-      setSelectedIdx((i) => Math.min(agents.length - 1, i + 1));
-      return;
-    }
-    if (input === "a" || input === "A") {
-      addAgent();
-      return;
-    }
-    if (input === "d" || input === "D") {
-      deleteAgent();
-      return;
-    }
-    if (input === "n" || input === "N") {
-      startEditName();
-      return;
-    }
-    if (input === "p" || input === "P") {
-      startEditPrompt();
-      return;
-    }
-    if (input === "m" || input === "M") {
-      cycleModel();
-      return;
-    }
+
+    // Only S when in task mode (or task has content)
     if ((input === "s" || input === "S") && taskInput.trim()) {
       handleStartTeam();
       return;
@@ -288,6 +305,7 @@ export function TeamCreateView({
     // Type characters → task input
     if (input && !key.ctrl && !key.meta) {
       setTaskInput((prev) => prev + input);
+      if (focus === "agents") setFocus("task");
     }
   });
 
@@ -330,8 +348,26 @@ export function TeamCreateView({
         <Text dimColor> Back </Text>
       </Box>
 
-      {/* Spacer */}
-      <Box marginTop={1} />
+      {/* Focus indicator */}
+      <Box marginTop={1} marginLeft={1}>
+        <Text dimColor>
+          {focus === "agents" ? (
+            <Text color={BRAND} bold>
+              ▸ Agents
+            </Text>
+          ) : (
+            <Text> Agents</Text>
+          )}
+          <Text> · </Text>
+          {focus === "task" ? (
+            <Text color={BRAND} bold>
+              ▸ Task
+            </Text>
+          ) : (
+            <Text> Task</Text>
+          )}
+        </Text>
+      </Box>
 
       {/* Agent list */}
       {agents.map((agent, i) => {
