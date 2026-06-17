@@ -50,6 +50,22 @@ export class AgentWorker {
       maxTurns: this.config.maxTurns ?? DEFAULT_MAX_TURNS,
       createOpenAIClient: () => {
         const base = this.options.createOpenAIClient();
+
+        // If agent has custom apiKey or baseURL, create a completely new client
+        if (this.config.apiKey || this.config.baseURL) {
+          const { OpenAI } = require("openai");
+          const apiKey = this.config.apiKey || base.apiKey || "";
+          const baseURL = this.config.baseURL || base.baseURL || "https://api.openai.com/v1";
+          const client = new OpenAI({ apiKey, baseURL });
+          return {
+            ...base,
+            client,
+            apiKey,
+            baseURL,
+            model: this.config.model || base.model,
+          };
+        }
+
         const overrides: Record<string, unknown> = {};
         if (this.config.model) overrides.model = this.config.model;
         if (this.config.thinkingEnabled !== undefined) overrides.thinkingEnabled = this.config.thinkingEnabled;

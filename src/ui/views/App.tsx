@@ -434,6 +434,8 @@ function App({
           description: a.name,
           systemPrompt: a.prompt,
           model: a.model || undefined,
+          apiKey: a.apiKey || undefined,
+          baseURL: a.baseURL || undefined,
         }));
 
         const result = await orchestrator.executeTask("Team task", {

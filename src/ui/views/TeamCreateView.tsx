@@ -11,6 +11,10 @@ export interface TeamAgentRule {
   name: string;
   prompt: string;
   model?: string;
+  /** Custom API key for this agent. Falls back to global key if omitted. */
+  apiKey?: string;
+  /** Custom base URL for this agent. Supports different providers (OpenAI, Anthropic, Gemini, Ollama). */
+  baseURL?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +69,8 @@ function loadAgents(projectRoot: string): TeamAgentRule[] {
       name: String(a.name ?? "Unnamed"),
       prompt: String(a.prompt ?? ""),
       model: a.model ? String(a.model) : undefined,
+      apiKey: a.apiKey ? String(a.apiKey) : undefined,
+      baseURL: a.baseURL ? String(a.baseURL) : undefined,
     }));
   } catch {
     return DEFAULT_AGENTS.map((a) => ({ ...a }));
@@ -326,17 +332,50 @@ export function TeamCreateView({
             ? `${prefix} ${i + 1}. ${editing === "name" ? "" : "["}${editBuffer}${editing === "prompt" ? "]" : ""}`
             : `${prefix} ${i + 1}. ${agent.name}`;
 
+        // Determine provider display
+        const modelDisplay = modelLabel(agent.model ?? "");
+        const providerMap: Record<string, string> = {
+          "gpt-4": "OpenAI",
+          "gpt-4o": "OpenAI",
+          "gpt-4o-mini": "OpenAI",
+          "deepseek-v4": "DeepSeek",
+          "deepseek-chat": "DeepSeek",
+          "claude-3-opus": "Anthropic",
+          "claude-3-sonnet": "Anthropic",
+          "claude-3-haiku": "Anthropic",
+          "claude-4": "Anthropic",
+          "gemini-pro": "Google",
+          "gemini-2.0-flash": "Google",
+        };
+        const provider = agent.model ? (providerMap[agent.model] ?? (agent.baseURL ? "Custom" : "Inherit")) : "Inherit";
+        const hasCustomApi = agent.apiKey || agent.baseURL;
+        const providerTag = hasCustomApi ? `${provider} \u2605` : provider;
+
         return (
-          <Box key={`agent-${i}`} marginLeft={1}>
-            <Text color={isSelected ? "cyan" : undefined} bold={isSelected}>
-              {label}
-            </Text>
-            <Text dimColor> — {modelLabel(agent.model ?? "")}</Text>
-            {isSelected && !editing && (
-              <Text dimColor>
-                {"  "}
-                {agent.prompt.length > 60 ? agent.prompt.slice(0, 58) + "\u2026" : agent.prompt}
+          <Box key={`agent-${i}`} marginLeft={1} flexDirection="column">
+            <Box>
+              <Text color={isSelected ? "cyan" : undefined} bold={isSelected}>
+                {label}
               </Text>
+              <Text dimColor> — </Text>
+              <Text color={agent.model ? "green" : "gray"}>{modelDisplay}</Text>
+              <Text dimColor> · </Text>
+              <Text color={hasCustomApi ? "yellow" : "gray"}>{providerTag}</Text>
+            </Box>
+            {isSelected && !editing && (
+              <Box marginLeft={2}>
+                <Text dimColor>{agent.prompt.length > 70 ? agent.prompt.slice(0, 68) + "\u2026" : agent.prompt}</Text>
+              </Box>
+            )}
+            {isSelected && !editing && hasCustomApi && (
+              <Box marginLeft={2}>
+                <Text color="yellow" dimColor>
+                  API: {agent.apiKey ? "***" + agent.apiKey.slice(-4) : "Inherit"}
+                  {agent.baseURL
+                    ? ` @ ${agent.baseURL.length > 40 ? agent.baseURL.slice(0, 38) + "…" : agent.baseURL}`
+                    : ""}
+                </Text>
+              </Box>
             )}
           </Box>
         );

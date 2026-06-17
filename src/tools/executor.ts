@@ -20,6 +20,7 @@ export type CreateOpenAIClient = () => {
   client: OpenAI | null;
   model: string;
   baseURL?: string;
+  apiKey?: string;
   temperature?: number;
   thinkingEnabled: boolean;
   reasoningEffort?: ReasoningEffort;

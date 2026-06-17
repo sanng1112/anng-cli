@@ -43,6 +43,10 @@ export interface AgentConfig {
   role: AgentRole;
   description?: string;
   model?: string;
+  /** Custom API key for this agent. Falls back to parent key if omitted. */
+  apiKey?: string;
+  /** Custom base URL for this agent. Useful for different providers (OpenAI, Anthropic, Gemini, Ollama, etc.). */
+  baseURL?: string;
   thinkingEnabled?: boolean;
   reasoningEffort?: string;
   skills?: string[];
