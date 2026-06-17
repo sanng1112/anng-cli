@@ -106,6 +106,9 @@ const teamTmux = args.includes("--tmux");
 const teamWorkers = parseInt(extractArgValue(args, "--team-workers") ?? "4", 10);
 const teamModeValue = extractArgValue(args, "--team-mode");
 
+// Worker configuration flags
+const workerModel = extractArgValue(args, "--model");
+
 if (autoAcceptEnabled && !initialPrompt) {
   initialPrompt = loadTaskQueue(process.cwd());
 }
@@ -136,6 +139,7 @@ async function main(): Promise<void> {
     const { resolveCurrentSettings } = await import("./settings");
 
     console.log(`[Worker] Starting task: ${initialPrompt}`);
+    const resolvedSettings = resolveCurrentSettings(projectRoot);
     const sm = new SessionManager({
       projectRoot,
       autoAccept: true,
@@ -146,6 +150,15 @@ async function main(): Promise<void> {
       renderMarkdown: (text) => text,
       onAssistantMessage: () => {},
     });
+    // Override model if --model was provided
+    if (workerModel) {
+      const { writeModelConfigSelection } = await import("./settings");
+      writeModelConfigSelection(
+        { model: workerModel, thinkingEnabled: false, reasoningEffort: "max" },
+        resolvedSettings,
+        projectRoot
+      );
+    }
 
     await sm.handleUserPrompt({ text: initialPrompt });
     console.log(`[Worker] Task completed.`);
