@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import DropdownMenu from "../components/DropdownMenu";
 import { MODEL_COMMAND_MODELS, MODEL_COMMAND_THINKING_OPTIONS } from "../components/ModelsDropdown";
+import { resolveCurrentSettings } from "../../settings";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -124,9 +125,12 @@ export function TeamCreateView({
   const [taskInput, setTaskInput] = useState("");
   const [focus, setFocus] = useState<"agents" | "task">("agents");
   const [msg, setMsg] = useState("");
-  const [configStep, setConfigStep] = useState<false | "model" | "thinking">(false);
+  const [configStep, setConfigStep] = useState<false | "model" | "apiKey" | "baseURL" | "thinking">(false);
   const [configModelIdx, setConfigModelIdx] = useState(0);
   const [configPendingModel, setConfigPendingModel] = useState<string | null>(null);
+  const [configBuffer, setConfigBuffer] = useState("");
+  const [configPendingApiKey, setConfigPendingApiKey] = useState<string | null>(null);
+  const [configPendingBaseUrl, setConfigPendingBaseUrl] = useState<string | null>(null);
   const msgTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const agentsRef = useRef(agents);
   agentsRef.current = agents;
@@ -142,6 +146,20 @@ export function TeamCreateView({
     if (msgTimerRef.current) clearTimeout(msgTimerRef.current);
     msgTimerRef.current = setTimeout(() => setMsg(""), 2000);
   }, []);
+
+  // ---- Model dropdown items ----
+
+  const modelDropdownItems = useMemo(() => {
+    return [
+      { key: "inherit", label: "Inherit (Default)", selected: !agents[selectedIdx]?.model },
+      ...MODEL_COMMAND_MODELS.map((m) => ({
+        key: m,
+        label: m,
+        selected: agents[selectedIdx]?.model === m,
+      })),
+      { key: "__custom__", label: "Custom model...", selected: false },
+    ];
+  }, [agents, selectedIdx]);
 
   // ---- Handlers ----
 
@@ -167,22 +185,35 @@ export function TeamCreateView({
     flash("Agent deleted.");
   }, [agents.length, selectedIdx, flash]);
 
-  const openModelConfig = useCallback(() => {
+  const openUnifiedConfig = useCallback(() => {
     const currentModel = agents[selectedIdx]?.model ?? "";
-    const allModels = ["", ...MODEL_COMMAND_MODELS];
-    const idx = allModels.indexOf(currentModel);
-    setConfigModelIdx(Math.max(0, idx));
+    let idx = 0;
+    if (currentModel) {
+      const mi = MODEL_COMMAND_MODELS.findIndex((m) => m === currentModel);
+      idx = mi >= 0 ? mi + 1 : 0;
+    }
+    setConfigModelIdx(idx);
     setConfigPendingModel(null);
+    setConfigPendingApiKey(null);
+    setConfigPendingBaseUrl(null);
     setConfigStep("model");
   }, [agents, selectedIdx]);
 
   const applyModelConfig = useCallback(
-    (model: string, thinkingEnabled?: boolean, reasoningEffort?: string) => {
+    (
+      model: string,
+      apiKey: string | null,
+      baseURL: string | null,
+      thinkingEnabled?: boolean,
+      reasoningEffort?: string
+    ) => {
       setAgents((prev) => {
         const next = [...prev];
         next[selectedIdx] = {
           ...next[selectedIdx],
           model: model || undefined,
+          apiKey: apiKey !== null ? apiKey || undefined : next[selectedIdx].apiKey,
+          baseURL: baseURL !== null ? baseURL || undefined : next[selectedIdx].baseURL,
           thinkingEnabled: thinkingEnabled ?? next[selectedIdx].thinkingEnabled,
           reasoningEffort: reasoningEffort ?? next[selectedIdx].reasoningEffort,
         };
@@ -190,7 +221,9 @@ export function TeamCreateView({
       });
       setConfigStep(false);
       setConfigPendingModel(null);
-      flash("Model updated.");
+      setConfigPendingApiKey(null);
+      setConfigPendingBaseUrl(null);
+      flash("Agent configured.");
     },
     [selectedIdx, flash]
   );
@@ -268,10 +301,9 @@ export function TeamCreateView({
   // ---- Input ----
 
   useInput((input, key) => {
-    // ---------- Model/Thinking config mode ----------
-    if (configStep === "model" || configStep === "thinking") {
-      const options = configStep === "model" ? [...MODEL_COMMAND_MODELS, "__custom__"] : MODEL_COMMAND_THINKING_OPTIONS;
-      const optionCount = options.length;
+    // ---------- Unified config mode ----------
+    if (configStep === "model") {
+      const optionCount = modelDropdownItems.length;
       if (key.upArrow) {
         setConfigModelIdx((i) => (i - 1 + optionCount) % optionCount);
         return;
@@ -286,33 +318,83 @@ export function TeamCreateView({
         return;
       }
       if (input === " " || key.return) {
-        if (configStep === "model") {
-          const selectedModel = MODEL_COMMAND_MODELS[configModelIdx] ?? "";
-          if (configModelIdx >= MODEL_COMMAND_MODELS.length) {
-            // "Custom model..." option — switch to inline editing for model name
-            setEditing("model");
-            setEditBuffer(agents[selectedIdx]?.model ?? "");
-            setConfigStep(false);
-            return;
-          }
-          setConfigPendingModel(selectedModel || null);
-          // Move to thinking config step
-          setConfigStep("thinking");
-          setConfigModelIdx(0);
+        const item = modelDropdownItems[configModelIdx];
+        if (item.key === "__custom__") {
+          // Custom model... — switch to inline editing for model name
+          setEditing("model");
+          setEditBuffer(agents[selectedIdx]?.model ?? "");
+          setConfigStep(false);
+          return;
+        }
+        setConfigPendingModel(item.key === "inherit" ? null : item.key);
+        setConfigStep("apiKey");
+        setConfigBuffer(agents[selectedIdx]?.apiKey ?? "");
+        return;
+      }
+      return;
+    }
+
+    if (configStep === "apiKey" || configStep === "baseURL") {
+      if (key.escape || key.tab) {
+        if (configStep === "apiKey") {
+          setConfigStep("model");
         } else {
-          // configStep === "thinking"
-          const opt = MODEL_COMMAND_THINKING_OPTIONS[configModelIdx];
-          if (opt) {
-            applyModelConfig(
-              configPendingModel ?? agents[selectedIdx]?.model ?? "",
-              opt.thinkingEnabled,
-              opt.reasoningEffort
-            );
-          }
+          setConfigStep("apiKey");
+          setConfigBuffer(agents[selectedIdx]?.apiKey ?? "");
         }
         return;
       }
-      return; // block all other keys during config
+      if (key.return) {
+        if (configStep === "apiKey") {
+          setConfigPendingApiKey(configBuffer.trim() || null);
+          setConfigStep("baseURL");
+          setConfigBuffer(agents[selectedIdx]?.baseURL ?? "");
+        } else {
+          setConfigPendingBaseUrl(configBuffer.trim() || null);
+          setConfigStep("thinking");
+          setConfigModelIdx(0);
+        }
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setConfigBuffer((prev) => prev.slice(0, -1));
+        return;
+      }
+      if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        setConfigBuffer((prev) => prev + input);
+      }
+      return;
+    }
+
+    if (configStep === "thinking") {
+      const optionCount = MODEL_COMMAND_THINKING_OPTIONS.length;
+      if (key.upArrow) {
+        setConfigModelIdx((i) => (i - 1 + optionCount) % optionCount);
+        return;
+      }
+      if (key.downArrow) {
+        setConfigModelIdx((i) => (i + 1) % optionCount);
+        return;
+      }
+      if (key.escape || key.tab) {
+        setConfigStep("baseURL");
+        setConfigBuffer(agents[selectedIdx]?.baseURL ?? "");
+        return;
+      }
+      if (input === " " || key.return) {
+        const opt = MODEL_COMMAND_THINKING_OPTIONS[configModelIdx];
+        if (opt) {
+          applyModelConfig(
+            configPendingModel ?? agents[selectedIdx]?.model ?? "",
+            configPendingApiKey,
+            configPendingBaseUrl,
+            opt.thinkingEnabled,
+            opt.reasoningEffort
+          );
+        }
+        return;
+      }
+      return;
     }
 
     // ---------- Edit mode ----------
@@ -368,15 +450,7 @@ export function TeamCreateView({
         return;
       }
       if (input === "m" || input === "M" || key.rightArrow) {
-        openModelConfig();
-        return;
-      }
-      if (input === "k" || input === "K") {
-        startEditApiKey();
-        return;
-      }
-      if (input === "u" || input === "U") {
-        startEditBaseUrl();
+        openUnifiedConfig();
         return;
       }
     }
@@ -454,11 +528,7 @@ export function TeamCreateView({
         <Text color={BRAND}>P</Text>
         <Text dimColor> Prompt </Text>
         <Text color={BRAND}>M/→</Text>
-        <Text dimColor> Model </Text>
-        <Text color={BRAND}>K</Text>
-        <Text dimColor> API </Text>
-        <Text color={BRAND}>U</Text>
-        <Text dimColor> URL </Text>
+        <Text dimColor> Config </Text>
         <Text color={BRAND}>Esc</Text>
         <Text dimColor> Back </Text>
       </Box>
@@ -594,26 +664,32 @@ export function TeamCreateView({
         )}
       </Box>
 
-      {/* Model / Thinking Config UI */}
+      {/* Config UI */}
       {configStep === "model" ? (
         <Box marginTop={1}>
           <DropdownMenu
             width={columnWidth}
             title="Select Model"
             helpText="↑↓ navigate · Enter select · Space select · Esc/Tab cancel · 'Custom model...' to type any name"
-            items={[
-              { key: "inherit", label: "Inherit (Default)", selected: !agents[selectedIdx]?.model },
-              ...MODEL_COMMAND_MODELS.map((m) => ({
-                key: m,
-                label: m,
-                selected: agents[selectedIdx]?.model === m,
-              })),
-              { key: "__custom__", label: "Custom model...", selected: false },
-            ]}
+            items={modelDropdownItems}
             activeIndex={configModelIdx}
             activeColor={BRAND}
             maxVisible={10}
           />
+        </Box>
+      ) : configStep === "apiKey" ? (
+        <Box marginTop={1} marginLeft={1}>
+          <Text>
+            <Text color={BRAND}>Enter API Key for {agents[selectedIdx]?.name}:</Text> <Text>{configBuffer}</Text>
+            <Text>_</Text>
+          </Text>
+        </Box>
+      ) : configStep === "baseURL" ? (
+        <Box marginTop={1} marginLeft={1}>
+          <Text>
+            <Text color={BRAND}>Enter Base URL for {agents[selectedIdx]?.name}:</Text> <Text>{configBuffer}</Text>
+            <Text>_</Text>
+          </Text>
         </Box>
       ) : configStep === "thinking" ? (
         <Box marginTop={1}>
