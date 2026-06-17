@@ -440,6 +440,8 @@ function App({
           model: a.model || undefined,
           apiKey: a.apiKey || undefined,
           baseURL: a.baseURL || undefined,
+          thinkingEnabled: typeof a.thinkingEnabled === "boolean" ? a.thinkingEnabled : undefined,
+          reasoningEffort: a.reasoningEffort || undefined,
         }));
 
         const result = await orchestrator.executeTask(taskText, {
