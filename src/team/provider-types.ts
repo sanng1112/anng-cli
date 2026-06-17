@@ -12,20 +12,11 @@ export type Provider = {
 };
 
 // ---------------------------------------------------------------------------
-// ModelEntry: a model name bound to a provider
+// ModelEntry: a model name (NOT bound to any provider)
 // ---------------------------------------------------------------------------
 export type ModelEntry = {
   name: string;
-  providerId: string;
   tested: boolean;
-};
-
-// ---------------------------------------------------------------------------
-// Full config container
-// ---------------------------------------------------------------------------
-export type ProviderConfig = {
-  providers: Provider[];
-  models: ModelEntry[];
 };
 
 // ---------------------------------------------------------------------------
@@ -60,7 +51,6 @@ export function loadProviders(projectRoot: string): Provider[] {
 }
 
 export function saveProviders(projectRoot: string, providers: Provider[]): void {
-  // Deduplicate by id before saving
   const seen = new Set<string>();
   const deduped: Provider[] = [];
   for (const p of providers) {
@@ -79,6 +69,22 @@ export function saveProviders(projectRoot: string, providers: Provider[]): void 
 // Load / Save models
 // ---------------------------------------------------------------------------
 
+const MODEL_COMMAND_MODELS = [
+  "deepseek-v4-pro",
+  "deepseek-v4-flash",
+  "gemini-3.5-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+] as const;
+
+/** Create default models from the built-in list */
+function createDefaultModels(projectRoot: string): ModelEntry[] {
+  const models: ModelEntry[] = MODEL_COMMAND_MODELS.map((m) => ({ name: m, tested: false }));
+  saveModels(projectRoot, models);
+  return models;
+}
+
 export function loadModels(projectRoot: string): ModelEntry[] {
   try {
     const p = modelsPath(projectRoot);
@@ -89,11 +95,9 @@ export function loadModels(projectRoot: string): ModelEntry[] {
     const valid = data.filter(
       (x: unknown): x is ModelEntry => typeof x === "object" && x !== null && typeof (x as ModelEntry).name === "string"
     );
-    // If too few models (corrupted), restore defaults
     if (valid.length < MODEL_COMMAND_MODELS.length / 2) {
       return createDefaultModels(projectRoot);
     }
-    // Deduplicate by name (keep first occurrence)
     const seen = new Set<string>();
     const deduped: ModelEntry[] = [];
     for (const m of valid) {
@@ -111,21 +115,7 @@ export function loadModels(projectRoot: string): ModelEntry[] {
   }
 }
 
-/** Create default models from MODEL_COMMAND_MODELS, linked to first available provider */
-function createDefaultModels(projectRoot: string): ModelEntry[] {
-  const providers = loadProviders(projectRoot);
-  const providerId = providers.length > 0 ? providers[0].id : "unknown";
-  const models: ModelEntry[] = MODEL_COMMAND_MODELS.map((m) => ({
-    name: m,
-    providerId,
-    tested: false,
-  }));
-  saveModels(projectRoot, models);
-  return models;
-}
-
 export function saveModels(projectRoot: string, models: ModelEntry[]): void {
-  // Deduplicate before saving
   const seen = new Set<string>();
   const deduped: ModelEntry[] = [];
   for (const m of models) {
@@ -141,17 +131,8 @@ export function saveModels(projectRoot: string, models: ModelEntry[]): void {
 }
 
 // ---------------------------------------------------------------------------
-// Migration: old settings.json proxyApiKey → providers + models
+// Migration: old settings.json proxyApiKey → providers
 // ---------------------------------------------------------------------------
-
-const MODEL_COMMAND_MODELS = [
-  "deepseek-v4-pro",
-  "deepseek-v4-flash",
-  "gemini-3.5-flash",
-  "gemini-3.1-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-] as const;
 
 export function migrateFromSettings(
   projectRoot: string,
@@ -161,9 +142,7 @@ export function migrateFromSettings(
   const provPath = providersPath(projectRoot);
   const modPath = modelsPath(projectRoot);
 
-  // Already migrated
   if (fs.existsSync(provPath) && fs.existsSync(modPath)) return;
-  // Nothing to migrate
   if (!proxyApiKeys) return;
 
   const keys = proxyApiKeys
@@ -174,7 +153,6 @@ export function migrateFromSettings(
 
   const baseURL = proxyBaseURL || "https://opencode.ai/zen/v1";
 
-  // Create providers
   const providers: Provider[] = keys.map((key, i) => ({
     id: `ds${i + 1}`,
     name: `DeepSeek Key ${i + 1}`,
@@ -182,31 +160,4 @@ export function migrateFromSettings(
     baseURL,
   }));
   saveProviders(projectRoot, providers);
-
-  // Create models if models.json doesn't exist yet
-  if (!fs.existsSync(modPath) && providers.length > 0) {
-    const models: ModelEntry[] = MODEL_COMMAND_MODELS.map((m) => ({
-      name: m,
-      providerId: providers[0].id,
-      tested: false,
-    }));
-    saveModels(projectRoot, models);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Resolve: given a model name, find its provider
-// ---------------------------------------------------------------------------
-
-export function resolveModelProvider(
-  projectRoot: string,
-  modelName: string
-): { provider: Provider | null; model: ModelEntry | null } {
-  const models = loadModels(projectRoot);
-  const model = models.find((m) => m.name === modelName) ?? null;
-  if (!model) return { provider: null, model: null };
-
-  const providers = loadProviders(projectRoot);
-  const provider = providers.find((p) => p.id === model.providerId) ?? null;
-  return { provider, model };
 }

@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import DropdownMenu from "../components/DropdownMenu";
 import { MODEL_COMMAND_THINKING_OPTIONS } from "../components/ModelsDropdown";
-import { loadModels, loadProviders, resolveModelProvider } from "../../team/provider-types";
+import { loadModels } from "../../team/provider-types";
 import type { ModelEntry } from "../../team/provider-types";
 
 // ---------------------------------------------------------------------------
@@ -124,7 +124,6 @@ export function TeamCreateView({
   agentsRef.current = agents;
 
   const [availableModels] = useState<ModelEntry[]>(() => loadModels(projectRoot));
-  useState(() => loadProviders(projectRoot)); // keep loaded for provider resolution via resolveModelProvider
 
   useEffect(() => {
     return () => {
@@ -275,22 +274,8 @@ export function TeamCreateView({
       flash("Type a task description first.");
       return;
     }
-    // Resolve provider apiKey/baseURL for each agent when model is known
-    const enrichedAgents = agentsRef.current.map((a) => {
-      if (a.model) {
-        const resolved = resolveModelProvider(projectRoot, a.model);
-        if (resolved.provider) {
-          return {
-            ...a,
-            apiKey: a.apiKey || resolved.provider.apiKey || undefined,
-            baseURL: a.baseURL || resolved.provider.baseURL || undefined,
-          };
-        }
-      }
-      return a;
-    });
     saveAgents(projectRoot, agentsRef.current);
-    onStartTeam(trimmed, enrichedAgents);
+    onStartTeam(trimmed, agentsRef.current);
   }, [taskInput, projectRoot, onStartTeam, flash]);
 
   // ---- Input ----
@@ -558,19 +543,10 @@ export function TeamCreateView({
             ? `${prefix} ${i + 1}. ${editing === "name" ? "" : "["}${editBuffer}${editing === "prompt" ? "]" : ""}`
             : `${prefix} ${i + 1}. ${agent.name}`;
 
-        // Determine provider display
+        // Determine model display
         const modelDisplay = agent.model ?? "Inherit";
-        let providerLabel = "Inherit";
-        if (agent.model) {
-          const resolved = resolveModelProvider(projectRoot, agent.model);
-          if (resolved.provider) {
-            providerLabel = resolved.provider.name;
-          } else {
-            providerLabel = agent.baseURL ? "Custom" : "Inherit";
-          }
-        }
         const hasCustomApi = agent.apiKey || agent.baseURL;
-        const providerTag = hasCustomApi ? `${providerLabel} \u2605` : providerLabel;
+        const providerTag = hasCustomApi ? "\u2605 Custom" : "Inherit";
 
         return (
           <Box key={`agent-${i}`} marginLeft={1} flexDirection="column">
