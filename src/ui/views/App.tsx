@@ -535,12 +535,16 @@ function App({
         }
 
         if (subCmd === "kill" || subCmd === "stop") {
-          teamOrchestratorRef.current = null;
+          // Interrupt the orchestrator first so it can clean up tmux session
+          if (teamOrchestratorRef.current) {
+            teamOrchestratorRef.current.interrupt();
+            teamOrchestratorRef.current = null;
+          }
           setTeamModeEnabled(false);
           setTeamBusy(false);
           setBusy(false);
-          setStatusLine("Team mode disabled.");
-          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team mode disabled by user.", 0)]);
+          setStatusLine("Team mode disabled. Tmux session cleaned up.");
+          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team stopped. Tmux session terminated.", 0)]);
           return;
         }
 
