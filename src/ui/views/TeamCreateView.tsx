@@ -291,6 +291,13 @@ export function TeamCreateView({
       return;
     }
 
+    // When focus is on agents, only agent operation keys should be active.
+    // Block global actions like Enter (run task), Escape (exit view),
+    // Backspace/Delete (modify task input) when navigating agents.
+    if (focus === "agents") {
+      return;
+    }
+
     // Only S when in task mode (or task has content)
     if ((input === "s" || input === "S") && (key.ctrl || key.meta) && taskInput.trim()) {
       handleStartTeam();
@@ -308,16 +315,10 @@ export function TeamCreateView({
       setTaskInput((prev) => prev.slice(0, -1));
       return;
     }
-    // When focus is "agents", don't add characters to task input —
-    // all agent operation keys are handled above.
-    if (focus === "agents") {
-      return;
-    }
 
     // Type characters → task input
     if (input && !key.ctrl && !key.meta) {
       setTaskInput((prev) => prev + input);
-      if (focus === "agents") setFocus("task");
     }
   });
 
