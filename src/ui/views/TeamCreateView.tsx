@@ -120,7 +120,7 @@ export function TeamCreateView({
   const [editing, setEditing] = useState<false | "name" | "prompt">(false);
   const [editBuffer, setEditBuffer] = useState("");
   const [taskInput, setTaskInput] = useState("");
-  const [focus, setFocus] = useState<"agents" | "task">("task");
+  const [focus, setFocus] = useState<"agents" | "task">("agents");
   const [msg, setMsg] = useState("");
   const msgTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const agentsRef = useRef(agents);
@@ -287,7 +287,7 @@ export function TeamCreateView({
 
     if (key.upArrow && focus === "task") {
       setFocus("agents");
-      setSelectedIdx(agents.length - 1);
+      setSelectedIdx(0);
       return;
     }
 
