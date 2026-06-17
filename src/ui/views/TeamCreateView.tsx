@@ -257,6 +257,10 @@ export function TeamCreateView({
       startEditName();
       return;
     }
+    if (input === "p" || input === "P") {
+      startEditPrompt();
+      return;
+    }
     if (input === "m" || input === "M") {
       cycleModel();
       return;
@@ -265,12 +269,8 @@ export function TeamCreateView({
       handleStartTeam();
       return;
     }
-    if (key.return) {
-      if (taskInput.trim()) {
-        handleRun();
-      } else {
-        startEditPrompt();
-      }
+    if (key.return && taskInput.trim()) {
+      handleRun();
       return;
     }
     if (key.escape) {
@@ -301,21 +301,27 @@ export function TeamCreateView({
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>Configure agents for your team. Then type a task and press Enter to run.</Text>
+        <Text dimColor>Configure agents and type a task below. Press </Text>
+        <Text color="green">Enter</Text>
+        <Text dimColor> to run internally or </Text>
+        <Text color="yellow">S</Text>
+        <Text dimColor> to start in tmux.</Text>
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor> Shortcuts: </Text>
+        <Text dimColor> Keys: </Text>
+        <Text color="yellow">↑↓</Text>
+        <Text dimColor> Select </Text>
         <Text color="yellow">A</Text>
         <Text dimColor> Add </Text>
         <Text color="yellow">D</Text>
         <Text dimColor> Del </Text>
         <Text color="yellow">N</Text>
         <Text dimColor> Name </Text>
+        <Text color="yellow">P</Text>
+        <Text dimColor> Prompt </Text>
         <Text color="yellow">M</Text>
         <Text dimColor> Model </Text>
-        <Text color="yellow">Enter</Text>
-        <Text dimColor> Edit prompt / Run </Text>
         <Text color="yellow">Esc</Text>
         <Text dimColor> Back </Text>
       </Box>
