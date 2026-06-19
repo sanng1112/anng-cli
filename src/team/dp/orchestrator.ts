@@ -32,7 +32,7 @@ export class DpOrchestrator {
 Nhiệm vụ của bạn là phân tích yêu cầu của user và trả về một JSON HỢP LỆ (KHÔNG CÓ MARKDOWN) theo đúng format:
 {
   "taskPrompt": "Mô tả công việc tổng thể và chi tiết cho toàn bộ các clones",
-  "concurrencyLimit": 2,
+  "concurrencyLimit": 5,
   "subteamConfig": {
     "startAgentId": "agent_A",
     "agents": [
@@ -146,7 +146,7 @@ Lưu ý quan trọng:
             });
 
             let currentOutput = "";
-            node.liveOutput = `[Agent: ${agent.name}] Đang suy nghĩ...\n`;
+            node.liveOutput = (node.liveOutput || "") + `\n\n--- [Agent: ${agent.name}] Đang suy nghĩ... ---\n`;
             onProgress(plan);
 
             let chunkCount = 0;
@@ -183,7 +183,7 @@ Lưu ý quan trọng:
             });
 
             let review = "";
-            node.liveOutput = `[Agent: ${agent.name}] Đang đánh giá...\n`;
+            node.liveOutput = (node.liveOutput || "") + `\n\n--- [Agent: ${agent.name}] Đang đánh giá... ---\n`;
             onProgress(plan);
 
             let chunkCount = 0;
@@ -210,7 +210,9 @@ Lưu ý quan trọng:
               }
 
               currentAgentId = targetNode;
-              node.liveOutput = `\n[Agent: ${agent.name}] TỪ CHỐI KẾT QUẢ! Yêu cầu ${targetNode} làm lại (Lần ${nodeRetries[targetNode]}/${plan.proposal.subteamConfig.maxRetries})...\n`;
+              node.liveOutput =
+                (node.liveOutput || "") +
+                `\n\n[Agent: ${agent.name}] TỪ CHỐI KẾT QUẢ! Yêu cầu ${targetNode} làm lại (Lần ${nodeRetries[targetNode]}/${plan.proposal.subteamConfig.maxRetries})...\n`;
               onProgress(plan);
             } else {
               const successEdge = plan.proposal.subteamConfig.edges.find(

@@ -77,6 +77,9 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
             setPlan({ ...updatedPlan });
             if (updatedPlan.status === "completed" || updatedPlan.status === "failed") {
               setPhase("done");
+              setTimeout(() => {
+                onCancel();
+              }, 2000);
             }
           });
         } else if (reviewCursor > 0 && proposal) {
