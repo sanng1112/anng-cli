@@ -942,7 +942,11 @@ function App({
           }}
         />
       ) : view === "team-dp" ? (
-        <TeamDpConfigView initialPrompt={teamDpPrompt} onCancel={() => navigateToSubView("chat")} />
+        <TeamDpConfigView
+          initialPrompt={teamDpPrompt}
+          projectRoot={projectRoot}
+          onCancel={() => navigateToSubView("chat")}
+        />
       ) : view === "team-wf" ? (
         <TeamWfConfigView onCancel={() => navigateToSubView("chat")} />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (

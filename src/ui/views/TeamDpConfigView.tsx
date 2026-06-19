@@ -1,29 +1,30 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
+import fs from "fs";
+import path from "path";
 import { DpOrchestrator } from "../../team/dp/orchestrator";
 import type { DpExecutionPlan, DpProposal, DpPlanNode } from "../../team/dp/types";
 
 export interface TeamDpConfigViewProps {
   initialPrompt?: string;
   onCancel: () => void;
+  projectRoot: string;
 }
 
-export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewProps) {
-  const [phase, setPhase] = useState<"setup" | "review" | "executing" | "done" | "error">("setup");
+export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamDpConfigViewProps) {
+  const [phase, setPhase] = useState<
+    "setup" | "review" | "editing_worker" | "editing_tester" | "executing" | "done" | "error"
+  >("setup");
   const [proposal, setProposal] = useState<DpProposal | null>(null);
   const [plan, setPlan] = useState<DpExecutionPlan | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [orchestrator] = useState(() => new DpOrchestrator());
+  const [orchestrator] = useState(() => new DpOrchestrator(projectRoot));
 
   // Navigation states
   const [execCursor, setExecCursor] = useState(0);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [reviewCursor, setReviewCursor] = useState(0);
-  const reviewOptions = [
-    "🚀 Phê duyệt & Chạy",
-    "✏️ Chỉnh sửa Worker (Comming soon)",
-    "✏️ Chỉnh sửa Tester (Comming soon)",
-  ];
+  const reviewOptions = ["🚀 Phê duyệt & Chạy", "✏️ Chỉnh sửa Worker", "✏️ Chỉnh sửa Tester"];
 
   useEffect(() => {
     if (initialPrompt && phase === "setup") {
@@ -68,9 +69,50 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
               setPhase("done");
             }
           });
+        } else if (reviewCursor === 1) {
+          // Edit worker
+          const tempDir = path.join(projectRoot, ".anng", "memory", "dp_temp");
+          if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+          fs.writeFileSync(path.join(tempDir, "edit_worker.md"), proposal.subteamConfig.worker.systemPrompt);
+          setPhase("editing_worker");
+        } else if (reviewCursor === 2 && proposal.subteamConfig.tester) {
+          // Edit tester
+          const tempDir = path.join(projectRoot, ".anng", "memory", "dp_temp");
+          if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+          fs.writeFileSync(path.join(tempDir, "edit_tester.md"), proposal.subteamConfig.tester.systemPrompt);
+          setPhase("editing_tester");
         }
       }
       if (key.escape) onCancel();
+      return;
+    }
+
+    if (phase === "editing_worker" || phase === "editing_tester") {
+      if (key.escape) {
+        setPhase("review");
+      }
+      if (key.return && proposal) {
+        const tempFile = path.join(
+          projectRoot,
+          ".anng",
+          "memory",
+          "dp_temp",
+          phase === "editing_worker" ? "edit_worker.md" : "edit_tester.md"
+        );
+        try {
+          const newContent = fs.readFileSync(tempFile, "utf-8").trim();
+          const newProposal = { ...proposal };
+          if (phase === "editing_worker") {
+            newProposal.subteamConfig.worker.systemPrompt = newContent;
+          } else if (phase === "editing_tester" && newProposal.subteamConfig.tester) {
+            newProposal.subteamConfig.tester.systemPrompt = newContent;
+          }
+          setProposal(newProposal);
+        } catch (e) {
+          // Ignore read error
+        }
+        setPhase("review");
+      }
       return;
     }
 
@@ -139,13 +181,40 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
           <Text>- Luồng đồng thời tối đa (Concurrency): {proposal.concurrencyLimit}</Text>
 
           <Box marginTop={1} flexDirection="column">
-            {reviewOptions.map((opt, i) => (
-              <Text key={i} color={reviewCursor === i ? "green" : "white"}>
-                {reviewCursor === i ? "> " : "  "}
-                {opt}
-              </Text>
-            ))}
+            {reviewOptions.map((opt, i) => {
+              if (i === 2 && !proposal.subteamConfig.tester) return null; // Hide Tester edit if no tester
+              return (
+                <Text key={i} color={reviewCursor === i ? "green" : "white"}>
+                  {reviewCursor === i ? "> " : "  "}
+                  {opt}
+                </Text>
+              );
+            })}
           </Box>
+        </Box>
+      )}
+
+      {(phase === "editing_worker" || phase === "editing_tester") && (
+        <Box marginY={1} flexDirection="column">
+          <Text color="yellow" bold>
+            ✏️ ĐANG CHỈNH SỬA {phase === "editing_worker" ? "WORKER" : "TESTER"} PROMPT
+          </Text>
+          <Text color="gray">────────────────────────────────────────────────────────</Text>
+          <Box marginY={1} flexDirection="column">
+            <Text>Vui lòng mở file sau trong IDE của bạn để chỉnh sửa:</Text>
+            <Text color="cyan">
+              {path.join(
+                projectRoot,
+                ".anng",
+                "memory",
+                "dp_temp",
+                phase === "editing_worker" ? "edit_worker.md" : "edit_tester.md"
+              )}
+            </Text>
+          </Box>
+          <Text color="gray">────────────────────────────────────────────────────────</Text>
+          <Text color="green"> [ Nhấn ENTER khi bạn đã sửa và lưu file xong ]</Text>
+          <Text color="gray"> [ Nhấn ESC để hủy thay đổi ]</Text>
         </Box>
       )}
 
