@@ -32,13 +32,15 @@ export class DpOrchestrator {
 Nhiệm vụ của bạn là phân tích yêu cầu của user và trả về một JSON HỢP LỆ (KHÔNG CÓ MARKDOWN) theo đúng format:
 {
   "taskPrompt": "Mô tả công việc cho mỗi clone",
-  "concurrencyLimit": số lượng luồng (1-10),
+  "concurrencyLimit": 2,
   "subteamConfig": {
-    "worker": { "role": "worker", "systemPrompt": "Lệnh cho worker", "allowedSkills": ["write_handler"] },
-    "tester": { "role": "tester", "systemPrompt": "Lệnh cho tester", "allowedSkills": ["read_handler"] },
+    "agents": [
+      { "name": "Worker", "role": "worker", "systemPrompt": "Bạn là AI. Hãy xử lý yêu cầu.", "allowedSkills": [] },
+      { "name": "Tester", "role": "tester", "systemPrompt": "Bạn là Tester. Kiểm tra lại kết quả.", "allowedSkills": [] }
+    ],
     "maxRetries": 2
   },
-  "dataChunks": ["dữ liệu 1", "dữ liệu 2", "dữ liệu 3"]
+  "dataChunks": ["Mẫu 1", "Mẫu 2"]
 }
 Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng block \`\`\`json.`,
           },
@@ -98,9 +100,6 @@ Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng 
       onProgress(plan);
 
       try {
-        // [QUAN TRỌNG]: Cơ chế Sandboxing (Giải quyết Bottleneck #3)
-        // Thay vì dùng chung SessionManager, mỗi Node sẽ tạo một Temporary Session
-        // với thư mục làm việc riêng biệt (Workspace Namespace) để tránh Race Condition.
         const sandboxDir = `.anng/memory/dp_temp/${node.id}`;
         void sandboxDir;
         const { client, model } = createOpenAIClient(this.projectRoot);
@@ -109,53 +108,54 @@ Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng 
         const outputDir = path.join(this.projectRoot, "dp_output");
         if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-        // Gọi Worker
-        const workerStream = await client.chat.completions.create({
-          model,
-          stream: true,
-          messages: [
-            { role: "system", content: plan.proposal.subteamConfig.worker.systemPrompt },
-            { role: "user", content: `Task: ${plan.proposal.taskPrompt}\n\nData: ${JSON.stringify(node.inputData)}` },
-          ],
-        });
+        let currentOutput = "";
 
-        let workerOutput = "";
-        for await (const chunk of workerStream) {
-          workerOutput += chunk.choices[0]?.delta?.content || "";
-        }
+        for (const agent of plan.proposal.subteamConfig.agents) {
+          if (agent.role === "worker") {
+            const workerStream = await client.chat.completions.create({
+              model,
+              stream: true,
+              messages: [
+                { role: "system", content: agent.systemPrompt },
+                {
+                  role: "user",
+                  content: `Task: ${plan.proposal.taskPrompt}\n\nData: ${JSON.stringify(node.inputData)}\n\nPrevious Output (if any): ${currentOutput}`,
+                },
+              ],
+            });
 
-        let isPass = true;
-        // Gọi Tester nếu có
-        if (plan.proposal.subteamConfig.tester) {
-          const testerStream = await client.chat.completions.create({
-            model,
-            stream: true,
-            messages: [
-              { role: "system", content: plan.proposal.subteamConfig.tester.systemPrompt },
-              {
-                role: "user",
-                content: `Kiểm tra xem kết quả sau có đáp ứng Task: "${plan.proposal.taskPrompt}" không.\nKết quả: ${workerOutput}\n\nTrang đầu tiên trả lời YES hoặc NO.`,
-              },
-            ],
-          });
+            currentOutput = "";
+            for await (const chunk of workerStream) {
+              currentOutput += chunk.choices[0]?.delta?.content || "";
+            }
+          } else if (agent.role === "tester") {
+            const testerStream = await client.chat.completions.create({
+              model,
+              stream: true,
+              messages: [
+                { role: "system", content: agent.systemPrompt },
+                {
+                  role: "user",
+                  content: `Kiểm tra xem kết quả sau có đáp ứng Task: "${plan.proposal.taskPrompt}" không.\nKết quả: ${currentOutput}\n\nTrang đầu tiên trả lời YES hoặc NO.`,
+                },
+              ],
+            });
 
-          let review = "";
-          for await (const chunk of testerStream) {
-            review += chunk.choices[0]?.delta?.content || "";
+            let review = "";
+            for await (const chunk of testerStream) {
+              review += chunk.choices[0]?.delta?.content || "";
+            }
+
+            if (review.toUpperCase().includes("NO")) {
+              throw new Error(`${agent.name} từ chối: ` + review.slice(0, 100));
+            }
           }
-
-          if (review.toUpperCase().includes("NO")) {
-            isPass = false;
-            throw new Error("Tester từ chối: " + review.slice(0, 100));
-          }
         }
 
-        if (isPass) {
-          node.status = "completed";
-          const fileName = `output_${node.id}.md`;
-          fs.writeFileSync(path.join(outputDir, fileName), workerOutput);
-          node.output = `Đã lưu kết quả tại dp_output/${fileName}`;
-        }
+        node.status = "completed";
+        const fileName = `output_${node.id}.md`;
+        fs.writeFileSync(path.join(outputDir, fileName), currentOutput);
+        node.output = `Đã lưu kết quả tại dp_output/${fileName}`;
       } catch (err: unknown) {
         if (node.retries < plan.proposal.subteamConfig.maxRetries) {
           node.retries++;

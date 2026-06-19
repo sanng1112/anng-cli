@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Box, Text, useInput } from "ink";
 import fs from "fs";
 import path from "path";
@@ -24,7 +24,17 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
   const [execCursor, setExecCursor] = useState(0);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [reviewCursor, setReviewCursor] = useState(0);
-  const reviewOptions = ["🚀 Phê duyệt & Chạy", "✏️ Chỉnh sửa Worker", "✏️ Chỉnh sửa Tester"];
+  const [editingAgentIndex, setEditingAgentIndex] = useState<number | null>(null);
+
+  const reviewOptions: string[] = useMemo(() => {
+    const opts = ["🚀 Phê duyệt & Chạy"];
+    if (proposal) {
+      proposal.subteamConfig.agents.forEach((agent) => {
+        opts.push(`✏️ Chỉnh sửa Agent: ${agent.name} (${agent.role})`);
+      });
+    }
+    return opts;
+  }, [proposal]);
 
   useEffect(() => {
     if (initialPrompt && phase === "setup") {
@@ -69,49 +79,40 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
               setPhase("done");
             }
           });
-        } else if (reviewCursor === 1) {
-          // Edit worker
-          const tempDir = path.join(projectRoot, ".anng", "memory", "dp_temp");
-          if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-          fs.writeFileSync(path.join(tempDir, "edit_worker.md"), proposal.subteamConfig.worker.systemPrompt);
-          setPhase("editing_worker");
-        } else if (reviewCursor === 2 && proposal.subteamConfig.tester) {
-          // Edit tester
-          const tempDir = path.join(projectRoot, ".anng", "memory", "dp_temp");
-          if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-          fs.writeFileSync(path.join(tempDir, "edit_tester.md"), proposal.subteamConfig.tester.systemPrompt);
-          setPhase("editing_tester");
+        } else if (reviewCursor > 0 && proposal) {
+          const agentIndex = reviewCursor - 1;
+          const agent = proposal.subteamConfig.agents[agentIndex];
+          if (agent) {
+            const tempDir = path.join(projectRoot, ".anng", "memory", "dp_temp");
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+            const tempFile = path.join(tempDir, `edit_agent_${agentIndex}.md`);
+            fs.writeFileSync(tempFile, agent.systemPrompt);
+            setEditingAgentIndex(agentIndex);
+            setPhase("editing_worker");
+          }
         }
       }
       if (key.escape) onCancel();
       return;
     }
 
-    if (phase === "editing_worker" || phase === "editing_tester") {
+    if (phase === "editing_worker") {
       if (key.escape) {
         setPhase("review");
+        setEditingAgentIndex(null);
       }
-      if (key.return && proposal) {
-        const tempFile = path.join(
-          projectRoot,
-          ".anng",
-          "memory",
-          "dp_temp",
-          phase === "editing_worker" ? "edit_worker.md" : "edit_tester.md"
-        );
+      if (key.return && proposal && editingAgentIndex !== null) {
+        const tempFile = path.join(projectRoot, ".anng", "memory", "dp_temp", `edit_agent_${editingAgentIndex}.md`);
         try {
           const newContent = fs.readFileSync(tempFile, "utf-8").trim();
           const newProposal = { ...proposal };
-          if (phase === "editing_worker") {
-            newProposal.subteamConfig.worker.systemPrompt = newContent;
-          } else if (phase === "editing_tester" && newProposal.subteamConfig.tester) {
-            newProposal.subteamConfig.tester.systemPrompt = newContent;
-          }
+          newProposal.subteamConfig.agents[editingAgentIndex].systemPrompt = newContent;
           setProposal(newProposal);
         } catch (e) {
           // Ignore read error
         }
         setPhase("review");
+        setEditingAgentIndex(null);
       }
       return;
     }
@@ -123,7 +124,6 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
     if (key.return) {
       if (phase === "setup" && !initialPrompt) {
         setPhase("review");
-        // Fallback mock if no prompt provided
         orchestrator
           .generateProposal("system", "Tạo 3 cốt truyện...")
           .then((p: DpProposal) => setProposal(p))
@@ -175,14 +175,15 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
           <Text>
             {"\n"}- Nhiệm vụ: {proposal.taskPrompt}
           </Text>
-          <Text>- Kiến trúc Tiểu nhóm: Worker + {proposal.subteamConfig.tester ? "Tester" : ""}</Text>
-          <Text>- Quy định Worker: {proposal.subteamConfig.worker.allowedSkills.join(", ")}</Text>
+          <Text>
+            - Kiến trúc Tiểu nhóm: Tuần tự {proposal.subteamConfig.agents.length} agents (
+            {proposal.subteamConfig.agents.map((a) => a.name).join(" -> ")})
+          </Text>
           <Text>- Số lượng bản sao (Clones): {proposal.dataChunks.length} nodes</Text>
           <Text>- Luồng đồng thời tối đa (Concurrency): {proposal.concurrencyLimit}</Text>
 
           <Box marginTop={1} flexDirection="column">
             {reviewOptions.map((opt, i) => {
-              if (i === 2 && !proposal.subteamConfig.tester) return null; // Hide Tester edit if no tester
               return (
                 <Text key={i} color={reviewCursor === i ? "green" : "white"}>
                   {reviewCursor === i ? "> " : "  "}
@@ -194,22 +195,16 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
         </Box>
       )}
 
-      {(phase === "editing_worker" || phase === "editing_tester") && (
+      {phase === "editing_worker" && editingAgentIndex !== null && proposal && (
         <Box marginY={1} flexDirection="column">
           <Text color="yellow" bold>
-            ✏️ ĐANG CHỈNH SỬA {phase === "editing_worker" ? "WORKER" : "TESTER"} PROMPT
+            ✏️ ĐANG CHỈNH SỬA PROMPT CHO: {proposal.subteamConfig.agents[editingAgentIndex]?.name.toUpperCase()}
           </Text>
           <Text color="gray">────────────────────────────────────────────────────────</Text>
           <Box marginY={1} flexDirection="column">
             <Text>Vui lòng mở file sau trong IDE của bạn để chỉnh sửa:</Text>
             <Text color="cyan">
-              {path.join(
-                projectRoot,
-                ".anng",
-                "memory",
-                "dp_temp",
-                phase === "editing_worker" ? "edit_worker.md" : "edit_tester.md"
-              )}
+              {path.join(projectRoot, ".anng", "memory", "dp_temp", `edit_agent_${editingAgentIndex}.md`)}
             </Text>
           </Box>
           <Text color="gray">────────────────────────────────────────────────────────</Text>

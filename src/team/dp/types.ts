@@ -7,6 +7,7 @@ export type DpSubagentRole = "worker" | "tester";
  * Nó bị khóa cứng các kỹ năng (allowedSkills) để tránh "chồng lấn kỹ năng".
  */
 export interface DpSubagentProfile {
+  name: string; // Tên hiển thị, ví dụ: "Researcher", "Writer", "Reviewer"
   role: DpSubagentRole;
   systemPrompt: string;
   allowedSkills: string[];
@@ -14,11 +15,10 @@ export interface DpSubagentProfile {
 
 /**
  * Cấu hình cho một Tiểu nhóm nguyên tử (Micro-team).
- * Theo kiến trúc, một tiểu nhóm chứa 1 Worker và có thể có 1 Tester.
+ * Theo kiến trúc, một tiểu nhóm chứa một chuỗi các agent chạy tuần tự.
  */
 export interface DpSubteamConfig {
-  worker: DpSubagentProfile;
-  tester?: DpSubagentProfile;
+  agents: DpSubagentProfile[];
   maxRetries: number;
 }
 
@@ -59,14 +59,16 @@ export interface DpExecutionPlan {
 // ============================================================
 
 export const DpSubagentProfileSchema = z.object({
+  name: z.string().describe("Name of the subagent (e.g. Researcher, Writer, Reviewer)"),
   role: z.enum(["worker", "tester"]),
   systemPrompt: z.string().describe("Instructions specific to this subagent's role"),
   allowedSkills: z.array(z.string()).describe("List of allowed tool IDs (e.g. 'read_file', 'write_to_file')"),
 });
 
 export const DpSubteamConfigSchema = z.object({
-  worker: DpSubagentProfileSchema,
-  tester: DpSubagentProfileSchema.optional(),
+  agents: z
+    .array(DpSubagentProfileSchema)
+    .describe("List of agents in this subteam that run sequentially. Order matters."),
   maxRetries: z.number().int().min(0).max(5).default(2),
 });
 
