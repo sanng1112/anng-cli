@@ -47,24 +47,18 @@ Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng 
       });
 
       const rawJson = completion.choices[0]?.message?.content || "{}";
-      const cleanJson = rawJson
+      const strippedJson = rawJson.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      const cleanJson = strippedJson
         .replace(/```json/g, "")
         .replace(/```/g, "")
         .trim();
       return JSON.parse(cleanJson) as DpProposal;
-    } catch (e) {
-      console.error("Lỗi khi sinh Proposal:", e);
-      // Fallback
-      return {
-        taskPrompt: userRequest,
-        concurrencyLimit: 2,
-        subteamConfig: {
-          worker: { role: "worker", systemPrompt: "Bạn là AI. Hãy xử lý yêu cầu.", allowedSkills: [] },
-          tester: { role: "tester", systemPrompt: "Bạn là Tester. Kiểm tra lại kết quả.", allowedSkills: [] },
-          maxRetries: 1,
-        },
-        dataChunks: ["Chunk 1", "Chunk 2"],
-      };
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        throw new Error(`Lỗi khi sinh Proposal: ${e.message}`);
+      } else {
+        throw new Error(`Lỗi không xác định khi sinh Proposal.`);
+      }
     }
   }
 

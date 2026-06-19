@@ -9,15 +9,22 @@ export interface TeamDpConfigViewProps {
 }
 
 export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewProps) {
-  const [phase, setPhase] = useState<"setup" | "review" | "executing" | "done">("setup");
+  const [phase, setPhase] = useState<"setup" | "review" | "executing" | "done" | "error">("setup");
   const [proposal, setProposal] = useState<DpProposal | null>(null);
   const [plan, setPlan] = useState<DpExecutionPlan | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [orchestrator] = useState(() => new DpOrchestrator());
 
   useEffect(() => {
     if (initialPrompt && phase === "setup") {
       setPhase("review");
-      orchestrator.generateProposal("system", initialPrompt).then((p: DpProposal) => setProposal(p));
+      orchestrator
+        .generateProposal("system", initialPrompt)
+        .then((p: DpProposal) => setProposal(p))
+        .catch((e: Error) => {
+          setErrorMsg(e.message);
+          setPhase("error");
+        });
     }
   }, [initialPrompt, phase, orchestrator]);
 
@@ -30,7 +37,13 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
       if (phase === "setup" && !initialPrompt) {
         setPhase("review");
         // Fallback mock if no prompt provided
-        orchestrator.generateProposal("system", "Tạo 3 cốt truyện...").then((p: DpProposal) => setProposal(p));
+        orchestrator
+          .generateProposal("system", "Tạo 3 cốt truyện...")
+          .then((p: DpProposal) => setProposal(p))
+          .catch((e: Error) => {
+            setErrorMsg(e.message);
+            setPhase("error");
+          });
       } else if (phase === "review" && proposal) {
         setPhase("executing");
         const newPlan = orchestrator.compilePlan(proposal);
@@ -62,6 +75,15 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
           ) : (
             <Text color="yellow">Bạn chưa nhập lệnh. Nhấn [ENTER] để chạy MOCK thử nghiệm.</Text>
           )}
+        </Box>
+      )}
+
+      {phase === "error" && (
+        <Box marginY={1} flexDirection="column">
+          <Text color="red" bold>
+            ❌ Đã xảy ra lỗi:
+          </Text>
+          <Text>{errorMsg}</Text>
         </Box>
       )}
 
