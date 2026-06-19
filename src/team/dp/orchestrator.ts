@@ -116,9 +116,14 @@ Lưu ý quan trọng:
         const outputDir = path.join(this.projectRoot, "dp_output");
         if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-        let currentOutput = "";
+        let step = 0;
+        let localRetries = 0;
+        const outputs: string[] = [];
 
-        for (const agent of plan.proposal.subteamConfig.agents) {
+        while (step < plan.proposal.subteamConfig.agents.length) {
+          const agent = plan.proposal.subteamConfig.agents[step];
+          const previousOutput = step > 0 ? outputs[step - 1] : "";
+
           if (agent.role === "worker") {
             const workerStream = await client.chat.completions.create({
               model,
@@ -127,12 +132,12 @@ Lưu ý quan trọng:
                 { role: "system", content: agent.systemPrompt },
                 {
                   role: "user",
-                  content: `Task: ${plan.proposal.taskPrompt}\n\nData: ${JSON.stringify(node.inputData)}\n\nPrevious Output (if any): ${currentOutput}`,
+                  content: `Task: ${plan.proposal.taskPrompt}\n\nData: ${JSON.stringify(node.inputData)}\n\nPrevious Output (if any): ${previousOutput}`,
                 },
               ],
             });
 
-            currentOutput = "";
+            let currentOutput = "";
             node.liveOutput = `[Agent: ${agent.name}] Đang suy nghĩ...\n`;
             onProgress(plan);
 
@@ -145,8 +150,12 @@ Lưu ý quan trọng:
               chunkCount++;
               if (chunkCount % 5 === 0) onProgress(plan);
             }
+            outputs[step] = currentOutput;
             onProgress(plan);
+            step++; // Tiến lên agent tiếp theo
+            localRetries = 0; // Reset số lần thử lại cho agent tiếp theo
           } else if (agent.role === "tester") {
+            const currentOutput = step > 0 ? outputs[step - 1] : "";
             const testerStream = await client.chat.completions.create({
               model,
               stream: true,
@@ -154,7 +163,7 @@ Lưu ý quan trọng:
                 { role: "system", content: agent.systemPrompt },
                 {
                   role: "user",
-                  content: `Kiểm tra xem kết quả sau có đáp ứng Task: "${plan.proposal.taskPrompt}" không.\nKết quả: ${currentOutput}\n\nTrang đầu tiên trả lời YES hoặc NO.`,
+                  content: `Kiểm tra xem kết quả sau có đáp ứng Task: "${plan.proposal.taskPrompt}" không.\nKết quả: ${currentOutput}\n\nTrang đầu tiên trả lời YES hoặc NO. Nếu NO, hãy giải thích lý do để làm lại.`,
                 },
               ],
             });
@@ -175,14 +184,28 @@ Lưu ý quan trọng:
             onProgress(plan);
 
             if (review.toUpperCase().includes("NO")) {
-              throw new Error(`${agent.name} từ chối: ` + review.slice(0, 100));
+              if (localRetries < plan.proposal.subteamConfig.maxRetries && step > 0) {
+                localRetries++;
+                step--; // Lùi lại 1 bước để worker trước đó làm lại
+                node.liveOutput = `\n[Agent: ${agent.name}] TỪ CHỐI KẾT QUẢ! Yêu cầu làm lại (Lần ${localRetries}/${plan.proposal.subteamConfig.maxRetries})...\n`;
+                onProgress(plan);
+                continue;
+              } else {
+                throw new Error(`${agent.name} từ chối kết quả cuối cùng: ` + review.slice(0, 100));
+              }
+            } else {
+              // Nếu duyệt, output của tester chính là output của worker trước đó (truyền tiếp)
+              outputs[step] = outputs[step - 1];
+              step++;
+              localRetries = 0;
             }
           }
         }
 
+        const finalOutput = outputs[outputs.length - 1] || "";
         node.status = "completed";
         const fileName = `output_${node.id}.md`;
-        fs.writeFileSync(path.join(outputDir, fileName), currentOutput);
+        fs.writeFileSync(path.join(outputDir, fileName), finalOutput);
         node.output = `Đã lưu kết quả tại dp_output/${fileName}`;
       } catch (err: unknown) {
         if (node.retries < plan.proposal.subteamConfig.maxRetries) {
