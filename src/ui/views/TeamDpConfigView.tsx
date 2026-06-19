@@ -178,10 +178,25 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
           <Text>
             {"\n"}- Nhiệm vụ: {proposal.taskPrompt}
           </Text>
-          <Text>
-            - Kiến trúc Tiểu nhóm: Tuần tự {proposal.subteamConfig.agents.length} agents (
-            {proposal.subteamConfig.agents.map((a) => a.name).join(" -> ")})
-          </Text>
+          <Text>- Kiến trúc Tiểu nhóm (Graph): {proposal.subteamConfig.agents.length} Agents</Text>
+          <Box flexDirection="column" marginLeft={2}>
+            <Text color="cyan">Luồng thực thi (Edges):</Text>
+            {proposal.subteamConfig.edges.map((e, idx) => {
+              const fromName = proposal.subteamConfig.agents.find((a) => a.id === e.from)?.name || e.from;
+              const toName =
+                e.to === "END"
+                  ? "Kết Thúc (END)"
+                  : proposal.subteamConfig.agents.find((a) => a.id === e.to)?.name || e.to;
+              let color = "white";
+              if (e.condition === "on_reject") color = "red";
+              if (e.condition === "on_success") color = "green";
+              return (
+                <Text key={idx} color={color}>
+                  • [{fromName}] --({e.condition})--&gt; [{toName}]
+                </Text>
+              );
+            })}
+          </Box>
           <Text>- Số lượng bản sao (Clones): {proposal.dataChunks.length} nodes</Text>
           <Text>- Luồng đồng thời tối đa (Concurrency): {proposal.concurrencyLimit}</Text>
 
