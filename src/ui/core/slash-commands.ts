@@ -29,6 +29,8 @@ export type SlashCommandKind =
   | "raw"
   | "exit"
   | "team"
+  | "team-dp"
+  | "team-wf"
   | "custom-agents"
   | "skills"
   | "skill"
@@ -152,6 +154,22 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
     name: "team",
     label: "/team",
     description: "Team orchestration: create, status, kill",
+    source: "tui",
+    visible: true,
+  },
+  {
+    kind: "team-dp",
+    name: "team-dp",
+    label: "/team-dp",
+    description: "Data Parallelism: Auto-scale subteams for parallel tasks",
+    source: "tui",
+    visible: true,
+  },
+  {
+    kind: "team-wf",
+    name: "team-wf",
+    label: "/team-wf",
+    description: "Workflow: Run sequential tasks with specific agent pipelines",
     source: "tui",
     visible: true,
   },

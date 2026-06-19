@@ -46,8 +46,10 @@ import type {
 } from "../../session";
 import { SessionManager } from "../../session";
 import { SettingsView } from "./SettingsView";
+import { TeamDpConfigView } from "./TeamDpConfigView";
+import { TeamWfConfigView } from "./TeamWfConfigView";
 
-type View = "chat" | "session-list" | "undo" | "mcp-status" | "settings";
+type View = "chat" | "session-list" | "undo" | "mcp-status" | "settings" | "team-dp" | "team-wf";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -387,6 +389,14 @@ function App({
       }
       if (submission.command === "settings") {
         navigateToSubView("settings");
+        return;
+      }
+      if (submission.command === "team-dp") {
+        navigateToSubView("team-dp");
+        return;
+      }
+      if (submission.command === "team-wf") {
+        navigateToSubView("team-wf");
         return;
       }
 
@@ -929,6 +939,10 @@ function App({
             navigateToSubView("chat");
           }}
         />
+      ) : view === "team-dp" ? (
+        <TeamDpConfigView onCancel={() => navigateToSubView("chat")} />
+      ) : view === "team-wf" ? (
+        <TeamWfConfigView onCancel={() => navigateToSubView("chat")} />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
         <AskUserQuestionPrompt
           questions={pendingQuestion.questions}

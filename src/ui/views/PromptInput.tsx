@@ -71,7 +71,18 @@ export type PromptSubmission = {
   selectedSkills?: SkillInfo[];
   permissions?: UserToolPermission[];
   alwaysAllows?: PermissionScope[];
-  command?: "new" | "resume" | "continue" | "undo" | "mcp" | "exit" | "team" | "custom-agents" | "settings";
+  command?:
+    | "new"
+    | "resume"
+    | "continue"
+    | "undo"
+    | "mcp"
+    | "exit"
+    | "team"
+    | "team-dp"
+    | "team-wf"
+    | "custom-agents"
+    | "settings";
 };
 
 export type PromptDraft = {
@@ -730,9 +741,15 @@ export const PromptInput = React.memo(function PromptInput({
       clearUndoRedoStacks();
       return;
     }
-    if (item.kind === "team") {
-      const rawText = buffer.text.trim() || "/team";
-      onSubmit({ text: rawText, imageUrls: [], command: "team" });
+    if (item.kind === "team-dp") {
+      const rawText = buffer.text.trim() || "/team-dp";
+      onSubmit({ text: rawText, imageUrls: [], command: "team-dp" });
+      resetPromptInput();
+      return;
+    }
+    if (item.kind === "team-wf") {
+      const rawText = buffer.text.trim() || "/team-wf";
+      onSubmit({ text: rawText, imageUrls: [], command: "team-wf" });
       resetPromptInput();
       return;
     }
