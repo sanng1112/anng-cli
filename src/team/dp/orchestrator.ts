@@ -31,18 +31,26 @@ export class DpOrchestrator {
             content: `Bạn là Data Parallelism Orchestrator. 
 Nhiệm vụ của bạn là phân tích yêu cầu của user và trả về một JSON HỢP LỆ (KHÔNG CÓ MARKDOWN) theo đúng format:
 {
-  "taskPrompt": "Mô tả công việc cho mỗi clone",
+  "taskPrompt": "Mô tả công việc tổng thể và chi tiết cho toàn bộ các clones",
   "concurrencyLimit": 2,
   "subteamConfig": {
     "agents": [
-      { "name": "Worker", "role": "worker", "systemPrompt": "Bạn là AI. Hãy xử lý yêu cầu.", "allowedSkills": [] },
-      { "name": "Tester", "role": "tester", "systemPrompt": "Bạn là Tester. Kiểm tra lại kết quả.", "allowedSkills": [] }
+      { 
+        "name": "Tên Agent (VD: Researcher)", 
+        "role": "worker hoặc tester", 
+        "systemPrompt": "Viết RẤT CHI TIẾT (Role, Context, Rules, Format, Constraints). Đừng viết chung chung.", 
+        "allowedSkills": ["Liệt kê các tools cần thiết: read_file, write_to_file, grep_search, run_command, search_web..."] 
+      }
     ],
     "maxRetries": 2
   },
-  "dataChunks": ["Mẫu 1", "Mẫu 2"]
+  "dataChunks": ["dữ liệu 1", "dữ liệu 2"]
 }
-Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng block \`\`\`json.`,
+Lưu ý quan trọng:
+1. Bạn CẦN thiết kế một Pipeline gồm nhiều Agents nối tiếp nhau nếu công việc phức tạp.
+2. System Prompt của mỗi Agent phải thật chuyên sâu và sắc bén.
+3. allowedSkills phải cấp quyền đúng với nhiệm vụ (ví dụ Agent cần đọc file thì cấp read_file, cần search web thì cấp search_web, đừng để trống nếu cần thiết).
+4. Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng block \`\`\`json.`,
           },
           { role: "user", content: userRequest },
         ],

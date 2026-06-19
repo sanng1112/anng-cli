@@ -136,8 +136,8 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
   });
 
   return (
-    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="cyan">
-      <Text color="cyan" bold>
+    <Box flexDirection="column" padding={1} borderStyle="round" borderColor="#D4704B">
+      <Text color="#D4704B" bold>
         🚀 Trưởng nhóm Data Parallelism (DP)
       </Text>
 
