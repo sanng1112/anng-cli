@@ -16,10 +16,10 @@ import {
   getCompactPrompt,
   getExtensionRoot,
   getRuntimeContext,
-  getSystemPrompt,
   getTools,
   type ToolDefinition,
 } from "../prompt";
+import { buildSystemPrompt } from "../prompt-engine";
 import {
   ToolExecutor,
   type CreateOpenAIClient,
@@ -641,53 +641,6 @@ ${agentInstructions}
     systemPrompt += "The candidate skills are as follows:\n\n";
     systemPrompt += "```\n" + JSON.stringify(simpleSkills, null, 2) + "\n```";
 
-    // Try proxy model first (cheaper/faster for simple classification)
-    try {
-      const { resolveCurrentSettings } = await import("../settings");
-      const settings = resolveCurrentSettings(this.projectRoot);
-      if (settings.fullPowerMode) {
-        throw new Error("Full-Power Mode enabled. Skipping proxy for skill matching.");
-      }
-      const { createProxyClient } = await import("../common/openai-client");
-      const proxyClient = createProxyClient(this.projectRoot);
-      if (proxyClient) {
-        const { resolveCurrentSettings } = await import("../settings");
-        const settings = resolveCurrentSettings(this.projectRoot);
-        const res = await proxyClient.chat.completions.create(
-          {
-            model: settings.proxyModel || "deepseek-v4-flash-free",
-            temperature: 0.1,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            response_format: { type: "json_object" },
-          },
-          options?.signal ? { signal: options.signal } : undefined
-        );
-        this.throwIfAborted(options?.signal);
-
-        const rawContent = res.choices?.[0]?.message?.content;
-        const content = typeof rawContent === "string" ? rawContent : "";
-        if (content) {
-          const parsed = JSON.parse(content);
-          if (parsed && Array.isArray(parsed.skillNames)) {
-            return parsed.skillNames.filter(
-              (skillName: unknown): skillName is string =>
-                typeof skillName === "string" && candidateSkillNames.has(skillName)
-            );
-          }
-        }
-        return [];
-      }
-    } catch (error) {
-      if (this.isAbortLikeError(error) || options?.signal?.aborted) {
-        throw error;
-      }
-      // Fallback to main model below
-    }
-
-    // Fallback: use main model if proxy is unavailable
     const { client, model, baseURL, debugLogEnabled } = this.createOpenAIClient();
     if (!client) {
       return [];
@@ -1073,22 +1026,29 @@ ${agentInstructions}
     }
 
     const promptToolOptions = this.getPromptToolOptions();
-    const systemPrompt = getSystemPrompt(this.projectRoot, promptToolOptions);
-    const systemMessage = buildSysMsg(sessionId, systemPrompt);
+    const mode = this.executionContext.mode === "planning" ? "plan" : "act";
+    const promptResult = buildSystemPrompt({
+      mode,
+      cwd: this.projectRoot,
+    });
+    const systemMessage = buildSysMsg(sessionId, promptResult.systemPrompt);
     this.appendSessionMessage(sessionId, systemMessage);
 
+    // Capabilities (static content — keep early for prefix caching)
     const capabilityPrompt = globalCapabilityRegistry.buildPrompt(this.executionContext);
     if (capabilityPrompt) {
       const capabilityMessage = buildSysMsg(sessionId, capabilityPrompt);
       this.appendSessionMessage(sessionId, capabilityMessage);
     }
 
+    // Runtime context / workspace metadata (model-specific — keep after capabilities)
     const runtimeContextPrompt = getRuntimeContext(this.projectRoot, promptToolOptions.model);
     if (runtimeContextPrompt) {
       const runtimeContextMessage = buildSysMsg(sessionId, runtimeContextPrompt);
       this.appendSessionMessage(sessionId, runtimeContextMessage);
     }
 
+    // Agent instructions (AGENTS.md) as a separate system layer
     const agentInstructions = this.loadAgentInstructions();
     if (agentInstructions) {
       const instructionsMessage = buildSysMsg(sessionId, agentInstructions);
@@ -1101,10 +1061,13 @@ ${agentInstructions}
 
     if (userPrompt.text) {
       const skills = await this.listSkills();
-      const skillNames = await this.identifyMatchingSkillNames(skills, userPrompt.text, { signal });
-      this.throwIfAborted(signal);
-      const skillSet = new Set(skillNames);
-      const matchedSkill = skills.filter((skill) => skillSet.has(skill.name));
+      let matchedSkill: SkillInfo[] = [];
+      if (skills.length > 0) {
+        const skillNames = await this.identifyMatchingSkillNames(skills, userPrompt.text, { signal });
+        this.throwIfAborted(signal);
+        const skillSet = new Set(skillNames);
+        matchedSkill = skills.filter((skill) => skillSet.has(skill.name));
+      }
       if (Array.isArray(userPrompt.skills)) {
         userPrompt.skills.push(...matchedSkill);
       } else if (matchedSkill.length > 0) {
@@ -1166,10 +1129,13 @@ ${agentInstructions}
 
     if (userPrompt.text) {
       const skills = await this.listSkills(sessionId);
-      const skillNames = await this.identifyMatchingSkillNames(skills, userPrompt.text, { signal, sessionId });
-      this.throwIfAborted(signal);
-      const skillSet = new Set(skillNames);
-      const matchedSkill = skills.filter((skill) => skillSet.has(skill.name));
+      let matchedSkill: SkillInfo[] = [];
+      if (skills.length > 0) {
+        const skillNames = await this.identifyMatchingSkillNames(skills, userPrompt.text, { signal, sessionId });
+        this.throwIfAborted(signal);
+        const skillSet = new Set(skillNames);
+        matchedSkill = skills.filter((skill) => skillSet.has(skill.name));
+      }
       if (Array.isArray(userPrompt.skills)) {
         userPrompt.skills.push(...matchedSkill);
       } else if (matchedSkill.length > 0) {
@@ -1214,7 +1180,7 @@ ${agentInstructions}
       this.onAssistantMessage(
         buildAsstMsg(
           sessionId,
-          "API key not found. Please configure ~/.anng/settings.json or ./.anng/settings.json.",
+          "API key not found. Please configure your API key using the /settings command or set it in ~/.anng/settings.json.",
           null
         ),
         false
@@ -1244,7 +1210,7 @@ ${agentInstructions}
     this.sessionControllers.set(sessionId, sessionController);
 
     try {
-      const maxIterations = 80000; // about 1K RMB cost
+      const maxIterations = this.maxTurns || 100;
       let toolCalls: unknown[] | null = null;
 
       for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -1282,6 +1248,8 @@ ${agentInstructions}
           }
         }
 
+        this.truncateOldToolMessages(sessionId);
+
         const sessionMessages = this.listSessionMessages(sessionId);
         const compactionDecision = shouldCompactContext({
           messages: sessionMessages,
@@ -1298,7 +1266,7 @@ ${agentInstructions}
           await this.compactSession(sessionId, compactionDecision, sessionController.signal);
         }
 
-        let activeMessages = this.listSessionMessages(sessionId);
+        const activeMessages = this.listSessionMessages(sessionId);
         let pinnedSnippets = getSessionSnippets(sessionId);
         if (pinnedSnippets.length > 0) {
           const MAX_WORKSPACE_CHARS = 40000;
@@ -1340,16 +1308,9 @@ ${agentInstructions}
             updateTime: new Date().toISOString(),
           };
 
-          const firstNonSystemIndex = activeMessages.findIndex((m) => m.role !== "system");
-          if (firstNonSystemIndex >= 0) {
-            activeMessages = [
-              ...activeMessages.slice(0, firstNonSystemIndex),
-              workspaceMessage,
-              ...activeMessages.slice(firstNonSystemIndex),
-            ];
-          } else {
-            activeMessages = [...activeMessages, workspaceMessage];
-          }
+          // Append workspaceMessage to the END of activeMessages to preserve prefix caching
+          // for all preceding turns. If inserted in the middle, it breaks the DeepSeek prefix cache.
+          activeMessages.push(workspaceMessage);
         }
 
         // --- Cache Shock Absorber ---
@@ -1533,6 +1494,52 @@ ${agentInstructions}
         this.sessionControllers.delete(sessionId);
       }
       this.maybeNotifyTaskCompletion(sessionId, notify, startedAt, env);
+    }
+  }
+
+  private truncateOldToolMessages(sessionId: string): void {
+    const messages = this.listSessionMessages(sessionId);
+    const activeMessages = messages.filter((m) => !m.compacted);
+
+    let assistantMessageCount = 0;
+    const cutoffAssistantCount = 2; // Keep the last 2 assistant replies intact
+
+    let cutoffId: string | null = null;
+    for (let i = activeMessages.length - 1; i >= 0; i--) {
+      if (activeMessages[i].role === "assistant" && activeMessages[i].content) {
+        assistantMessageCount++;
+        if (assistantMessageCount > cutoffAssistantCount) {
+          cutoffId = activeMessages[i].id;
+          break;
+        }
+      }
+    }
+
+    if (!cutoffId) return;
+
+    const cutoffIndex = messages.findIndex((m) => m.id === cutoffId);
+    if (cutoffIndex === -1) return;
+
+    let modified = false;
+    for (let i = 0; i <= cutoffIndex; i++) {
+      const msg = messages[i];
+      if (msg.role === "tool" && !msg.compacted && typeof msg.content === "string") {
+        if (msg.content.length > 2000) {
+          const truncatedContent =
+            msg.content.substring(0, 500) +
+            "\n\n... [TRUNCATED: Result was too long and has been archived to save tokens. If you need this data again, you must re-run the tool.]";
+          messages[i] = {
+            ...msg,
+            content: truncatedContent,
+            updateTime: new Date().toISOString(),
+          };
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      this.saveSessionMessages(sessionId, messages);
     }
   }
 
@@ -2188,7 +2195,13 @@ ${agentInstructions}
 
   private renderInitCommandPrompt(): string {
     const templatePath = path.join(getExtensionRoot(), "templates", "prompts", "init_command.md");
-    const template = fs.readFileSync(templatePath, "utf8");
+    let template =
+      "Generate a file named ./AGENTS.md that serves as a contributor guide for this repository. Follow the repository's code style and rules. {{agents_instruction}}";
+    try {
+      template = fs.readFileSync(templatePath, "utf8");
+    } catch {
+      // ignore
+    }
     const agentsMdFile = this.getEffectiveProjectAgentsMdFile();
     const instruction =
       agentsMdFile == null
@@ -2429,10 +2442,13 @@ ${agentInstructions}
     this.appendSessionMessage(sessionId, userMessage);
     if (userPrompt.text) {
       const skills = await this.listSkills(sessionId);
-      const skillNames = await this.identifyMatchingSkillNames(skills, userPrompt.text, { signal, sessionId });
-      this.throwIfAborted(signal);
-      const skillSet = new Set(skillNames);
-      const matchedSkill = skills.filter((skill) => skillSet.has(skill.name));
+      let matchedSkill: SkillInfo[] = [];
+      if (skills.length > 0) {
+        const skillNames = await this.identifyMatchingSkillNames(skills, userPrompt.text, { signal, sessionId });
+        this.throwIfAborted(signal);
+        const skillSet = new Set(skillNames);
+        matchedSkill = skills.filter((skill) => skillSet.has(skill.name));
+      }
       if (Array.isArray(userPrompt.skills)) {
         userPrompt.skills.push(...matchedSkill);
       } else if (matchedSkill.length > 0) {

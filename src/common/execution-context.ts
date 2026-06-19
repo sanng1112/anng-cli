@@ -1,4 +1,4 @@
-export type OperatingMode = "planning" | "autonomous" | "interactive" | "team";
+export type OperatingMode = "planning" | "autonomous" | "interactive";
 export type ExecutionPhase = "initialized" | "planning" | "waiting_approval" | "executing" | "completed" | "failed";
 
 export interface PermissionSettings {

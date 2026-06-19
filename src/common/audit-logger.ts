@@ -42,6 +42,24 @@ export class AuditEventLogger {
         // ignore
       }
     }
+    this.cleanupOldLogs();
+  }
+
+  private cleanupOldLogs(): void {
+    try {
+      const files = fs
+        .readdirSync(this.logDir)
+        .filter((f) => f.endsWith(".log"))
+        .sort();
+      if (files.length > 14) {
+        const toDelete = files.slice(0, files.length - 14);
+        for (const file of toDelete) {
+          fs.unlinkSync(path.join(this.logDir, file));
+        }
+      }
+    } catch {
+      // ignore
+    }
   }
 
   private getLogFileStream(): fs.WriteStream | null {

@@ -865,6 +865,7 @@ export const PromptInput = React.memo(function PromptInput({
         onClose={() => setShowModelDropdown(false)}
         onModelConfigChange={onModelConfigChange}
         onStatusMessage={setStatusMessage}
+        projectRoot={projectRoot}
       />
       <FileMentionMenu
         open={showFileMentionMenu}

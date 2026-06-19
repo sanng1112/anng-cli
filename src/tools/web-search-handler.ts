@@ -106,12 +106,10 @@ async function executeConfiguredWebSearch(
     };
   }
 
-  const summarizedOutput = output ? await summarizeWebSearchResult(query, output, context.projectRoot) : undefined;
-
   return {
     ok: true,
     name: "WebSearch",
-    output: summarizedOutput,
+    output: output ? output.slice(0, MAX_OUTPUT_CHARS) : undefined,
     metadata: {
       exitCode: execution.exitCode,
       signal: execution.signal,
@@ -129,7 +127,7 @@ async function executeDefaultWebSearch(
   try {
     const prepared = await prepareSearchQuery(query, llmContext);
     const rawOutput = await runDefaultWebSearchRequest(prepared.resolvedQuery, llmContext.machineId, context);
-    const output = await summarizeWebSearchResult(query, rawOutput, context.projectRoot);
+    const output = rawOutput.slice(0, MAX_OUTPUT_CHARS);
 
     return {
       ok: true,
@@ -388,39 +386,4 @@ function buildCommandError(exitCode: number | null, signal: string | null): stri
     return `WebSearch command failed with exit code ${exitCode}.`;
   }
   return "WebSearch command failed.";
-}
-
-async function summarizeWebSearchResult(query: string, content: string, projectRoot: string): Promise<string> {
-  if (content.length <= 4000) return content; // Not that long
-
-  try {
-    const { createProxyClient } = await import("../common/openai-client");
-    const { resolveCurrentSettings } = await import("../settings");
-    const client = createProxyClient(projectRoot);
-    const settings = resolveCurrentSettings(projectRoot);
-    if (client) {
-      const res = await client.chat.completions.create({
-        model: settings.proxyModel || "deepseek-v4-flash-free",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a web scraper assistant. You will be given a raw search result or documentation text. Extract the exact information, code snippets, and API signatures that answer the user's query. Discard all noisy menus, footers, advertisements, and irrelevant text. Keep the summary focused and concise.",
-          },
-          { role: "user", content: `Query: ${query}\n\nWeb Content:\n${content.slice(0, 500000)}` },
-        ],
-      });
-      const compressed = res.choices[0]?.message?.content || "";
-      if (compressed) {
-        return compressed + "\n\n(Note: Filtered by Proxy Model)";
-      }
-    }
-  } catch (_err) {
-    // Fallback to original text truncating
-  }
-
-  if (content.length > MAX_OUTPUT_CHARS) {
-    return content.slice(0, MAX_OUTPUT_CHARS) + "\n...[OUTPUT TRUNCATED]...";
-  }
-  return content;
 }

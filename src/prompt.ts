@@ -472,27 +472,6 @@ export function getTools(_options: PromptToolOptions = {}, externalTools: ToolDe
     {
       type: "function",
       function: {
-        name: "ProxyRead",
-        description:
-          "Uses the Proxy Model to read a very large file and extract only the relevant logic, functions, or classes based on your query, instead of returning thousands of lines of code. Saves a massive amount of tokens.",
-        parameters: {
-          type: "object",
-          properties: {
-            file_path: { type: "string", description: "Absolute path to the large file." },
-            query: {
-              type: "string",
-              description:
-                "What you are looking for in the file (e.g. 'find the login function' or 'extract the database schema').",
-            },
-          },
-          required: ["file_path", "query"],
-          additionalProperties: false,
-        },
-      },
-    },
-    {
-      type: "function",
-      function: {
         name: "bash",
         description: "Execute shell commands in a persistent bash session.",
         parameters: {
@@ -733,14 +712,7 @@ export function getTools(_options: PromptToolOptions = {}, externalTools: ToolDe
   }
 
   if (_options.planMode) {
-    const allowedPlanTools = new Set([
-      "AnalyzeProject",
-      "ProxyRead",
-      "AskUserQuestion",
-      "UpdatePlan",
-      "read",
-      "WebSearch",
-    ]);
+    const allowedPlanTools = new Set(["AnalyzeProject", "AskUserQuestion", "UpdatePlan", "read", "WebSearch"]);
     return tools.filter((t) => allowedPlanTools.has(t.function.name));
   }
 

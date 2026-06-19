@@ -3,7 +3,14 @@ import { DEFAULT_MAX_TURNS } from "./common/constants";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { TeamSettings } from "./team/types";
+
+// ==========================================================================
+// Types
+// ==========================================================================
+
+// -- Environment helpers ---------------------------------------------------
+
+export type SettingsProcessEnv = Record<string, string | undefined>;
 
 export type DeepcodingEnv = Record<string, string | undefined> & {
   MODEL?: string;
@@ -16,19 +23,22 @@ export type DeepcodingEnv = Record<string, string | undefined> & {
   TELEMETRY_ENABLED?: string;
   GEMINI_API_KEY?: string;
   GEMINI_BASE_URL?: string;
-  PROXY_API_KEY?: string;
-  PROXY_BASE_URL?: string;
-  PROXY_MODEL?: string;
   FULL_POWER_MODE?: string;
 };
 
+// -- Reasoning -------------------------------------------------------------
+
 export type ReasoningEffort = "high" | "max";
+
+// -- MCP -------------------------------------------------------------------
 
 export type McpServerConfig = {
   command: string;
   args?: string[];
   env?: Record<string, string>;
 };
+
+// -- Permissions -----------------------------------------------------------
 
 export type PermissionScope =
   | "read-in-cwd"
@@ -40,8 +50,7 @@ export type PermissionScope =
   | "query-git-log"
   | "mutate-git-log"
   | "network"
-  | "mcp"
-  | "team";
+  | "mcp";
 
 export type PermissionDefaultMode = "allowAll" | "askAll";
 
@@ -52,7 +61,19 @@ export type PermissionSettings = {
   defaultMode?: PermissionDefaultMode;
 };
 
+// -- Skills ----------------------------------------------------------------
+
 export type EnabledSkillsSettings = Record<string, boolean>;
+
+// -- User-facing model selection -------------------------------------------
+
+export type ModelConfigSelection = {
+  model: string;
+  thinkingEnabled: boolean;
+  reasoningEffort: ReasoningEffort;
+};
+
+// -- Raw settings (what user writes in JSON) -------------------------------
 
 export type DeepcodingSettings = {
   env?: DeepcodingEnv;
@@ -67,20 +88,16 @@ export type DeepcodingSettings = {
   mcpServers?: Record<string, McpServerConfig>;
   permissions?: PermissionSettings;
   enabledSkills?: EnabledSkillsSettings;
-  // Harness properties (headless CI/CD execution)
   autoAccept?: boolean;
   planMode?: boolean;
-  // Multi-provider support
+  maxTurns?: number;
   geminiApiKey?: string;
   geminiBaseURL?: string;
-  proxyApiKey?: string;
-  proxyBaseURL?: string;
-  proxyModel?: string;
-  // Team orchestration
-  team?: TeamSettings;
   autoLinter?: string;
   fullPowerMode?: boolean;
 };
+
+// -- Resolved settings (after merging sources) -----------------------------
 
 export type ResolvedDeepcodingSettings = {
   env: Record<string, string>;
@@ -97,58 +114,146 @@ export type ResolvedDeepcodingSettings = {
   mcpServers?: Record<string, McpServerConfig>;
   permissions: Required<PermissionSettings>;
   enabledSkills: EnabledSkillsSettings;
-  // Harness properties (headless CI/CD execution)
   autoAccept: boolean;
   planMode: boolean;
   maxTurns: number;
   headlessPrompt?: string;
   fullPowerMode: boolean;
-  // Multi-provider support
   geminiApiKey?: string;
   geminiBaseURL?: string;
-  proxyApiKey?: string;
-  proxyBaseURL?: string;
-  proxyModel?: string;
   autoLinter?: string;
-  team?: TeamSettings;
 };
 
-export type ModelConfigSelection = {
-  model: string;
-  thinkingEnabled: boolean;
-  reasoningEffort: ReasoningEffort;
+// ==========================================================================
+// Default constants
+// ==========================================================================
+
+export const DEFAULT_MODEL = "deepseek-v4-pro";
+export const DEFAULT_BASE_URL = "https://opencode.ai/zen/v1";
+
+// ==========================================================================
+// Resolution context (input sources for merging)
+// ==========================================================================
+
+type ResolutionSources = {
+  systemEnv: Record<string, string>;
+  projectSettings?: DeepcodingSettings | null;
+  projectEnv: Record<string, string>;
+  userSettings?: DeepcodingSettings | null;
+  userEnv: Record<string, string>;
 };
 
-export type SettingsProcessEnv = Record<string, string | undefined>;
+// ==========================================================================
+// Generic fallback helpers
+// ==========================================================================
+
+function firstString(sources: ResolutionSources, key: string, settingsKey: string, fallback = ""): string {
+  return (
+    trimString(sources.systemEnv[key]) ||
+    trimString(sources.projectSettings?.[settingsKey as keyof DeepcodingSettings]) ||
+    trimString(sources.projectEnv[key]) ||
+    trimString(sources.userSettings?.[settingsKey as keyof DeepcodingSettings]) ||
+    trimString(sources.userEnv[key]) ||
+    fallback
+  );
+}
+
+function firstBoolean(sources: ResolutionSources, key: string, settingsKey: string, fallback: boolean): boolean;
+function firstBoolean(
+  sources: ResolutionSources,
+  key: string,
+  settingsKey: string,
+  fallback?: boolean
+): boolean | undefined;
+function firstBoolean(
+  sources: ResolutionSources,
+  key: string,
+  settingsKey: string,
+  fallback?: boolean
+): boolean | undefined {
+  return (
+    parseBoolean(sources.systemEnv[key]) ??
+    parseBoolean(sources.projectSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    parseBoolean(sources.projectEnv[key]) ??
+    parseBoolean(sources.userSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    parseBoolean(sources.userEnv[key]) ??
+    fallback
+  );
+}
+
+function firstReasoning(
+  sources: ResolutionSources,
+  key: string,
+  settingsKey: string,
+  fallback: ReasoningEffort
+): ReasoningEffort;
+function firstReasoning(
+  sources: ResolutionSources,
+  key: string,
+  settingsKey: string,
+  fallback?: ReasoningEffort
+): ReasoningEffort | undefined;
+function firstReasoning(
+  sources: ResolutionSources,
+  key: string,
+  settingsKey: string,
+  fallback?: ReasoningEffort
+): ReasoningEffort | undefined {
+  return (
+    resolveReasoningEffort(sources.systemEnv[key]) ??
+    resolveReasoningEffort(sources.projectSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    resolveReasoningEffort(sources.projectEnv[key]) ??
+    resolveReasoningEffort(sources.userSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    resolveReasoningEffort(sources.userEnv[key]) ??
+    fallback
+  );
+}
+
+function firstTemperature(sources: ResolutionSources, key: string, settingsKey: string): number | undefined {
+  return (
+    parseTemperature(sources.systemEnv[key]) ??
+    parseTemperature(sources.projectSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    parseTemperature(sources.projectEnv[key]) ??
+    parseTemperature(sources.userSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    parseTemperature(sources.userEnv[key])
+  );
+}
+
+function firstInteger(sources: ResolutionSources, key: string, settingsKey: string, fallback: number): number {
+  const val =
+    parseInteger(sources.systemEnv[key]) ??
+    parseInteger(sources.projectSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    parseInteger(sources.projectEnv[key]) ??
+    parseInteger(sources.userSettings?.[settingsKey as keyof DeepcodingSettings]) ??
+    parseInteger(sources.userEnv[key]);
+  return val !== undefined ? val : fallback;
+}
+
+// ==========================================================================
+// Permissions normalization
+// ==========================================================================
 
 function resolveReasoningEffort(value: unknown): ReasoningEffort | undefined {
   return value === "high" || value === "max" ? value : undefined;
 }
 
 function parseBoolean(value: unknown): boolean | undefined {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "enabled", "yes", "on"].includes(normalized)) {
-    return true;
-  }
-  if (["0", "false", "disabled", "no", "off"].includes(normalized)) {
-    return false;
-  }
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return undefined;
+  const n = value.trim().toLowerCase();
+  if (["1", "true", "enabled", "yes", "on"].includes(n)) return true;
+  if (["0", "false", "disabled", "no", "off"].includes(n)) return false;
   return undefined;
 }
 
 function parseTemperature(value: unknown): number | undefined {
   const raw = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
-  if (!Number.isFinite(raw) || raw < 0 || raw > 2) {
-    return undefined;
-  }
-  return raw;
+  return Number.isFinite(raw) && raw >= 0 && raw <= 2 ? raw : undefined;
+}
+
+function parseInteger(value: unknown): number | undefined {
+  const raw = typeof value === "number" ? value : typeof value === "string" && value.trim() ? parseInt(value, 10) : NaN;
+  return Number.isInteger(raw) && raw > 0 ? raw : undefined;
 }
 
 function trimString(value: unknown): string {
@@ -206,7 +311,7 @@ function normalizePermissions(settings: PermissionSettings | null | undefined): 
     allow: normalizePermissionList(settings?.allow),
     deny: normalizePermissionList(settings?.deny),
     ask: normalizePermissionList(settings?.ask),
-    defaultMode: normalizePermissionDefaultMode(settings?.defaultMode) ?? "allowAll",
+    defaultMode: normalizePermissionDefaultMode(settings?.defaultMode) ?? "askAll",
   };
 }
 
@@ -224,7 +329,7 @@ function mergePermissions(
       ? projectPermissions.defaultMode
       : userSettings?.permissions
         ? userPermissions.defaultMode
-        : "allowAll",
+        : "askAll",
   };
 }
 
@@ -353,150 +458,34 @@ export function resolveSettingsSources(
   const userEnv = normalizeEnv(userSettings?.env);
   const projectEnv = normalizeEnv(projectSettings?.env);
   const systemEnv = collectAnngEnv(processEnv);
-  const env = {
-    ...userEnv,
-    ...projectEnv,
-    ...systemEnv,
-  };
+  const src: ResolutionSources = { systemEnv, projectSettings, projectEnv, userSettings, userEnv };
 
-  const model =
-    trimString(systemEnv.MODEL) ||
-    trimString(projectSettings?.model) ||
-    trimString(projectEnv.MODEL) ||
-    trimString(userSettings?.model) ||
-    trimString(userEnv.MODEL) ||
-    defaults.model;
-
-  const thinkingEnabled =
-    parseBoolean(systemEnv.THINKING_ENABLED) ??
-    parseBoolean(projectSettings?.thinkingEnabled) ??
-    parseBoolean(projectEnv.THINKING_ENABLED) ??
-    parseBoolean(userSettings?.thinkingEnabled) ??
-    parseBoolean(userEnv.THINKING_ENABLED) ??
-    defaultsToThinkingMode(model);
-
-  const reasoningEffort =
-    resolveReasoningEffort(systemEnv.REASONING_EFFORT) ??
-    resolveReasoningEffort(projectSettings?.reasoningEffort) ??
-    resolveReasoningEffort(projectEnv.REASONING_EFFORT) ??
-    resolveReasoningEffort(userSettings?.reasoningEffort) ??
-    resolveReasoningEffort(userEnv.REASONING_EFFORT) ??
-    "max";
-
-  const temperature =
-    parseTemperature(systemEnv.TEMPERATURE) ??
-    parseTemperature(projectSettings?.temperature) ??
-    parseTemperature(projectEnv.TEMPERATURE) ??
-    parseTemperature(userSettings?.temperature) ??
-    parseTemperature(userEnv.TEMPERATURE);
-
-  const debugLogEnabled =
-    parseBoolean(systemEnv.DEBUG_LOG_ENABLED) ??
-    parseBoolean(projectSettings?.debugLogEnabled) ??
-    parseBoolean(projectEnv.DEBUG_LOG_ENABLED) ??
-    parseBoolean(userSettings?.debugLogEnabled) ??
-    parseBoolean(userEnv.DEBUG_LOG_ENABLED) ??
-    false;
-
-  const telemetryEnabled =
-    parseBoolean(systemEnv.TELEMETRY_ENABLED) ??
-    parseBoolean(projectSettings?.telemetryEnabled) ??
-    parseBoolean(projectEnv.TELEMETRY_ENABLED) ??
-    parseBoolean(userSettings?.telemetryEnabled) ??
-    parseBoolean(userEnv.TELEMETRY_ENABLED) ??
-    true;
-
-  const notify =
-    trimString(systemEnv.NOTIFY) || trimString(projectSettings?.notify) || trimString(userSettings?.notify) || "";
-  const webSearchTool =
-    trimString(systemEnv.WEB_SEARCH_TOOL) ||
-    trimString(projectSettings?.webSearchTool) ||
-    trimString(userSettings?.webSearchTool) ||
-    "";
-
-  const autoLinter =
-    trimString(systemEnv.AUTO_LINTER) ||
-    trimString(projectSettings?.autoLinter) ||
-    trimString(userSettings?.autoLinter) ||
-    "";
+  const env = { ...userEnv, ...projectEnv, ...systemEnv };
+  const model = firstString(src, "MODEL", "model", defaults.model);
 
   return {
     env,
     apiKey: trimString(env.API_KEY) || undefined,
     baseURL: trimString(env.BASE_URL) || defaults.baseURL,
     model,
-    temperature,
-    thinkingEnabled,
-    reasoningEffort,
-    debugLogEnabled,
-    telemetryEnabled,
-    notify: notify || undefined,
-    webSearchTool: webSearchTool || undefined,
-    autoLinter: autoLinter || undefined,
+    temperature: firstTemperature(src, "TEMPERATURE", "temperature"),
+    thinkingEnabled: firstBoolean(src, "THINKING_ENABLED", "thinkingEnabled", defaultsToThinkingMode(model)),
+    reasoningEffort: firstReasoning(src, "REASONING_EFFORT", "reasoningEffort", "max"),
+    debugLogEnabled: firstBoolean(src, "DEBUG_LOG_ENABLED", "debugLogEnabled", false),
+    telemetryEnabled: firstBoolean(src, "TELEMETRY_ENABLED", "telemetryEnabled", false),
+    notify: firstString(src, "NOTIFY", "notify") || undefined,
+    webSearchTool: firstString(src, "WEB_SEARCH_TOOL", "webSearchTool") || undefined,
+    autoLinter: firstString(src, "AUTO_LINTER", "autoLinter") || undefined,
     mcpServers: mergeMcpServers(userSettings, projectSettings, userEnv, projectEnv, systemEnv),
     permissions: mergePermissions(userSettings, projectSettings),
     enabledSkills: mergeEnabledSkills(userSettings, projectSettings),
-    // Harness defaults
-    autoAccept:
-      parseBoolean(systemEnv.AUTO_ACCEPT) ??
-      parseBoolean(projectSettings?.autoAccept) ??
-      parseBoolean(projectEnv.AUTO_ACCEPT) ??
-      parseBoolean(userSettings?.autoAccept) ??
-      parseBoolean(userEnv.AUTO_ACCEPT) ??
-      false,
-    planMode:
-      parseBoolean(systemEnv.PLAN_MODE) ??
-      parseBoolean(projectSettings?.planMode) ??
-      parseBoolean(projectEnv.PLAN_MODE) ??
-      parseBoolean(userSettings?.planMode) ??
-      parseBoolean(userEnv.PLAN_MODE) ??
-      false,
-    maxTurns: DEFAULT_MAX_TURNS,
+    autoAccept: firstBoolean(src, "AUTO_ACCEPT", "autoAccept", false),
+    planMode: firstBoolean(src, "PLAN_MODE", "planMode", false),
+    maxTurns: firstInteger(src, "MAX_TURNS", "maxTurns", DEFAULT_MAX_TURNS),
     headlessPrompt: undefined,
-    // Multi-provider
-    geminiApiKey:
-      trimString(systemEnv.GEMINI_API_KEY) ||
-      trimString(projectSettings?.geminiApiKey) ||
-      trimString(projectEnv.GEMINI_API_KEY) ||
-      trimString(userSettings?.geminiApiKey) ||
-      trimString(userEnv.GEMINI_API_KEY) ||
-      "",
-    geminiBaseURL:
-      trimString(systemEnv.GEMINI_BASE_URL) ||
-      trimString(projectSettings?.geminiBaseURL) ||
-      trimString(projectEnv.GEMINI_BASE_URL) ||
-      trimString(userSettings?.geminiBaseURL) ||
-      trimString(userEnv.GEMINI_BASE_URL) ||
-      "",
-    proxyApiKey:
-      trimString(systemEnv.PROXY_API_KEY) ||
-      trimString(projectSettings?.proxyApiKey) ||
-      trimString(projectEnv.PROXY_API_KEY) ||
-      trimString(userSettings?.proxyApiKey) ||
-      trimString(userEnv.PROXY_API_KEY) ||
-      undefined,
-    proxyBaseURL:
-      trimString(systemEnv.PROXY_BASE_URL) ||
-      trimString(projectSettings?.proxyBaseURL) ||
-      trimString(projectEnv.PROXY_BASE_URL) ||
-      trimString(userSettings?.proxyBaseURL) ||
-      trimString(userEnv.PROXY_BASE_URL) ||
-      "https://opencode.ai/zen/v1",
-    proxyModel:
-      trimString(systemEnv.PROXY_MODEL) ||
-      trimString(projectSettings?.proxyModel) ||
-      trimString(projectEnv.PROXY_MODEL) ||
-      trimString(userSettings?.proxyModel) ||
-      trimString(userEnv.PROXY_MODEL) ||
-      "deepseek-v4-flash-free",
-    team: userSettings?.team ?? projectSettings?.team,
-    fullPowerMode:
-      parseBoolean(systemEnv.FULL_POWER_MODE) ??
-      parseBoolean(projectSettings?.fullPowerMode) ??
-      parseBoolean(projectEnv.FULL_POWER_MODE) ??
-      parseBoolean(userSettings?.fullPowerMode) ??
-      parseBoolean(userEnv.FULL_POWER_MODE) ??
-      false,
+    fullPowerMode: firstBoolean(src, "FULL_POWER_MODE", "fullPowerMode", false),
+    geminiApiKey: firstString(src, "GEMINI_API_KEY", "geminiApiKey") || undefined,
+    geminiBaseURL: firstString(src, "GEMINI_BASE_URL", "geminiBaseURL") || undefined,
   };
 }
 
@@ -524,10 +513,8 @@ export function applyModelConfigSelection(
     return { settings: next, changed: false };
   }
 
-  if (selected.model !== current.model || Object.prototype.hasOwnProperty.call(next, "model")) {
+  if (selected.model !== current.model) {
     next.model = selected.model;
-  } else {
-    delete next.model;
   }
 
   next.thinkingEnabled = selected.thinkingEnabled;
@@ -537,13 +524,6 @@ export function applyModelConfigSelection(
 
   return { settings: next, changed: true };
 }
-
-// ---------------------------------------------------------------------------
-// Default constants
-// ---------------------------------------------------------------------------
-
-export const DEFAULT_MODEL = "deepseek-v4-pro";
-export const DEFAULT_BASE_URL = "https://opencode.ai/zen/go/v1";
 
 // ---------------------------------------------------------------------------
 // Settings file I/O

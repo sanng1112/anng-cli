@@ -1,7 +1,7 @@
 {
   "name": "anng-cli",
   "version": "0.1.29",
-  "description": "ANNG CLI CLI - Vibe coding for the deepseek-v4 model in your terminal",
+  "description": "ANNG CLI - Vibe coding for the deepseek-v4 model in your terminal",
   "license": "MIT",
   "type": "module",
   "repository": {

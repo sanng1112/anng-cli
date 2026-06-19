@@ -20,6 +20,7 @@ test("buildSlashCommands prefixes built-ins before skills", () => {
   assert.equal(items[firstSkillIndex].name, "skill-writer");
   const builtinNames = items.filter((i) => i.kind !== "skill").map((i) => i.name);
   assert.deepEqual(builtinNames, [
+    "settings",
     "skills",
     "model",
     "new",
@@ -32,7 +33,6 @@ test("buildSlashCommands prefixes built-ins before skills", () => {
     "exit",
     "team",
     "custom-agents",
-    "settings",
   ]);
 });
 

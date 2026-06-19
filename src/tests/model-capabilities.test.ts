@@ -13,6 +13,11 @@ describe("DEEPSEEK_V4_MODELS", () => {
     assert.equal(DEEPSEEK_V4_MODELS.has("deepseek-v4-pro"), true);
   });
 
+  it("includes free variants", () => {
+    assert.equal(DEEPSEEK_V4_MODELS.has("deepseek-v4-flash-free"), true);
+    assert.equal(DEEPSEEK_V4_MODELS.has("deepseek-v4-pro-free"), true);
+  });
+
   it("does not contain other models", () => {
     assert.equal(DEEPSEEK_V4_MODELS.has("gpt-4"), false);
     assert.equal(DEEPSEEK_V4_MODELS.has("gemini-2.5-flash"), false);
@@ -31,6 +36,8 @@ describe("defaultsToThinkingMode", () => {
   it("returns true for deepseek V4 models", () => {
     assert.equal(defaultsToThinkingMode("deepseek-v4-pro"), true);
     assert.equal(defaultsToThinkingMode("deepseek-v4-flash"), true);
+    assert.equal(defaultsToThinkingMode("deepseek-v4-flash-free"), true);
+    assert.equal(defaultsToThinkingMode("deepseek-v4-pro-free"), true);
   });
 
   it("returns false for non-V4 models", () => {

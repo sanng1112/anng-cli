@@ -25,7 +25,7 @@ const SHORTCUT_TIPS = [
   { label: "Ctrl+R", description: "Open raw display mode selection" },
   { label: "Esc", description: "Interrupt the current model turn" },
   { label: "/", description: "Open the skills and commands menu" },
-  { label: "Ctrl+D twice", description: "Quit ANNG CLI CLI" },
+  { label: "Ctrl+D twice", description: "Quit ANNG CLI" },
 ];
 
 export function WelcomeScreen({ projectRoot, settings, skills, width }: WelcomeScreenProps): React.ReactElement {
@@ -57,7 +57,7 @@ export function WelcomeScreen({ projectRoot, settings, skills, width }: WelcomeS
             paddingX={1}
           >
             <Box flexGrow={1} marginBottom={compact ? 1 : 0}>
-              <Text color={"#D4704Be6"}>{">"}_ ANNG CLI </Text>
+              <Text color={"#D4704Be6"}>{">"}_ xin chào — ANNG CLI </Text>
               <Text color="gray"> (v{version || "unknown"})</Text>
             </Box>
             {!compact ? <Text> </Text> : null}

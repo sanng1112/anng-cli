@@ -31,9 +31,9 @@ export function shouldCompactContext(options: {
     const msg = activeMessages[i];
     const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content ?? "");
     // Approximate token count to avoid expensive full tokenization in a tight loop
-    // 1 char ~ 0.25 tokens for English/Code, 0.55 for CJK.
+    // 1 char ~ 0.25 tokens for English/Code, 0.55 for CJK. We use higher coefficients to be safe.
     const isMultibyte = /[^\x00-\x7F]/.test(content);
-    const msgTokens = Math.ceil(content.length * (isMultibyte ? 0.55 : 0.32));
+    const msgTokens = Math.ceil(content.length * (isMultibyte ? 0.75 : 0.45));
 
     if (keptTokens + msgTokens > targetKeepTokens) {
       boundaryIndex = i + 1;

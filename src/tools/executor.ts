@@ -8,7 +8,6 @@ import { handleUpdatePlanTool } from "./update-plan-handler";
 import { handleWebSearchTool } from "./web-search-handler";
 import { handleAnalyzeProjectTool } from "./analyze-project-handler";
 
-import { handleProxyReadTool } from "./proxy-read-handler";
 import { handleWriteTool } from "./write-handler";
 import type { McpManager } from "../mcp/mcp-manager";
 import type { ExecutionContext } from "../common/execution-context";
@@ -159,7 +158,7 @@ export class ToolExecutor {
       .filter((toolCall): toolCall is ToolCall => Boolean(toolCall));
 
     const executions: ToolCallExecution[] = [];
-    const safeTools = new Set(["read", "ProxyRead", "WebSearch", "AnalyzeProject"]);
+    const safeTools = new Set(["read", "WebSearch", "AnalyzeProject"]);
 
     const batches: ToolCall[][] = [];
     for (const call of parsedCalls) {
@@ -218,8 +217,6 @@ export class ToolExecutor {
     this.toolHandlers.set("UpdatePlan", handleUpdatePlanTool);
     this.toolHandlers.set("WebSearch", handleWebSearchTool);
     this.toolHandlers.set("AnalyzeProject", handleAnalyzeProjectTool as unknown as ToolHandler);
-
-    this.toolHandlers.set("ProxyRead", handleProxyReadTool as unknown as ToolHandler);
   }
 
   private parseToolCall(toolCall: unknown): ToolCall | null {

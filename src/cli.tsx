@@ -1,3 +1,10 @@
+/**
+ * ANNG CLI Entry Point
+ *
+ * Refactored to use the formal Harness module for all headless /
+ * CI–CD execution paths. The interactive TUI path remains unchanged.
+ */
+
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
@@ -6,9 +13,18 @@ import { render } from "ink";
 import { setShellIfWindows } from "./common/shell-utils";
 import { checkForNpmUpdate, promptForPendingUpdate, type PackageInfo } from "./common/update-check";
 import { AppContainer } from "./ui";
+import { setOutputMode, runAgent, installSignalHandlers, writeErr } from "./harness";
+import type { AgentMode, OutputMode, HarnessConfig, RunResult } from "./harness";
+import { resolveCurrentSettings } from "./settings";
+
+// =============================================================================
+// Argument parsing
+// =============================================================================
 
 const args = process.argv.slice(2);
 const packageInfo = readPackageInfo();
+
+// --- Quick flags ---
 
 if (args.includes("--version") || args.includes("-v")) {
   process.stdout.write(`${packageInfo.version || "unknown"}\n`);
@@ -16,176 +32,127 @@ if (args.includes("--version") || args.includes("-v")) {
 }
 
 if (args.includes("--help") || args.includes("-h")) {
-  process.stdout.write(
-    [
-      "anng - ANNG CLI CLI",
-      "",
-      "Usage:",
-      "  anng                              Launch the interactive TUI in the current directory",
-      "  anng -p <prompt>                  Launch with a pre-filled prompt",
-      "  anng --yolo -p <prompt>           Headless mode: auto-accept all permissions",
-      "  anng --plan                       Plan mode: ask for confirmation for all tool calls",
-      "  anng --yolo --max-turns 10 -p <p> Headless with turn limit",
-      "  anng --team -p <prompt>               Team mode: dispatch task to multiple agents",
-      "  anng --team --tmux -p <prompt>        Team mode with tmux visual panels",
-      "  anng --team --team-workers 8 -p <...>  Team mode with 8 parallel workers",
-      "  anng --version                    Print the version",
-      "  anng --help                       Show this help",
-      "",
-      "Configuration:",
-      "  ~/.anng/settings.json    User-level API key, model, base URL",
-      "  ./.anng/settings.json    Project-level settings",
-      "  ./.anng/skills/*/SKILL.md Project-level native skills",
-      "  ./.agents/skills/*/SKILL.md   Project-level interoperable skills",
-      "  ~/.anng/skills/*/SKILL.md User-level native skills",
-      "  ~/.agents/skills/*/SKILL.md   User-level interoperable skills",
-      "",
-      "Inside the TUI:",
-      "  enter            Send the prompt",
-      "  shift+enter      Insert a newline",
-      "  home/end         Move within the current line",
-      "  alt+left/right   Move by word",
-      "  ctrl+w           Delete the previous word",
-      "  ctrl+v           Paste an image from the clipboard",
-      "  ctrl+x           Clear pasted images",
-      "  esc              Interrupt the current model turn",
-      "  /                Open the skills/commands menu",
-      "  /skills          List available skills",
-      "  /model           Select model, thinking mode and effort control",
-      "  /new             Start a fresh conversation",
-      "  /init            Initialize an AGENTS.md file with instructions for LLM",
-      "  /resume          Pick a previous conversation to continue",
-      "  /continue        Continue the active conversation, or resume one if empty",
-      "  /undo            Restore code and/or conversation to a previous point",
-      "  /mcp             Show MCP server status and available tools",
-      "  /raw             Toggle display mode for viewing or collapsing reasoning content",
-      "  /exit            Quit",
-      "  ctrl+c twice     Quit",
-    ].join("\n") + "\n"
-  );
+  printHelp(packageInfo.name ?? "anng-cli");
   process.exit(0);
 }
 
-function extractInitialPrompt(args: string[]): string | undefined {
-  const promptIndex = args.findIndex((arg) => arg === "-p" || arg === "--prompt");
-  if (promptIndex !== -1 && promptIndex + 1 < args.length) {
-    return args[promptIndex + 1];
-  }
-  return undefined;
+// --- Extract helpers ---
+
+function extractPrompt(args: string[]): string | undefined {
+  const idx = args.findIndex((a) => a === "-p" || a === "--prompt");
+  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : undefined;
 }
 
-function extractArgValue(args: string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  if (index !== -1 && index + 1 < args.length) {
-    return args[index + 1];
-  }
-  return undefined;
+function extractFlag(args: string[], flag: string): string | undefined {
+  const idx = args.indexOf(flag);
+  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : undefined;
 }
 
-function loadTaskQueue(rootPath: string): string | undefined {
-  const taskPath = path.join(rootPath, ".anng", "memory", "task-queue.md");
-  try {
-    if (fs.existsSync(taskPath)) {
-      return `Please process the following persistent task queue:\n\n${fs.readFileSync(taskPath, "utf8")}`;
-    }
-  } catch {
-    // Ignore read errors
-  }
-  return undefined;
+function hasFlag(args: string[], ...flags: string[]): boolean {
+  return flags.some((f) => args.includes(f));
 }
 
-let initialPrompt = extractInitialPrompt(args);
+// --- Parse args ---
 
-// Harness flags for headless CI/CD execution
-const autoAcceptEnabled = args.includes("--yolo") || args.includes("-y");
-const planModeEnabled = args.includes("--plan");
+const initialPrompt = extractPrompt(args);
+const outputMode: OutputMode = hasFlag(args, "--json") ? "json" : "text";
+const mode: AgentMode = hasFlag(args, "--plan")
+  ? "plan"
+  : hasFlag(args, "--yolo", "-y")
+    ? "yolo"
+    : hasFlag(args, "--zen")
+      ? "zen"
+      : "act";
 
-// Team orchestration flags
-const teamMode = args.includes("--team");
-const teamTmux = args.includes("--tmux");
-const teamWorkers = parseInt(extractArgValue(args, "--team-workers") ?? "4", 10);
-const teamModeValue = extractArgValue(args, "--team-mode");
-
-// Worker configuration flags
-const workerModel = extractArgValue(args, "--model");
-
-if (autoAcceptEnabled && !initialPrompt) {
-  initialPrompt = loadTaskQueue(process.cwd());
-}
-const maxTurnsArgIndex = args.indexOf("--max-turns");
-const maxTurns = maxTurnsArgIndex !== -1 ? Math.max(1, parseInt(args[maxTurnsArgIndex + 1], 10) || 25) : 25;
-const isHeadless = autoAcceptEnabled;
+const maxTurns = parseInt(extractFlag(args, "--max-turns") ?? "25", 10);
+const verbose = hasFlag(args, "--verbose");
 
 const projectRoot = process.cwd();
 configureWindowsShell();
+setOutputMode(outputMode);
+const uninstallSignals = installSignalHandlers();
+
+// --- Task queue fallback for headless ---
+const effectivePrompt = initialPrompt ?? loadTaskQueue(projectRoot);
 
 if (!process.stdin.isTTY) {
-  process.stderr.write("anng requires an interactive terminal (TTY). " + "Re-run from a real terminal session.\n");
+  writeErr("anng requires an interactive terminal (TTY). Re-run from a real terminal session.");
   process.exit(1);
 }
 
 void main();
 
 async function main(): Promise<void> {
-  const updatePromptResult = await promptForPendingUpdate(packageInfo);
-  if (updatePromptResult.installed) {
-    process.exit(0);
+  const updateResult = await promptForPendingUpdate(packageInfo);
+  if (updateResult.installed) process.exit(0);
+
+  // ============ HEADLESS MODES (yolo, plan, json, zen) ============
+  if (mode === "yolo" || mode === "plan" || mode === "zen" || outputMode === "json") {
+    const result = await runHeadless(effectivePrompt);
+    uninstallSignals();
+    process.exit(result.finishReason === "completed" ? 0 : 1);
   }
 
-  // Headless worker execution for Tmux integration
-  if (args.includes("--worker") && initialPrompt) {
-    const { SessionManager } = await import("./session");
-    const { createOpenAIClient } = await import("./common/openai-client");
-    const { resolveCurrentSettings } = await import("./settings");
+  // ============ INTERACTIVE TUI ============
+  await startInteractiveTUI();
+}
 
-    console.log(`[Worker] Starting task: ${initialPrompt}`);
-    const resolvedSettings = resolveCurrentSettings(projectRoot);
-    const sm = new SessionManager({
-      projectRoot,
-      autoAccept: true,
-      planMode: false,
-      maxTurns: 25,
-      createOpenAIClient: () => createOpenAIClient(projectRoot),
-      getResolvedSettings: () => resolveCurrentSettings(projectRoot),
-      renderMarkdown: (text) => text,
-      onAssistantMessage: () => {},
-    });
-    // Override model if --model was provided
-    if (workerModel) {
-      const { writeModelConfigSelection } = await import("./settings");
-      writeModelConfigSelection(
-        { model: workerModel, thinkingEnabled: false, reasoningEffort: "max" },
-        resolvedSettings,
-        projectRoot
-      );
-    }
+// =============================================================================
+// Headless execution
+// =============================================================================
 
-    await sm.handleUserPrompt({ text: initialPrompt });
-    console.log(`[Worker] Task completed.`);
-    process.exit(0);
+async function runHeadless(prompt: string | undefined): Promise<RunResult> {
+  const settings = resolveCurrentSettings(projectRoot);
+
+  const config: HarnessConfig = {
+    providerId: settings.env.API_KEY ?? "default",
+    modelId: settings.model,
+    apiKey: settings.apiKey ?? "",
+    baseURL: settings.baseURL,
+    mode,
+    outputMode,
+    maxTurns,
+    cwd: projectRoot,
+    workspaceRoot: projectRoot,
+    consecutiveMistakeLimit: 3,
+    autoApproveTools: mode === "yolo" || mode === "zen",
+    verbose,
+    envVars: settings.env,
+  };
+
+  if (!prompt) {
+    writeErr("No prompt provided. Use -p <prompt> to specify a task.");
+    return {
+      finishReason: "error",
+      iterations: 0,
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      durationMs: 0,
+    };
   }
 
+  return runAgent(prompt, config);
+}
+
+// =============================================================================
+// Interactive TUI
+// =============================================================================
+
+async function startInteractiveTUI(): Promise<void> {
   const restartRef: { current: (() => void) | null } = { current: null };
 
   function startApp(): void {
     let restarting = false;
-    const appInitialPrompt = initialPrompt;
-    initialPrompt = undefined;
+    const appP = effectivePrompt;
     const inkInstance = render(
       <AppContainer
         projectRoot={projectRoot}
         version={packageInfo.version}
-        initialPrompt={appInitialPrompt}
-        autoAccept={autoAcceptEnabled}
-        planMode={planModeEnabled}
+        initialPrompt={appP}
+        autoAccept={hasFlag(args, "--yolo", "-y")}
+        planMode={hasFlag(args, "--plan")}
         maxTurns={maxTurns}
-        headless={isHeadless}
+        headless={false}
         onRestart={() => restartRef.current?.()}
-        teamMode={teamMode}
-        teamConfig={{
-          mode: teamTmux ? "tmux" : (teamModeValue ?? "internal"),
-          maxParallelWorkers: teamWorkers,
-        }}
       />,
       { exitOnCtrlC: false }
     );
@@ -206,8 +173,23 @@ async function main(): Promise<void> {
   }
 
   void checkForNpmUpdate(packageInfo);
-
   startApp();
+}
+
+// =============================================================================
+// Utilities
+// =============================================================================
+
+function loadTaskQueue(rootPath: string): string | undefined {
+  const taskPath = path.join(rootPath, ".anng", "memory", "task-queue.md");
+  try {
+    if (fs.existsSync(taskPath)) {
+      return `Please process the following persistent task queue:\n\n${fs.readFileSync(taskPath, "utf8")}`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined;
 }
 
 function configureWindowsShell(): void {
@@ -235,4 +217,46 @@ function readPackageInfo(): PackageInfo {
   } catch {
     return { name: "anng-cli", version: "" };
   }
+}
+
+function printHelp(name: string): void {
+  process.stdout.write(
+    [
+      `${name} - ANNG CLI`,
+      "",
+      "Usage:",
+      "  anng                              Launch the interactive TUI",
+      "  anng -p <prompt>                  Launch with a pre-filled prompt",
+      "  anng --yolo -p <prompt>           Headless: auto-accept all permissions",
+      "  anng --plan -p <prompt>           Plan mode: ask before tool calls",
+      "  anng --json -p <prompt>           JSON output for CI/CD pipelines",
+      "  anng --zen -p <prompt>            Fire-and-forget background execution",
+      "  anng --yolo --max-turns 10 -p <p> Headless with turn limit",
+      "  anng --version                    Print version",
+      "  anng --help                       Show this help",
+      "",
+      "Output modes:",
+      "  --json          Machine-readable JSON lines on stdout",
+      "  --verbose       Detailed progress output",
+      "",
+      "Configuration:",
+      "  ~/.anng/settings.json         User-level settings",
+      "  ./.anng/settings.json         Project-level settings",
+      "  ./.anng/skills/*/SKILL.md     Project-level native skills",
+      "  ./.agents/skills/*/SKILL.md   Project-level interoperable skills",
+      "",
+      "Inside the TUI:",
+      "  enter            Send the prompt",
+      "  shift+enter      Insert a newline",
+      "  esc              Interrupt the current model turn",
+      "  /                Open the skills/commands menu",
+      "  /model           Select model and reasoning effort",
+      "  /new             Start a fresh conversation",
+      "  /resume          Pick a previous conversation to continue",
+      "  /undo            Restore code/conversation to a previous point",
+      "  /mcp             Show MCP server status and tools",
+      "  /exit            Quit",
+      "  ctrl+c twice     Quit",
+    ].join("\n") + "\n"
+  );
 }

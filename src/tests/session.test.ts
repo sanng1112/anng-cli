@@ -1125,19 +1125,23 @@ test("createSession appends default system prompts in prefix-cache-friendly orde
     .map((message) => message.content ?? "");
 
   assert.equal(systemContents.length >= 4, true);
-  assert.match(systemContents[0] ?? "", /# Available Tools/);
+  // [0] = base system prompt (most static — no model-specific content)
+  assert.match(systemContents[0] ?? "", /# ROLE & OBJECTIVE/);
   assert.doesNotMatch(systemContents[0] ?? "", /# Local Workspace Environment/);
   assert.doesNotMatch(systemContents[0] ?? "", /The current LLM model is test-model/);
+  // [1] = capabilities (static)
   assert.match(systemContents[1] ?? "", /<capability id="core-swe">/);
   assert.match(systemContents[1] ?? "", /# Unified Engineering Guidelines/);
   assert.doesNotMatch(systemContents[1] ?? "", /path="templates\/skills\//);
   assert.doesNotMatch(systemContents[1] ?? "", /The current LLM model is test-model/);
+  // [2] = runtime context (model-specific)
   assert.match(systemContents[2] ?? "", /# Local Workspace Environment/);
   assert.match(systemContents[2] ?? "", /The current LLM model is test-model/);
   const environmentJsonMatch = (systemContents[2] ?? "").match(/```json\n([\s\S]+?)\n```/);
   assert.ok(environmentJsonMatch);
   const environmentInfo = JSON.parse(environmentJsonMatch[1] ?? "{}") as { "root path"?: string };
   assert.equal(environmentInfo["root path"], workspace);
+  // [3] = agent instructions
   assert.equal(systemContents[3], "root project instructions");
 });
 

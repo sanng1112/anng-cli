@@ -56,36 +56,6 @@ type CorrectedEditStrings = {
   newString: string;
 };
 
-async function validateDiff(filePath: string, diffPreview: string, projectRoot: string): Promise<string | null> {
-  // Try to use Proxy Model to validate diff
-  try {
-    const { createProxyClient } = await import("../common/openai-client");
-    const { resolveCurrentSettings } = await import("../settings");
-    const client = createProxyClient(projectRoot);
-    const settings = resolveCurrentSettings(projectRoot);
-    if (!client) return null;
-
-    const res = await client.chat.completions.create({
-      model: settings.proxyModel || "deepseek-v4-flash-free",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a code reviewer. You will be given a file path and a diff. Analyze the diff to ensure it does not introduce obvious syntax errors, unmatched brackets, or severely broken indentation. If the edit introduces a critical syntax error, respond with exactly: 'REJECT: [Reason]'. Otherwise, respond with 'APPROVE'.",
-        },
-        { role: "user", content: `File: ${filePath}\n\nDiff:\n${diffPreview}` },
-      ],
-    });
-    const review = res.choices[0]?.message?.content?.trim() || "";
-    if (review.startsWith("REJECT:")) {
-      return review.replace("REJECT:", "").trim();
-    }
-  } catch (_err) {
-    // If validator fails, gracefully pass
-  }
-  return null;
-}
-
 const editSchema = z.strictObject({
   file_path: z.string().optional(),
   snippet_id: z.string().min(1, "snippet_id is required."),
@@ -347,17 +317,6 @@ export async function handleEditTool(
 
         const updated = applyReplacement(raw, replacementOldString, replacementNewString, matches, replaceAll);
         const diffPreview = buildDiffPreview(filePath, raw, updated);
-
-        if (diffPreview) {
-          const validationError = await validateDiff(filePath, diffPreview, context.projectRoot);
-          if (validationError) {
-            return {
-              ok: false,
-              name: "edit",
-              error: `Proxy Validator rejected this edit:\n${validationError}\n\nPlease review your code replacement. You likely broke syntax or indentation.`,
-            };
-          }
-        }
 
         context.onBeforeFileMutation?.(filePath);
         writeTextFile(filePath, updated, metadata.encoding, metadata.lineEndings);

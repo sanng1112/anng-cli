@@ -17,7 +17,6 @@ import {
   saveProviders,
   loadModels,
   saveModels,
-  migrateFromSettings,
   type Provider,
   type ModelEntry,
 } from "../../team/provider-types";
@@ -25,11 +24,10 @@ import {
 export type { Provider, ModelEntry } from "../../team/provider-types";
 
 type SettingsScope = "project" | "user";
-type Screen = "main" | "models" | "proxyModels" | "baseUrls" | "envVars" | "providers" | "modelRegistry";
+type Screen = "main" | "models" | "baseUrls" | "envVars" | "providers" | "modelRegistry";
 type InputPrompt =
   | null
   | "customModel"
-  | "customProxyModel"
   | "customBaseUrl"
   | "customEnvVar"
   | "editEnvVar"
@@ -60,8 +58,6 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
   const [inputBuffer, setInputBuffer] = useState("");
   const [editingEnvKey, setEditingEnvKey] = useState<string | null>(null);
   const [providers, setProviders] = useState<Provider[]>(() => {
-    // Migrate from old settings if needed
-    migrateFromSettings(projectRoot, resolved.proxyApiKey, resolved.proxyBaseURL);
     return loadProviders(projectRoot);
   });
   const [models, setModels] = useState<ModelEntry[]>(() => loadModels(projectRoot));
@@ -73,7 +69,6 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
   const [indices, setIndices] = useState<Record<Screen, number>>({
     main: 0,
     models: 0,
-    proxyModels: 0,
     baseUrls: 0,
     envVars: 0,
     providers: 0,
@@ -107,23 +102,18 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
     () => [
       {
         key: "scope",
-        label: `Configuration Scope: ${scope.toUpperCase()}`,
-        description: "Press Enter to toggle Project/User scope",
+        label: `Settings Scope: ${scope === "project" ? "Project-Specific" : "Global"}`,
+        description: "Press Enter to toggle between Project-Specific and Global settings",
       },
       {
         key: "model",
-        label: "Main Model",
-        description: `Current: ${activeSettings.model || "(Not set)"} | Effective: ${resolved.model}`,
-      },
-      {
-        key: "proxyModel",
-        label: "Proxy Model",
-        description: `Current: ${activeSettings.proxyModel || "(Not set)"} | Effective: ${resolved.proxyModel || "deepseek-v4-flash-free"}`,
+        label: "AI Model",
+        description: `Configured: ${activeSettings.model || "None"} | Active: ${resolved.model}`,
       },
       {
         key: "baseUrl",
-        label: "Base URL (OpenAI-compatible)",
-        description: `Current: ${activeSettings.env?.BASE_URL || "(Not set)"} | Effective: ${resolved.baseURL}`,
+        label: "API Base URL",
+        description: `Configured: ${activeSettings.env?.BASE_URL || "None"} | Active: ${resolved.baseURL}`,
       },
       {
         key: "envVars",
@@ -132,13 +122,13 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
       },
       {
         key: "thinking",
-        label: `Thinking Mode: ${activeSettings.thinkingEnabled ?? "(Not set)"}`,
-        description: `Effective: ${resolved.thinkingEnabled ? "Enabled" : "Disabled"} (Press Enter to toggle)`,
+        label: `Thinking Mode: ${activeSettings.thinkingEnabled === undefined ? "Inherited" : activeSettings.thinkingEnabled ? "Enabled" : "Disabled"}`,
+        description: `Currently Active: ${resolved.thinkingEnabled ? "Enabled" : "Disabled"} (Press Enter to toggle)`,
       },
       {
         key: "effort",
-        label: `Reasoning Effort: ${activeSettings.reasoningEffort ?? "(Not set)"}`,
-        description: `Effective: ${resolved.reasoningEffort} (Press Enter to toggle)`,
+        label: `Reasoning Effort: ${activeSettings.reasoningEffort ?? "Inherited"}`,
+        description: `Currently Active: ${resolved.reasoningEffort} (Press Enter to toggle)`,
       },
       {
         key: "providers",
@@ -155,14 +145,18 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
   );
 
   const modelItems: DropdownMenuItem[] = useMemo(() => {
-    const items: DropdownMenuItem[] = MODEL_COMMAND_MODELS.map((m) => ({
+    // Merge predefined + registry models (dedup, preserve order)
+    const registryNames = models.map((m) => m.name);
+    const allModelNames: string[] = [...new Set([...MODEL_COMMAND_MODELS, ...registryNames])];
+
+    const items: DropdownMenuItem[] = allModelNames.map((m) => ({
       key: m,
       label: m,
       selected: activeSettings.model === m || (!activeSettings.model && resolved.model === m),
     }));
 
-    // Add custom models if they aren't in the standard list
-    if (activeSettings.model && !(MODEL_COMMAND_MODELS as readonly string[]).includes(activeSettings.model)) {
+    // Add current model at top if it's custom (not in any list)
+    if (activeSettings.model && !allModelNames.includes(activeSettings.model)) {
       items.unshift({
         key: activeSettings.model,
         label: activeSettings.model,
@@ -183,37 +177,7 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
     });
 
     return items;
-  }, [activeSettings.model, resolved.model]);
-
-  const proxyModelItems: DropdownMenuItem[] = useMemo(() => {
-    const items: DropdownMenuItem[] = MODEL_COMMAND_MODELS.map((m) => ({
-      key: m,
-      label: m,
-      selected: activeSettings.proxyModel === m || (!activeSettings.proxyModel && resolved.proxyModel === m),
-    }));
-
-    if (activeSettings.proxyModel && !(MODEL_COMMAND_MODELS as readonly string[]).includes(activeSettings.proxyModel)) {
-      items.unshift({
-        key: activeSettings.proxyModel,
-        label: activeSettings.proxyModel,
-        selected: true,
-      });
-    }
-
-    items.push({
-      key: "add_custom",
-      label: "+ Add Custom Proxy Model...",
-      description: "Type a new proxy model name",
-    });
-
-    items.push({
-      key: "clear",
-      label: "✖ Clear Proxy Model Setting",
-      description: "Remove proxy model setting from this scope",
-    });
-
-    return items;
-  }, [activeSettings.proxyModel, resolved.proxyModel]);
+  }, [activeSettings.model, resolved.model, models]);
 
   const baseUrlItems: DropdownMenuItem[] = useMemo(() => {
     const currentUrl = activeSettings.env?.BASE_URL;
@@ -248,11 +212,17 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
 
   const envVarItems: DropdownMenuItem[] = useMemo(() => {
     const keys = Object.keys(activeSettings.env || {}).sort();
-    const items = keys.map((k) => ({
-      key: k,
-      label: k,
-      description: `Value: ${activeSettings.env![k]} (Press Delete to remove)`,
-    }));
+    const items = keys.map((k) => {
+      const val = activeSettings.env![k] ?? "";
+      const isSecret =
+        k.toLowerCase().includes("key") || k.toLowerCase().includes("token") || k.toLowerCase().includes("secret");
+      const displayVal = isSecret ? "***" : val;
+      return {
+        key: k,
+        label: k,
+        description: `Value: ${displayVal} (Press Delete to remove)`,
+      };
+    });
 
     items.push({
       key: "add_custom",
@@ -267,7 +237,7 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
     const items: DropdownMenuItem[] = providers.map((p) => ({
       key: p.id,
       label: `${p.name} (${p.id})`,
-      description: `API: ***${p.apiKey.slice(-4)} @ ${p.baseURL.length > 40 ? p.baseURL.slice(0, 38) + "…" : p.baseURL}`,
+      description: `API: *** @ ${p.baseURL.length > 40 ? p.baseURL.slice(0, 38) + "…" : p.baseURL}`,
     }));
     items.push({
       key: "add_provider",
@@ -296,34 +266,30 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
       ? mainItems
       : screen === "models"
         ? modelItems
-        : screen === "proxyModels"
-          ? proxyModelItems
-          : screen === "baseUrls"
-            ? baseUrlItems
-            : screen === "envVars"
-              ? envVarItems
-              : screen === "providers"
-                ? providersItems
-                : screen === "modelRegistry"
-                  ? modelRegistryItems
-                  : envVarItems;
+        : screen === "baseUrls"
+          ? baseUrlItems
+          : screen === "envVars"
+            ? envVarItems
+            : screen === "providers"
+              ? providersItems
+              : screen === "modelRegistry"
+                ? modelRegistryItems
+                : envVarItems;
 
   const currentTitle =
     screen === "main"
       ? "Settings Overview"
       : screen === "models"
         ? "Select Main Model"
-        : screen === "proxyModels"
-          ? "Select Proxy Model"
-          : screen === "baseUrls"
-            ? "Select Base URL"
-            : screen === "envVars"
-              ? "Environment Variables"
-              : screen === "providers"
-                ? "API Providers"
-                : screen === "modelRegistry"
-                  ? "Models Registry"
-                  : "Environment Variables";
+        : screen === "baseUrls"
+          ? "Select Base URL"
+          : screen === "envVars"
+            ? "Environment Variables"
+            : screen === "providers"
+              ? "API Providers"
+              : screen === "modelRegistry"
+                ? "Models Registry"
+                : "Environment Variables";
 
   // --- Input Handling ---
 
@@ -403,9 +369,6 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
         if (inputPrompt === "customModel" && inputBuffer.trim()) {
           newSettings.model = inputBuffer.trim();
           saveConfig(newSettings);
-        } else if (inputPrompt === "customProxyModel" && inputBuffer.trim()) {
-          newSettings.proxyModel = inputBuffer.trim();
-          saveConfig(newSettings);
         } else if (inputPrompt === "customBaseUrl" && inputBuffer.trim()) {
           newSettings.env.BASE_URL = inputBuffer.trim();
           saveConfig(newSettings);
@@ -447,6 +410,10 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
         onExit();
       } else {
         setScreen("main");
+        // Clear provider-pick mode when canceling provider selection
+        if (pickProviderForModel) {
+          setPickProviderForModel(null);
+        }
       }
       return;
     }
@@ -550,7 +517,6 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
       if (screen === "main") {
         if (item.key === "scope") setScope((s) => (s === "project" ? "user" : "project"));
         else if (item.key === "model") setScreen("models");
-        else if (item.key === "proxyModel") setScreen("proxyModels");
         else if (item.key === "baseUrl") setScreen("baseUrls");
         else if (item.key === "envVars") setScreen("envVars");
         else if (item.key === "thinking") {
@@ -580,23 +546,6 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
           // After picking model, switch to provider picker
           setPickProviderForModel(item.key);
           setScreen("providers");
-        }
-        return;
-      }
-
-      if (screen === "proxyModels") {
-        const newSettings = scope === "project" ? { ...projectSettings } : { ...userSettings };
-        if (item.key === "add_custom") {
-          setInputPrompt("customProxyModel");
-          setInputBuffer("");
-        } else if (item.key === "clear") {
-          delete newSettings.proxyModel;
-          saveConfig(newSettings);
-          setScreen("main");
-        } else {
-          newSettings.proxyModel = item.key;
-          saveConfig(newSettings);
-          setScreen("main");
         }
         return;
       }
@@ -714,13 +663,11 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
                       ? "Enter Model Name:"
                       : inputPrompt === "customModel"
                         ? "Enter Custom Main Model Name:"
-                        : inputPrompt === "customProxyModel"
-                          ? "Enter Custom Proxy Model Name:"
-                          : inputPrompt === "customBaseUrl"
-                            ? "Enter Custom Base URL:"
-                            : inputPrompt === "customEnvVar"
-                              ? "Add Environment Variable (Format: KEY=VALUE):"
-                              : `Edit Value for ${editingEnvKey}:`}
+                        : inputPrompt === "customBaseUrl"
+                          ? "Enter Custom Base URL:"
+                          : inputPrompt === "customEnvVar"
+                            ? "Add Environment Variable (Format: KEY=VALUE):"
+                            : `Edit Value for ${editingEnvKey}:`}
           </Text>
           <Text>{inputBuffer}█</Text>
           <Box marginTop={1}>

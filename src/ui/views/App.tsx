@@ -45,15 +45,9 @@ import type {
   UserPromptContent,
 } from "../../session";
 import { SessionManager } from "../../session";
-import { TeamOrchestrator } from "../../team/team-orchestrator";
-import type { TeamUIEvent, TeamResult, AgentConfig, TeamExecutionMode } from "../../team/types";
-import { AgentsConfigView } from "./AgentsConfigView";
-import { TeamCreateView, type TeamAgentRule } from "./TeamCreateView";
 import { SettingsView } from "./SettingsView";
-import * as fs from "fs";
-import * as path from "path";
 
-type View = "chat" | "session-list" | "undo" | "mcp-status" | "agents-config" | "settings" | "team-create";
+type View = "chat" | "session-list" | "undo" | "mcp-status" | "settings";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -65,8 +59,6 @@ type AppProps = {
   maxTurns?: number;
   headless?: boolean;
   onRestart?: () => void;
-  teamMode?: boolean;
-  teamConfig?: { mode?: string; maxParallelWorkers?: number };
 };
 
 const StatusLine = React.memo(function StatusLine({
@@ -110,8 +102,6 @@ function App({
   maxTurns = 25,
   headless: _headless = false,
   onRestart,
-  teamMode = false,
-  teamConfig,
 }: AppProps): React.ReactElement {
   const { exit } = useApp();
   const { stdout, write } = useStdout();
@@ -151,14 +141,9 @@ function App({
   const [showProcessStdout, setShowProcessStdout] = useState(false);
   const [currentAutoAccept, setCurrentAutoAccept] = useState(autoAccept);
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
-  const [teamResult, setTeamResult] = useState<TeamResult | null>(null);
-  const [teamBusy, setTeamBusy] = useState(false);
-  const [teamModeEnabled, setTeamModeEnabled] = useState(false);
-  const teamOrchestratorRef = useRef<TeamOrchestrator | null>(null);
 
   const initialAutoAccept = useRef(autoAccept).current;
   const initialPlanMode = useRef(planMode).current;
-  const initialTeamMode = useRef(teamMode).current;
 
   rawModeRef.current = mode;
   messagesRef.current = messages;
@@ -348,119 +333,6 @@ function App({
 
   writeRef.current = write;
 
-  const runTeamTask = useCallback(
-    async (taskText: string): Promise<void> => {
-      setTeamBusy(true);
-      setBusy(true);
-      try {
-        const orchestrator = new TeamOrchestrator({
-          projectRoot,
-          autoAccept: currentAutoAccept,
-          planMode: currentPlanMode,
-          createOpenAIClient: () => createOpenAIClient(projectRoot),
-          renderMarkdown: (text) => text,
-          onUIEvent: (event: TeamUIEvent) => {
-            if (event.type === "team_complete") {
-              // Don't setTeamResult here — it's set after executeTask returns below.
-              setMessages((prev) => [
-                ...prev,
-                buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
-              ]);
-            }
-          },
-        });
-        teamOrchestratorRef.current = orchestrator;
-        let workers: AgentConfig[] | undefined;
-        try {
-          const configPath = path.join(projectRoot, ".anng", "team-agents.json");
-          if (fs.existsSync(configPath)) {
-            const raw = fs.readFileSync(configPath, "utf-8");
-            const data = JSON.parse(raw);
-            if (Array.isArray(data) && data.length > 0) {
-              workers = data.map((a: Record<string, unknown>) => ({
-                name: String(a.name),
-                role: "worker" as const,
-                description: String(a.name),
-                systemPrompt: String(a.prompt),
-                model: a.model ? String(a.model) : undefined,
-                apiKey: a.apiKey ? String(a.apiKey) : undefined,
-                baseURL: a.baseURL ? String(a.baseURL) : undefined,
-                thinkingEnabled: typeof a.thinkingEnabled === "boolean" ? a.thinkingEnabled : undefined,
-                reasoningEffort: a.reasoningEffort ? String(a.reasoningEffort) : undefined,
-              }));
-            }
-          }
-        } catch (_e) {
-          // Ignore config loading errors
-        }
-        const result = await orchestrator.executeTask(taskText, {
-          workers,
-          maxParallelWorkers: teamConfig?.maxParallelWorkers,
-          mode: (teamConfig?.mode ?? "internal") as TeamExecutionMode,
-        });
-        setTeamResult(result);
-      } catch (error) {
-        setErrorLine(error instanceof Error ? error.message : String(error));
-      } finally {
-        setTeamBusy(false);
-        setBusy(false);
-        teamOrchestratorRef.current = null;
-      }
-    },
-    [projectRoot, currentAutoAccept, currentPlanMode, teamConfig]
-  );
-
-  const startTeamWithTmux = useCallback(
-    async (taskText: string, agents: TeamAgentRule[]) => {
-      setTeamBusy(true);
-      setBusy(true);
-      try {
-        const orchestrator = new TeamOrchestrator({
-          projectRoot,
-          autoAccept: currentAutoAccept,
-          planMode: currentPlanMode,
-          createOpenAIClient: () => createOpenAIClient(projectRoot),
-          renderMarkdown: (text) => text,
-          onUIEvent: (event: TeamUIEvent) => {
-            if (event.type === "team_complete") {
-              setMessages((prev) => [
-                ...prev,
-                buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
-              ]);
-            }
-          },
-        });
-        teamOrchestratorRef.current = orchestrator;
-
-        const workers: AgentConfig[] = agents.map((a) => ({
-          name: a.name,
-          role: "worker" as const,
-          description: a.name,
-          systemPrompt: a.prompt,
-          model: a.model || undefined,
-          apiKey: a.apiKey || undefined,
-          baseURL: a.baseURL || undefined,
-          thinkingEnabled: typeof a.thinkingEnabled === "boolean" ? a.thinkingEnabled : undefined,
-          reasoningEffort: a.reasoningEffort || undefined,
-        }));
-
-        const result = await orchestrator.executeTask(taskText, {
-          workers,
-          maxParallelWorkers: agents.length,
-          mode: "tmux",
-        });
-        setTeamResult(result);
-      } catch (error) {
-        setErrorLine(error instanceof Error ? error.message : String(error));
-      } finally {
-        setTeamBusy(false);
-        setBusy(false);
-        teamOrchestratorRef.current = null;
-      }
-    },
-    [projectRoot, currentAutoAccept, currentPlanMode]
-  );
-
   const handlePrompt = useCallback(
     async (submission: PromptSubmission) => {
       if (submission.command === "exit") {
@@ -513,77 +385,8 @@ function App({
         navigateToSubView("mcp-status");
         return;
       }
-      if (submission.command === "team") {
-        const parts = submission.text.trim().split(/\s+/);
-        const subCmd = parts[1]?.toLowerCase();
-        const taskText = parts.slice(2).join(" ");
-
-        if (subCmd === "create") {
-          if (taskText) {
-            await runTeamTask(taskText);
-          } else {
-            navigateToSubView("team-create");
-          }
-          return;
-        }
-
-        if (subCmd === "status") {
-          if (teamBusy) {
-            setStatusLine("Team is currently running a task. Please wait.");
-          } else if (teamResult) {
-            setMessages((prev) => [
-              ...prev,
-              buildSyntheticUserMessage("Team result: " + teamResult.executiveSummary, 0),
-            ]);
-            setTeamResult(null);
-          } else {
-            setStatusLine("Team mode is " + (initialTeamMode || teamModeEnabled ? "active" : "inactive") + ".");
-          }
-          return;
-        }
-
-        if (subCmd === "kill" || subCmd === "stop") {
-          // Interrupt the orchestrator first so it can clean up tmux session
-          if (teamOrchestratorRef.current) {
-            teamOrchestratorRef.current.interrupt();
-            teamOrchestratorRef.current = null;
-          }
-          setTeamModeEnabled(false);
-          setTeamBusy(false);
-          setBusy(false);
-          setStatusLine("Team mode disabled. Tmux session cleaned up.");
-          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team stopped. Tmux session terminated.", 0)]);
-          return;
-        }
-
-        if (teamBusy) {
-          setErrorLine("Team is currently running. Wait for completion or interrupt.");
-          return;
-        }
-        if (teamResult) {
-          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team result: " + teamResult.executiveSummary, 0)]);
-          setTeamResult(null);
-          return;
-        }
-        if (initialTeamMode || teamModeEnabled) {
-          setStatusLine("Team mode is active. Type your task directly.");
-          return;
-        }
-        setErrorLine("No active team. Use --team flag, /team create, or /team create <task>.");
-        return;
-      }
-      if (submission.command === "custom-agents") {
-        navigateToSubView("agents-config");
-        return;
-      }
       if (submission.command === "settings") {
         navigateToSubView("settings");
-        return;
-      }
-
-      // Nếu team mode được bật và không phải command đặc biệt
-      if ((initialTeamMode || teamModeEnabled) && submission.text.trim() && !submission.command) {
-        await runTeamTask(submission.text);
         return;
       }
 
@@ -658,11 +461,6 @@ function App({
       refreshSessionsList,
       navigateToSubView,
       resetToWelcome,
-      initialTeamMode,
-      teamModeEnabled,
-      runTeamTask,
-      teamBusy,
-      teamResult,
     ]
   );
 
@@ -740,15 +538,6 @@ function App({
     },
     [resetStaticView, sessionManager]
   );
-
-  // When --team is used without -p, show the Team Builder so the user can
-  // see/configure agents before typing a task.
-  useEffect(() => {
-    if (initialPrompt) return;
-    if (!initialTeamMode) return;
-    navigateToSubView("team-create");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (initialPromptSubmittedRef.current || !initialPrompt || !initialPrompt.trim()) {
@@ -1131,22 +920,6 @@ function App({
             const latest = resolveCurrentSettings(projectRoot);
             void sessionManager.reconnectMcpServer(name, latest.mcpServers?.[name]);
           }}
-        />
-      ) : view === "agents-config" ? (
-        <AgentsConfigView projectRoot={projectRoot} onExit={() => navigateToSubView("chat")} />
-      ) : view === "team-create" ? (
-        <TeamCreateView
-          projectRoot={projectRoot}
-          screenWidth={screenWidth}
-          onRunTask={(taskText: string) => {
-            navigateToSubView("chat");
-            void runTeamTask(taskText);
-          }}
-          onStartTeam={(taskText: string, agents: TeamAgentRule[]) => {
-            navigateToSubView("chat");
-            void startTeamWithTmux(taskText, agents);
-          }}
-          onExit={() => navigateToSubView("chat")}
         />
       ) : view === "settings" ? (
         <SettingsView

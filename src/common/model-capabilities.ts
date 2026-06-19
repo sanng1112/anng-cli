@@ -1,8 +1,15 @@
-export const DEEPSEEK_V4_MODELS = new Set(["deepseek-v4-flash", "deepseek-v4-pro"]);
+export const DEEPSEEK_V4_MODELS = new Set([
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "deepseek-v4-flash-free",
+  "deepseek-v4-pro-free",
+]);
 
 export const NON_MULTIMODAL_MODELS = new Set([
   "deepseek-v4-pro",
   "deepseek-v4-flash",
+  "deepseek-v4-flash-free",
+  "deepseek-v4-pro-free",
   "deepseek-chat",
   "deepseek-reasoner",
 ]);

@@ -22,7 +22,7 @@
 ## 🌟 Điểm nổi bật
 
 - ⚡ **Tốc độ & Thông minh:** Phân tích mã nguồn mạnh mẽ, đánh index codebase bằng Codegraph & tạo bộ nhớ cache thông minh vào `ANNG.md` để đọc hiểu toàn bộ dự án siêu tốc.
-- 🤖 **Đội ngũ Multi-Agent (Team Mode):** Khả năng gọi lệnh `anng --team`, lập tức triệu hồi một đội Agent để chia nhỏ task song song, tương tác và hiển thị log real-time qua các panel tmux thời gian thực.
+- 🤖 **Đa nền tảng & Linh hoạt:** Hỗ trợ đa dạng các Provider LLM (OpenAI, DeepSeek, Gemini,...) và nhiều chế độ chạy (Interactive, YOLO, Plan).
 - 🎨 **Giao diện Minimalist Sang Trọng:** Giao diện TUI được thiết kế tối giản, tinh tế mang đậm chất nghệ thuật ASCII/Quadrant Blocks với dải màu `#D4704B` hiện đại, thanh lịch.
 - 🛠️ **Hỗ trợ Model Context Protocol (MCP):** Mở rộng tính năng vô hạn. Kết nối trực tiếp hệ thống với Database, Git, AWS, Slack, v.v. thông qua các plugin MCP.
 - 🧠 **Suy luận Đa Chiều (Reasoning Control):** Tích hợp menu SelectList cho phép trực tiếp chuyển đổi Model và tùy chỉnh Mức độ suy luận (Reasoning Effort) ngay trên Terminal một cách trực quan.
@@ -69,8 +69,6 @@ anng -p "viết hàm tính tổng"
 # Mode YOLO (Auto-Accept mọi quyền đọc/ghi mà không cần hỏi lại)
 anng --yolo -p "dọn dẹp thư mục dist và dọn dẹp log"
 
-# Chế độ làm việc Đội ngũ (Multi-Agent Team)
-anng --team -p "phân tích hệ thống và tạo test case cho mọi hàm"
 ```
 
 ### 3. Cấu hình (`~/.anng/settings.json`)

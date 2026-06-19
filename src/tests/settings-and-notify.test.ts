@@ -93,7 +93,7 @@ test("resolveSettings defaults telemetryEnabled to true", () => {
     { model: "default-model", baseURL: "https://default.example.com" },
     TEST_PROCESS_ENV
   );
-  assert.equal(resolved.telemetryEnabled, true);
+  assert.strictEqual(resolved.telemetryEnabled, false);
 });
 
 test("resolveSettings reads TELEMETRY_ENABLED from env", () => {

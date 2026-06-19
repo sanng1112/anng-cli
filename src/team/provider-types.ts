@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { MODEL_COMMAND_MODELS } from "../ui/components/ModelsDropdown";
 
 // ---------------------------------------------------------------------------
 // Provider: an API endpoint with a key
@@ -69,15 +70,6 @@ export function saveProviders(projectRoot: string, providers: Provider[]): void 
 // Load / Save models
 // ---------------------------------------------------------------------------
 
-const MODEL_COMMAND_MODELS = [
-  "deepseek-v4-pro",
-  "deepseek-v4-flash",
-  "gemini-3.5-flash",
-  "gemini-3.1-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
-] as const;
-
 /** Create default models from the built-in list */
 function createDefaultModels(projectRoot: string): ModelEntry[] {
   const models: ModelEntry[] = MODEL_COMMAND_MODELS.map((m) => ({ name: m, tested: false }));
@@ -95,7 +87,7 @@ export function loadModels(projectRoot: string): ModelEntry[] {
     const valid = data.filter(
       (x: unknown): x is ModelEntry => typeof x === "object" && x !== null && typeof (x as ModelEntry).name === "string"
     );
-    if (valid.length < MODEL_COMMAND_MODELS.length / 2) {
+    if (valid.length === 0) {
       return createDefaultModels(projectRoot);
     }
     const seen = new Set<string>();
@@ -128,36 +120,4 @@ export function saveModels(projectRoot: string, models: ModelEntry[]): void {
   const dir = path.dirname(p);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(p, JSON.stringify(deduped, null, 2), "utf-8");
-}
-
-// ---------------------------------------------------------------------------
-// Migration: old settings.json proxyApiKey → providers
-// ---------------------------------------------------------------------------
-
-export function migrateFromSettings(
-  projectRoot: string,
-  proxyApiKeys: string | undefined,
-  proxyBaseURL: string | undefined
-): void {
-  const provPath = providersPath(projectRoot);
-  const modPath = modelsPath(projectRoot);
-
-  if (fs.existsSync(provPath) && fs.existsSync(modPath)) return;
-  if (!proxyApiKeys) return;
-
-  const keys = proxyApiKeys
-    .split(",")
-    .map((k) => k.trim())
-    .filter(Boolean);
-  if (keys.length === 0) return;
-
-  const baseURL = proxyBaseURL || "https://opencode.ai/zen/v1";
-
-  const providers: Provider[] = keys.map((key, i) => ({
-    id: `ds${i + 1}`,
-    name: `DeepSeek Key ${i + 1}`,
-    apiKey: key,
-    baseURL,
-  }));
-  saveProviders(projectRoot, providers);
 }

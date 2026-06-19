@@ -13,20 +13,7 @@ const AppContainer: React.FC<{
   maxTurns?: number;
   headless?: boolean;
   onRestart: () => void;
-  teamMode?: boolean;
-  teamConfig?: { mode?: string; maxParallelWorkers?: number };
-}> = ({
-  version,
-  projectRoot,
-  initialPrompt,
-  autoAccept,
-  planMode,
-  maxTurns,
-  headless,
-  onRestart,
-  teamMode,
-  teamConfig,
-}) => {
+}> = ({ version, projectRoot, initialPrompt, autoAccept, planMode, maxTurns, headless, onRestart }) => {
   return (
     <AppContext.Provider value={{ version: version }}>
       <RawModeProvider>
@@ -39,8 +26,6 @@ const AppContainer: React.FC<{
             maxTurns={maxTurns ?? 25}
             headless={headless ?? false}
             onRestart={onRestart}
-            teamMode={teamMode}
-            teamConfig={teamConfig}
           />
         </ErrorBoundary>
       </RawModeProvider>
