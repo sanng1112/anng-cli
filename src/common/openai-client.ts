@@ -182,9 +182,9 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
       let headersReceived = false;
       const ttfbTimeoutId = setTimeout(() => {
         if (!abortedByCaller && !headersReceived) {
-          ac.abort(new Error("TimeoutTTFB5s"));
+          ac.abort(new Error("TimeoutTTFB60s"));
         }
-      }, 5000);
+      }, 60000);
 
       const timeoutId = setTimeout(() => {
         if (!abortedByCaller) {

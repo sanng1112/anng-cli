@@ -15,6 +15,16 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [orchestrator] = useState(() => new DpOrchestrator());
 
+  // Navigation states
+  const [execCursor, setExecCursor] = useState(0);
+  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [reviewCursor, setReviewCursor] = useState(0);
+  const reviewOptions = [
+    "🚀 Phê duyệt & Chạy",
+    "✏️ Chỉnh sửa Worker (Comming soon)",
+    "✏️ Chỉnh sửa Tester (Comming soon)",
+  ];
+
   useEffect(() => {
     if (initialPrompt && phase === "setup") {
       setPhase("review");
@@ -29,6 +39,41 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
   }, [initialPrompt, phase, orchestrator]);
 
   useInput((input, key) => {
+    if (phase === "executing" || phase === "done") {
+      if (key.upArrow) setExecCursor((c) => Math.max(0, c - 1));
+      if (key.downArrow && plan) setExecCursor((c) => Math.min(plan.nodes.length - 1, c + 1));
+      if (key.return && plan) {
+        if (selectedNode) setSelectedNode(null);
+        else setSelectedNode(plan.nodes[execCursor]?.id || null);
+      }
+      if (key.escape) {
+        if (selectedNode) setSelectedNode(null);
+        else onCancel();
+      }
+      return;
+    }
+
+    if (phase === "review" && proposal) {
+      if (key.upArrow) setReviewCursor((c) => Math.max(0, c - 1));
+      if (key.downArrow) setReviewCursor((c) => Math.min(reviewOptions.length - 1, c + 1));
+      if (key.return) {
+        if (reviewCursor === 0) {
+          setPhase("executing");
+          const newPlan = orchestrator.compilePlan(proposal);
+          setPlan(newPlan);
+          setExecCursor(0);
+          void orchestrator.executePlan(newPlan, (updatedPlan: DpExecutionPlan) => {
+            setPlan({ ...updatedPlan });
+            if (updatedPlan.status === "completed" || updatedPlan.status === "failed") {
+              setPhase("done");
+            }
+          });
+        }
+      }
+      if (key.escape) onCancel();
+      return;
+    }
+
     if (key.escape) {
       onCancel();
     }
@@ -44,19 +89,6 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
             setErrorMsg(e.message);
             setPhase("error");
           });
-      } else if (phase === "review" && proposal) {
-        setPhase("executing");
-        const newPlan = orchestrator.compilePlan(proposal);
-        setPlan(newPlan);
-
-        // Bắt đầu chạy
-        void orchestrator.executePlan(newPlan, (updatedPlan: DpExecutionPlan) => {
-          // Bắt buộc clone object để React re-render
-          setPlan({ ...updatedPlan });
-          if (updatedPlan.status === "completed" || updatedPlan.status === "failed") {
-            setPhase("done");
-          }
-        });
       }
     }
   });
@@ -106,37 +138,60 @@ export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewPr
           <Text>- Số lượng bản sao (Clones): {proposal.dataChunks.length} nodes</Text>
           <Text>- Luồng đồng thời tối đa (Concurrency): {proposal.concurrencyLimit}</Text>
 
-          <Box marginTop={1}>
-            <Text color="green">Nhấn [ENTER] để Phê duyệt & Chạy (Approve & Execute).</Text>
+          <Box marginTop={1} flexDirection="column">
+            {reviewOptions.map((opt, i) => (
+              <Text key={i} color={reviewCursor === i ? "green" : "white"}>
+                {reviewCursor === i ? "> " : "  "}
+                {opt}
+              </Text>
+            ))}
           </Box>
         </Box>
       )}
 
       {(phase === "executing" || phase === "done") && plan && (
         <Box marginY={1} flexDirection="column">
-          <Text color="yellow" bold>
-            TIẾN TRÌNH THỰC THI ({plan.nodes.filter((n: DpPlanNode) => n.status === "completed").length}/
-            {plan.nodes.length})
-          </Text>
-          <Box flexDirection="column" marginLeft={2}>
-            {plan.nodes.map((node: DpPlanNode) => (
-              <Box key={node.id}>
-                {node.status === "pending" && <Text color="gray">⏳</Text>}
-                {node.status === "running" && <Text color="blue">↻</Text>}
-                {node.status === "completed" && <Text color="green">✓</Text>}
-                {node.status === "failed" && <Text color="red">✗</Text>}
+          {!selectedNode && (
+            <Box flexDirection="column">
+              <Text color="yellow" bold>
+                🚀 THE MASTER PLAN: {proposal?.taskPrompt.slice(0, 50)}... (
+                {plan.nodes.filter((n: DpPlanNode) => n.status === "completed").length}/{plan.nodes.length})
+              </Text>
+              <Text color="gray">────────────────────────────────────────────────────────</Text>
+              <Box flexDirection="column" marginLeft={2}>
+                {plan.nodes.map((node: DpPlanNode, i: number) => (
+                  <Text key={node.id} color={execCursor === i ? "cyan" : "white"}>
+                    {execCursor === i ? "> " : "  "}[
+                    {node.status === "completed"
+                      ? "✓"
+                      : node.status === "failed"
+                        ? "✗"
+                        : node.status === "running"
+                          ? "↻"
+                          : " "}
+                    ] Task {node.id.split("-").pop()}: {JSON.stringify(node.inputData)}
+                  </Text>
+                ))}
+              </Box>
+              <Text color="gray">────────────────────────────────────────────────────────</Text>
+              <Text color="gray"> [ Nhấn Enter để xem chi tiết | Nhấn Lên/Xuống để cuộn | Nhấn ESC để thoát ]</Text>
+            </Box>
+          )}
+
+          {selectedNode && (
+            <Box flexDirection="column">
+              <Text color="yellow" bold>
+                🔍 CHI TIẾT: Task {selectedNode}
+              </Text>
+              <Text color="gray">────────────────────────────────────────────────────────</Text>
+              <Box marginY={1} marginLeft={2}>
                 <Text>
-                  {" "}
-                  Task {node.id.split("-").pop()} [Retries: {node.retries}] - {JSON.stringify(node.inputData)}
+                  {plan.nodes.find((n: DpPlanNode) => n.id === selectedNode)?.output ||
+                    "Đang chờ kết quả hoặc lỗi hiển thị tại đây..."}
                 </Text>
               </Box>
-            ))}
-          </Box>
-          {phase === "done" && (
-            <Box marginTop={1}>
-              <Text color="green" bold>
-                Hoàn thành toàn bộ kế hoạch!
-              </Text>
+              <Text color="gray">────────────────────────────────────────────────────────</Text>
+              <Text color="gray"> [ Nhấn ESC để quay lại Menu Tiến Trình ]</Text>
             </Box>
           )}
         </Box>

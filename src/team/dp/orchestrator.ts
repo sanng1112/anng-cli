@@ -44,9 +44,13 @@ Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng 
           },
           { role: "user", content: userRequest },
         ],
+        stream: true,
       });
 
-      const rawJson = completion.choices[0]?.message?.content || "{}";
+      let rawJson = "";
+      for await (const chunk of completion) {
+        rawJson += chunk.choices[0]?.delta?.content || "";
+      }
       const strippedJson = rawJson.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
       const cleanJson = strippedJson
         .replace(/```json/g, "")
@@ -106,20 +110,26 @@ Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng 
         if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
         // Gọi Worker
-        const workerResp = await client.chat.completions.create({
+        const workerStream = await client.chat.completions.create({
           model,
+          stream: true,
           messages: [
             { role: "system", content: plan.proposal.subteamConfig.worker.systemPrompt },
             { role: "user", content: `Task: ${plan.proposal.taskPrompt}\n\nData: ${JSON.stringify(node.inputData)}` },
           ],
         });
-        const workerOutput = workerResp.choices[0]?.message?.content || "";
+
+        let workerOutput = "";
+        for await (const chunk of workerStream) {
+          workerOutput += chunk.choices[0]?.delta?.content || "";
+        }
 
         let isPass = true;
         // Gọi Tester nếu có
         if (plan.proposal.subteamConfig.tester) {
-          const testerResp = await client.chat.completions.create({
+          const testerStream = await client.chat.completions.create({
             model,
+            stream: true,
             messages: [
               { role: "system", content: plan.proposal.subteamConfig.tester.systemPrompt },
               {
@@ -128,7 +138,12 @@ Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng 
               },
             ],
           });
-          const review = testerResp.choices[0]?.message?.content || "";
+
+          let review = "";
+          for await (const chunk of testerStream) {
+            review += chunk.choices[0]?.delta?.content || "";
+          }
+
           if (review.toUpperCase().includes("NO")) {
             isPass = false;
             throw new Error("Tester từ chối: " + review.slice(0, 100));
