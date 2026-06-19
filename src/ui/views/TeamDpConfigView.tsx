@@ -250,8 +250,12 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
               <Text color="gray">────────────────────────────────────────────────────────</Text>
               <Box marginY={1} marginLeft={2}>
                 <Text>
-                  {plan.nodes.find((n: DpPlanNode) => n.id === selectedNode)?.output ||
-                    "Đang chờ kết quả hoặc lỗi hiển thị tại đây..."}
+                  {(() => {
+                    const node = plan.nodes.find((n: DpPlanNode) => n.id === selectedNode);
+                    if (!node) return "Đang chờ kết quả hoặc lỗi hiển thị tại đây...";
+                    if (node.status === "failed") return `LỖI: ${node.error}`;
+                    return node.liveOutput || node.output || "Đang chờ kết quả hoặc lỗi hiển thị tại đây...";
+                  })()}
                 </Text>
               </Box>
               <Text color="gray">────────────────────────────────────────────────────────</Text>

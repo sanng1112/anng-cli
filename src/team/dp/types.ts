@@ -30,6 +30,7 @@ export interface DpPlanNode {
   inputData: unknown;
   status: "pending" | "running" | "completed" | "failed";
   output?: string;
+  liveOutput?: string;
   error?: string;
   retries: number;
 }

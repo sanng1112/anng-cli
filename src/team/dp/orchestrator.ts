@@ -133,9 +133,19 @@ Lưu ý quan trọng:
             });
 
             currentOutput = "";
+            node.liveOutput = `[Agent: ${agent.name}] Đang suy nghĩ...\n`;
+            onProgress(plan);
+
+            let chunkCount = 0;
             for await (const chunk of workerStream) {
-              currentOutput += chunk.choices[0]?.delta?.content || "";
+              const text = chunk.choices[0]?.delta?.content || "";
+              currentOutput += text;
+              node.liveOutput += text;
+
+              chunkCount++;
+              if (chunkCount % 5 === 0) onProgress(plan);
             }
+            onProgress(plan);
           } else if (agent.role === "tester") {
             const testerStream = await client.chat.completions.create({
               model,
@@ -150,9 +160,19 @@ Lưu ý quan trọng:
             });
 
             let review = "";
+            node.liveOutput = `[Agent: ${agent.name}] Đang đánh giá...\n`;
+            onProgress(plan);
+
+            let chunkCount = 0;
             for await (const chunk of testerStream) {
-              review += chunk.choices[0]?.delta?.content || "";
+              const text = chunk.choices[0]?.delta?.content || "";
+              review += text;
+              node.liveOutput += text;
+
+              chunkCount++;
+              if (chunkCount % 5 === 0) onProgress(plan);
             }
+            onProgress(plan);
 
             if (review.toUpperCase().includes("NO")) {
               throw new Error(`${agent.name} từ chối: ` + review.slice(0, 100));
