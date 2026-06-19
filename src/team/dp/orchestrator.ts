@@ -1,43 +1,71 @@
 import { randomUUID } from "crypto";
 import type { DpExecutionPlan, DpPlanNode, DpProposal } from "./types";
+import { createOpenAIClient } from "../../common/openai-client";
+import * as fs from "fs";
+import * as path from "path";
 
 /**
  * Trưởng nhóm (DP Leader / Orchestrator)
  * Chịu trách nhiệm thiết kế Plan và giám sát các Tiểu nhóm.
  */
 export class DpOrchestrator {
+  private projectRoot: string;
+
+  constructor(projectRoot: string = process.cwd()) {
+    this.projectRoot = projectRoot;
+  }
   /**
    * Bước 1: Sinh ra bản nháp (Proposal) để người dùng duyệt.
    * Đây là lúc LLM phân tích Prompt và tạo ra Relation & Kế hoạch chunk data.
    */
   public async generateProposal(systemPrompt: string, userRequest: string): Promise<DpProposal> {
-    // TODO: Tích hợp với OpenAIClient và Structured Outputs để trả về JSON an toàn.
-    // Dưới đây là dữ liệu mock để chứng minh kiến trúc (Proof of Concept).
+    try {
+      const { client, model } = createOpenAIClient(this.projectRoot);
+      if (!client) throw new Error("Vui lòng cấu hình API Key trong settings trước.");
 
-    console.log("Leader đang phân tích yêu cầu:", userRequest);
+      const completion = await client.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: `Bạn là Data Parallelism Orchestrator. 
+Nhiệm vụ của bạn là phân tích yêu cầu của user và trả về một JSON HỢP LỆ (KHÔNG CÓ MARKDOWN) theo đúng format:
+{
+  "taskPrompt": "Mô tả công việc cho mỗi clone",
+  "concurrencyLimit": số lượng luồng (1-10),
+  "subteamConfig": {
+    "worker": { "role": "worker", "systemPrompt": "Lệnh cho worker", "allowedSkills": ["write_handler"] },
+    "tester": { "role": "tester", "systemPrompt": "Lệnh cho tester", "allowedSkills": ["read_handler"] },
+    "maxRetries": 2
+  },
+  "dataChunks": ["dữ liệu 1", "dữ liệu 2", "dữ liệu 3"]
+}
+Lưu ý: Trả về DUY NHẤT JSON nguyên thủy, tuyệt đối không dùng block \`\`\`json.`,
+          },
+          { role: "user", content: userRequest },
+        ],
+      });
 
-    return {
-      taskPrompt: "Viết cốt truyện dựa trên dữ liệu đầu vào. Bố cục: Hành trình anh hùng.",
-      concurrencyLimit: 5,
-      subteamConfig: {
-        worker: {
-          role: "worker",
-          systemPrompt: "Bạn là nhà văn. Không làm gì ngoài việc viết truyện.",
-          allowedSkills: ["write_to_file"], // Khóa kỹ năng (Giải quyết Bottleneck #1)
+      const rawJson = completion.choices[0]?.message?.content || "{}";
+      const cleanJson = rawJson
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
+      return JSON.parse(cleanJson) as DpProposal;
+    } catch (e) {
+      console.error("Lỗi khi sinh Proposal:", e);
+      // Fallback
+      return {
+        taskPrompt: userRequest,
+        concurrencyLimit: 2,
+        subteamConfig: {
+          worker: { role: "worker", systemPrompt: "Bạn là AI. Hãy xử lý yêu cầu.", allowedSkills: [] },
+          tester: { role: "tester", systemPrompt: "Bạn là Tester. Kiểm tra lại kết quả.", allowedSkills: [] },
+          maxRetries: 1,
         },
-        tester: {
-          role: "tester",
-          systemPrompt: "Bạn là Biên tập viên. Đọc truyện và kiểm tra xem có đạt chuẩn bố cục không.",
-          allowedSkills: ["read_file"], // Khóa kỹ năng
-        },
-        maxRetries: 2,
-      },
-      dataChunks: [
-        { id: 1, theme: "Cyberpunk" },
-        { id: 2, theme: "Fantasy" },
-        { id: 3, theme: "Space Opera" },
-      ],
-    };
+        dataChunks: ["Chunk 1", "Chunk 2"],
+      };
+    }
   }
 
   /**
@@ -76,19 +104,48 @@ export class DpOrchestrator {
         // Thay vì dùng chung SessionManager, mỗi Node sẽ tạo một Temporary Session
         // với thư mục làm việc riêng biệt (Workspace Namespace) để tránh Race Condition.
         const sandboxDir = `.anng/memory/dp_temp/${node.id}`;
-        void sandboxDir; // TODO: Implement workspace isolation
+        void sandboxDir;
+        const { client, model } = createOpenAIClient(this.projectRoot);
+        if (!client) throw new Error("Thiếu cấu hình API Key.");
 
-        // Giả lập thời gian worker chạy
-        await new Promise((res) => setTimeout(res, 2000 + Math.random() * 2000));
+        const outputDir = path.join(this.projectRoot, "dp_output");
+        if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-        // Giả lập Tester kiểm tra
-        const isPass = Math.random() > 0.2; // 80% pass
+        // Gọi Worker
+        const workerResp = await client.chat.completions.create({
+          model,
+          messages: [
+            { role: "system", content: plan.proposal.subteamConfig.worker.systemPrompt },
+            { role: "user", content: `Task: ${plan.proposal.taskPrompt}\n\nData: ${JSON.stringify(node.inputData)}` },
+          ],
+        });
+        const workerOutput = workerResp.choices[0]?.message?.content || "";
+
+        let isPass = true;
+        // Gọi Tester nếu có
+        if (plan.proposal.subteamConfig.tester) {
+          const testerResp = await client.chat.completions.create({
+            model,
+            messages: [
+              { role: "system", content: plan.proposal.subteamConfig.tester.systemPrompt },
+              {
+                role: "user",
+                content: `Kiểm tra xem kết quả sau có đáp ứng Task: "${plan.proposal.taskPrompt}" không.\nKết quả: ${workerOutput}\n\nTrang đầu tiên trả lời YES hoặc NO.`,
+              },
+            ],
+          });
+          const review = testerResp.choices[0]?.message?.content || "";
+          if (review.toUpperCase().includes("NO")) {
+            isPass = false;
+            throw new Error("Tester từ chối: " + review.slice(0, 100));
+          }
+        }
 
         if (isPass) {
           node.status = "completed";
-          node.output = `Đã viết xong cốt truyện cho: ${JSON.stringify(node.inputData)}`;
-        } else {
-          throw new Error("Tester báo cáo: Không đạt cấu trúc Hero's Journey.");
+          const fileName = `output_${node.id}.md`;
+          fs.writeFileSync(path.join(outputDir, fileName), workerOutput);
+          node.output = `Đã lưu kết quả tại dp_output/${fileName}`;
         }
       } catch (err: unknown) {
         if (node.retries < plan.proposal.subteamConfig.maxRetries) {

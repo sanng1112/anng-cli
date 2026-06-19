@@ -1,17 +1,25 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import { DpOrchestrator } from "../../team/dp/orchestrator";
 import type { DpExecutionPlan, DpProposal, DpPlanNode } from "../../team/dp/types";
 
 export interface TeamDpConfigViewProps {
+  initialPrompt?: string;
   onCancel: () => void;
 }
 
-export function TeamDpConfigView({ onCancel }: TeamDpConfigViewProps) {
+export function TeamDpConfigView({ initialPrompt, onCancel }: TeamDpConfigViewProps) {
   const [phase, setPhase] = useState<"setup" | "review" | "executing" | "done">("setup");
   const [proposal, setProposal] = useState<DpProposal | null>(null);
   const [plan, setPlan] = useState<DpExecutionPlan | null>(null);
   const [orchestrator] = useState(() => new DpOrchestrator());
+
+  useEffect(() => {
+    if (initialPrompt && phase === "setup") {
+      setPhase("review");
+      orchestrator.generateProposal("system", initialPrompt).then((p: DpProposal) => setProposal(p));
+    }
+  }, [initialPrompt, phase, orchestrator]);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -19,9 +27,9 @@ export function TeamDpConfigView({ onCancel }: TeamDpConfigViewProps) {
     }
 
     if (key.return) {
-      if (phase === "setup") {
+      if (phase === "setup" && !initialPrompt) {
         setPhase("review");
-        // Gọi LLM sinh proposal (MOCK)
+        // Fallback mock if no prompt provided
         orchestrator.generateProposal("system", "Tạo 3 cốt truyện...").then((p: DpProposal) => setProposal(p));
       } else if (phase === "review" && proposal) {
         setPhase("executing");
@@ -48,8 +56,12 @@ export function TeamDpConfigView({ onCancel }: TeamDpConfigViewProps) {
 
       {phase === "setup" && (
         <Box marginY={1} flexDirection="column">
-          <Text>Nhập lệnh của bạn (VD: Tạo 50 cốt truyện từ data.json)</Text>
-          <Text color="green">Nhấn [ENTER] để Trưởng nhóm lên Kế hoạch (Plan & Relations).</Text>
+          <Text>Nhập lệnh của bạn từ CLI (VD: /team-dp Tạo 50 cốt truyện từ data.json)</Text>
+          {initialPrompt ? (
+            <Text color="green">Đang xử lý: {initialPrompt}</Text>
+          ) : (
+            <Text color="yellow">Bạn chưa nhập lệnh. Nhấn [ENTER] để chạy MOCK thử nghiệm.</Text>
+          )}
         </Box>
       )}
 

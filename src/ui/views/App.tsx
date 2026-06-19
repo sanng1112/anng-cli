@@ -143,6 +143,7 @@ function App({
   const [showProcessStdout, setShowProcessStdout] = useState(false);
   const [currentAutoAccept, setCurrentAutoAccept] = useState(autoAccept);
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
+  const [teamDpPrompt, setTeamDpPrompt] = useState("");
 
   const initialAutoAccept = useRef(autoAccept).current;
   const initialPlanMode = useRef(planMode).current;
@@ -392,6 +393,7 @@ function App({
         return;
       }
       if (submission.command === "team-dp") {
+        setTeamDpPrompt(submission.text?.replace(/^\/team-dp\s*/, "").trim() || "");
         navigateToSubView("team-dp");
         return;
       }
@@ -940,7 +942,7 @@ function App({
           }}
         />
       ) : view === "team-dp" ? (
-        <TeamDpConfigView onCancel={() => navigateToSubView("chat")} />
+        <TeamDpConfigView initialPrompt={teamDpPrompt} onCancel={() => navigateToSubView("chat")} />
       ) : view === "team-wf" ? (
         <TeamWfConfigView onCancel={() => navigateToSubView("chat")} />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
