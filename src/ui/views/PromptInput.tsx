@@ -742,13 +742,13 @@ export const PromptInput = React.memo(function PromptInput({
       return;
     }
     if (item.kind === "team-dp") {
-      const rawText = buffer.text.trim() || "/team-dp";
+      const rawText = expandPasteMarkers(buffer.text, pastesRef.current).trim() || "/team-dp";
       onSubmit({ text: rawText, imageUrls: [], command: "team-dp" });
       resetPromptInput();
       return;
     }
     if (item.kind === "team-wf") {
-      const rawText = buffer.text.trim() || "/team-wf";
+      const rawText = expandPasteMarkers(buffer.text, pastesRef.current).trim() || "/team-wf";
       onSubmit({ text: rawText, imageUrls: [], command: "team-wf" });
       resetPromptInput();
       return;
