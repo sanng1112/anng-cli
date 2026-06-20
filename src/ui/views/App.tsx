@@ -181,7 +181,7 @@ function App({
             return;
           }
           const now = Date.now();
-          if (now - lastUpdate > 66) {
+          if (now - lastUpdate > 150) {
             lastUpdate = now;
             setStreamProgress(progress);
           }
@@ -871,9 +871,28 @@ function App({
             id: `stream-${streamProgress.requestId}`,
             sessionId: streamProgress.sessionId ?? "",
             role: "assistant",
-            content: streamProgress.text ?? "",
+            content: streamProgress.text
+              ? streamProgress.text.split(/\r?\n/).length > Math.max(10, screenHeight - 15)
+                ? "...\n" +
+                  streamProgress.text
+                    .split(/\r?\n/)
+                    .slice(-Math.max(10, screenHeight - 15))
+                    .join("\n")
+                : streamProgress.text
+              : "",
             contentParams: null,
-            messageParams: streamProgress.reasoningText ? { reasoning_content: streamProgress.reasoningText } : null,
+            messageParams: streamProgress.reasoningText
+              ? {
+                  reasoning_content:
+                    streamProgress.reasoningText.split(/\r?\n/).length > Math.max(10, screenHeight - 15)
+                      ? "...\n" +
+                        streamProgress.reasoningText
+                          .split(/\r?\n/)
+                          .slice(-Math.max(10, screenHeight - 15))
+                          .join("\n")
+                      : streamProgress.reasoningText,
+                }
+              : null,
             compacted: false,
             visible: true,
             createTime: streamProgress.startedAt,
