@@ -145,17 +145,135 @@ export async function handleReadTool(
 
   const ext = path.extname(filePath).toLowerCase();
   try {
+    if (ext === ".json") {
+      try {
+        const raw = fs.readFileSync(filePath, "utf8");
+        const parsed = JSON.parse(raw);
+        const pretty = JSON.stringify(parsed, null, 2);
+        const summary = generateJsonSummary(parsed);
+
+        const offset = parseLineNumber(args.offset, "offset");
+        const limit = parseLineLimit(args.limit);
+        if (!offset.ok) {
+          return {
+            ok: false,
+            name: "read",
+            error: offset.error,
+          };
+        }
+        if (!limit.ok) {
+          return {
+            ok: false,
+            name: "read",
+            error: limit.error,
+          };
+        }
+
+        const startLine = offset.value ? offset.value - 1 : 0;
+        const endLine = startLine + limit.value;
+
+        const lines = pretty.split(/\r?\n/);
+        const selected = lines.slice(startLine, endLine);
+        const actualStartLine = startLine + 1;
+        const actualEndLine = actualStartLine + selected.length - 1;
+        const isPartialView = actualStartLine !== 1 || endLine < lines.length;
+
+        const formattedContent = selected.join("\n");
+        const formattedOutput = formatWithLineNumbers(selected, actualStartLine);
+
+        markFileRead(context.sessionId, filePath, {
+          content: formattedContent,
+          timestamp: Math.floor(stat.mtimeMs),
+          offset: isPartialView ? actualStartLine : undefined,
+          limit: isPartialView ? Math.max(1, actualEndLine - actualStartLine + 1) : undefined,
+          isPartialView,
+          encoding: "utf8",
+          lineEndings: "LF",
+        });
+
+        const snippet = isPartialView
+          ? createSnippet(context.sessionId, filePath, actualStartLine, actualEndLine, formattedOutput)
+          : createFullFileSnippet(context.sessionId, filePath, actualStartLine, actualEndLine, formattedOutput);
+
+        return {
+          ok: true,
+          name: "read",
+          output: `[File Content Saved to Workspace Memory]\nSnippet ID: ${snippet?.id}\n\nJSON Structure Summary:\n${summary}`,
+          metadata: snippet
+            ? {
+                snippet: {
+                  id: snippet.id,
+                  filePath: snippet.filePath,
+                  startLine: snippet.startLine,
+                  endLine: snippet.endLine,
+                },
+              }
+            : undefined,
+        };
+      } catch (err) {
+        // Fall back to standard read if JSON parsing fails
+      }
+    }
+
     if (ext === ".ipynb") {
-      const output = readNotebook(filePath);
+      const notebookLines = readNotebookLines(filePath);
+
+      const offset = parseLineNumber(args.offset, "offset");
+      const limit = parseLineLimit(args.limit);
+      if (!offset.ok) {
+        return {
+          ok: false,
+          name: "read",
+          error: offset.error,
+        };
+      }
+      if (!limit.ok) {
+        return {
+          ok: false,
+          name: "read",
+          error: limit.error,
+        };
+      }
+
+      const startLine = offset.value ? offset.value - 1 : 0;
+      const endLine = startLine + limit.value;
+
+      const selected = notebookLines.slice(startLine, endLine);
+      const actualStartLine = startLine + 1;
+      const actualEndLine = actualStartLine + selected.length - 1;
+      const isPartialView = actualStartLine !== 1 || endLine < notebookLines.length;
+
+      const formattedContent = selected.join("\n");
+      const formattedOutput = formatWithLineNumbers(selected, actualStartLine);
+
       markFileRead(context.sessionId, filePath, {
-        content: "",
+        content: formattedContent,
         timestamp: Math.floor(stat.mtimeMs),
-        isPartialView: true,
+        offset: isPartialView ? actualStartLine : undefined,
+        limit: isPartialView ? Math.max(1, actualEndLine - actualStartLine + 1) : undefined,
+        isPartialView,
+        encoding: "utf8",
+        lineEndings: "LF",
       });
+
+      const snippet = isPartialView
+        ? createSnippet(context.sessionId, filePath, actualStartLine, actualEndLine, formattedOutput)
+        : createFullFileSnippet(context.sessionId, filePath, actualStartLine, actualEndLine, formattedOutput);
+
       return {
         ok: true,
         name: "read",
-        output,
+        output: `[File Content Saved to Workspace Memory]\nSnippet ID: ${snippet?.id}`,
+        metadata: snippet
+          ? {
+              snippet: {
+                id: snippet.id,
+                filePath: snippet.filePath,
+                startLine: snippet.startLine,
+                endLine: snippet.endLine,
+              },
+            }
+          : undefined,
       };
     }
 
@@ -623,10 +741,14 @@ function parsePositiveInt(value: string, label: string): number {
   return integer;
 }
 
-function readNotebook(filePath: string): string {
+function stripAnsi(str: string): string {
+  return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, "");
+}
+
+function readNotebookLines(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, "utf8");
   if (!raw) {
-    return "WARNING: File is empty.";
+    return ["WARNING: File is empty."];
   }
 
   const parsed = JSON.parse(raw) as {
@@ -657,10 +779,10 @@ function readNotebook(filePath: string): string {
   });
 
   if (lines.length === 0) {
-    return "WARNING: Notebook has no cells.";
+    return ["WARNING: Notebook has no cells."];
   }
 
-  return formatWithLineNumbers(lines, 1);
+  return lines;
 }
 
 function normalizeNotebookField(value: unknown): string[] {
@@ -677,9 +799,9 @@ function formatNotebookOutput(output: Record<string, unknown>): string[] {
   const lines: string[] = [];
   const text = output.text;
   if (Array.isArray(text)) {
-    lines.push(...text.map((item) => String(item).replace(/\r?\n$/, "")));
+    lines.push(...text.map((item) => stripAnsi(String(item).replace(/\r?\n$/, ""))));
   } else if (typeof text === "string") {
-    lines.push(...text.split(/\r?\n/));
+    lines.push(...text.split(/\r?\n/).map(stripAnsi));
   }
 
   const data = output.data;
@@ -687,9 +809,9 @@ function formatNotebookOutput(output: Record<string, unknown>): string[] {
     const record = data as Record<string, unknown>;
     const textPlain = record["text/plain"];
     if (Array.isArray(textPlain)) {
-      lines.push(...textPlain.map((item) => String(item).replace(/\r?\n$/, "")));
+      lines.push(...textPlain.map((item) => stripAnsi(String(item).replace(/\r?\n$/, ""))));
     } else if (typeof textPlain === "string") {
-      lines.push(...textPlain.split(/\r?\n/));
+      lines.push(...textPlain.split(/\r?\n/).map(stripAnsi));
     }
 
     const imagePng = record["image/png"];
@@ -705,12 +827,64 @@ function formatNotebookOutput(output: Record<string, unknown>): string[] {
 
   const trace = output.traceback;
   if (Array.isArray(trace)) {
-    lines.push(...trace.map((item) => String(item).replace(/\r?\n$/, "")));
+    lines.push(...trace.map((item) => stripAnsi(String(item).replace(/\r?\n$/, ""))));
   }
 
   if (lines.length === 0) {
     lines.push("[output omitted]");
   }
 
-  return lines;
+  const MAX_OUTPUT_LINES = 50;
+  const MAX_OUTPUT_CHARS = 5000;
+
+  let totalChars = 0;
+  const truncatedLines: string[] = [];
+  let isTruncated = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (truncatedLines.length >= MAX_OUTPUT_LINES) {
+      isTruncated = true;
+      break;
+    }
+    if (totalChars + line.length > MAX_OUTPUT_CHARS) {
+      const remainingSpace = MAX_OUTPUT_CHARS - totalChars;
+      if (remainingSpace > 10) {
+        truncatedLines.push(line.slice(0, remainingSpace) + " ...[truncated]");
+      }
+      isTruncated = true;
+      break;
+    }
+    truncatedLines.push(line);
+    totalChars += line.length + 1;
+  }
+
+  if (isTruncated) {
+    truncatedLines.push("[... output truncated to save tokens]");
+  }
+
+  return truncatedLines;
+}
+
+function generateJsonSummary(val: unknown, depth = 0): string {
+  if (depth > 2) return "...";
+  if (val === null) return "null";
+  if (Array.isArray(val)) {
+    const types = new Set(val.map((item) => typeof item));
+    const typesStr = Array.from(types).join("|") || "empty";
+    return `Array<${typesStr}>[${val.length}]`;
+  }
+  if (typeof val === "object") {
+    const keys = Object.keys(val as Record<string, unknown>);
+    if (depth === 0) {
+      const summaryLines = keys.map((k) => {
+        const subVal = (val as Record<string, unknown>)[k];
+        return `  - "${k}": ${generateJsonSummary(subVal, depth + 1)}`;
+      });
+      return `Object with ${keys.length} keys:\n${summaryLines.join("\n")}`;
+    } else {
+      return `Object{${keys.slice(0, 5).join(", ")}${keys.length > 5 ? ", ..." : ""}}`;
+    }
+  }
+  return typeof val;
 }
