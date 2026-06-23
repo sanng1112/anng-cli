@@ -38,7 +38,10 @@ function createContext(
 test("Read JSON file - pretty-prints minified JSON and returns structure summary", async () => {
   const workspace = createTempWorkspace();
   const filePath = path.join(workspace, "minified.json");
-  const obj = { name: "test", nested: { array: [1, 2, 3], active: true }, longString: "a".repeat(2500) };
+  const obj: Record<string, any> = { name: "test", nested: { array: [1, 2, 3], active: true } };
+  for (let i = 0; i < 50; i++) {
+    obj[`key_${i}`] = "a".repeat(50);
+  }
   fs.writeFileSync(filePath, JSON.stringify(obj));
 
   const context = createContext("json-test", workspace);

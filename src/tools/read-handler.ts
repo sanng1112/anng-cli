@@ -210,7 +210,7 @@ export async function handleReadTool(
               }
             : undefined,
         };
-      } catch (err) {
+      } catch (_err) {
         // Fall back to standard read if JSON parsing fails
       }
     }
