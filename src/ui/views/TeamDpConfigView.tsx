@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 import fs from "fs";
 import path from "path";
@@ -19,6 +19,15 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
   const [plan, setPlan] = useState<DpExecutionPlan | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [orchestrator] = useState(() => new DpOrchestrator(projectRoot));
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   // Navigation states
   const [execCursor, setExecCursor] = useState(0);
@@ -77,7 +86,7 @@ export function TeamDpConfigView({ initialPrompt, onCancel, projectRoot }: TeamD
             setPlan({ ...updatedPlan });
             if (updatedPlan.status === "completed" || updatedPlan.status === "failed") {
               setPhase("done");
-              setTimeout(() => {
+              timeoutRef.current = setTimeout(() => {
                 onCancel();
               }, 2000);
             }

@@ -4,6 +4,7 @@ export type MessageViewProps = {
   message: SessionMessage;
   collapsed?: boolean;
   width?: number;
+  isStreaming?: boolean;
 };
 export type ToolSummary = {
   name: string;

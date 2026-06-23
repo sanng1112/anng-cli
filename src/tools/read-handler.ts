@@ -763,18 +763,28 @@ function readNotebookLines(filePath: string): string[] {
   const cells = Array.isArray(parsed.cells) ? parsed.cells : [];
   cells.forEach((cell, index) => {
     const cellType = cell.cell_type ?? "unknown";
-    lines.push(`# Cell ${index + 1} (${cellType})`);
+    lines.push(`<!-- Cell ${index + 1} (${cellType}) -->`);
 
     const source = normalizeNotebookField(cell.source);
-    if (source.length > 0) {
-      lines.push(...source);
+    if (cellType === "code") {
+      lines.push("```python");
+      if (source.length > 0) {
+        lines.push(...source);
+      }
+      lines.push("```");
+    } else {
+      if (source.length > 0) {
+        lines.push(...source);
+      }
     }
 
     const outputs = Array.isArray(cell.outputs) ? cell.outputs : [];
     outputs.forEach((output, outputIndex) => {
       const outputType = typeof output.output_type === "string" ? output.output_type : "output";
-      lines.push(`# Output ${outputIndex + 1} (${outputType})`);
+      lines.push(`<!-- Output ${outputIndex + 1} (${outputType}) -->`);
+      lines.push("```");
       lines.push(...formatNotebookOutput(output));
+      lines.push("```");
     });
   });
 

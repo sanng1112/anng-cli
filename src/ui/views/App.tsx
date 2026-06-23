@@ -53,6 +53,22 @@ type View = "chat" | "session-list" | "undo" | "mcp-status" | "settings" | "team
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
+function sliceLastLines(text: string, maxLines: number): string {
+  if (!text) return text;
+  let idx = text.length - 1;
+  let linesFound = 0;
+  while (idx >= 0 && linesFound < maxLines) {
+    idx = text.lastIndexOf("\n", idx - 1);
+    if (idx !== -1) {
+      linesFound++;
+    } else {
+      break;
+    }
+  }
+  if (idx < 0) return text;
+  return "...\n" + text.slice(idx + 1);
+}
+
 type AppProps = {
   projectRoot: string;
   initialPrompt?: string;
@@ -101,7 +117,7 @@ function App({
   initialPrompt,
   autoAccept = false,
   planMode = false,
-  maxTurns = 25,
+  maxTurns = 25000,
   headless: _headless = false,
   onRestart,
 }: AppProps): React.ReactElement {
@@ -871,26 +887,11 @@ function App({
             id: `stream-${streamProgress.requestId}`,
             sessionId: streamProgress.sessionId ?? "",
             role: "assistant",
-            content: streamProgress.text
-              ? streamProgress.text.split(/\r?\n/).length > Math.max(10, screenHeight - 15)
-                ? "...\n" +
-                  streamProgress.text
-                    .split(/\r?\n/)
-                    .slice(-Math.max(10, screenHeight - 15))
-                    .join("\n")
-                : streamProgress.text
-              : "",
+            content: streamProgress.text ? sliceLastLines(streamProgress.text, Math.max(10, screenHeight - 15)) : "",
             contentParams: null,
             messageParams: streamProgress.reasoningText
               ? {
-                  reasoning_content:
-                    streamProgress.reasoningText.split(/\r?\n/).length > Math.max(10, screenHeight - 15)
-                      ? "...\n" +
-                        streamProgress.reasoningText
-                          .split(/\r?\n/)
-                          .slice(-Math.max(10, screenHeight - 15))
-                          .join("\n")
-                      : streamProgress.reasoningText,
+                  reasoning_content: sliceLastLines(streamProgress.reasoningText, Math.max(10, screenHeight - 15)),
                 }
               : null,
             compacted: false,
@@ -900,6 +901,7 @@ function App({
           }}
           collapsed={false}
           width={screenWidth}
+          isStreaming={true}
         />
       ) : null}
       {busy || statusLine ? <StatusLine busy={busy} text={statusLine} /> : null}

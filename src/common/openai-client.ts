@@ -182,15 +182,15 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
       let headersReceived = false;
       const ttfbTimeoutId = setTimeout(() => {
         if (!abortedByCaller && !headersReceived) {
-          ac.abort(new Error("TimeoutTTFB60s"));
+          ac.abort(new Error("TimeoutTTFB300s"));
         }
-      }, 60000);
+      }, 300000);
 
       const timeoutId = setTimeout(() => {
         if (!abortedByCaller) {
-          ac.abort(new Error("TimeoutAfter300s"));
+          ac.abort(new Error("TimeoutAfter3600s"));
         }
-      }, 300000);
+      }, 3600000);
 
       try {
         const response = await undiciFetch(url, {
@@ -204,8 +204,11 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
         clearTimeout(timeoutId);
 
         if (response.status === 429 || response.status === 401 || response.status >= 500) {
-          await response.text().catch(() => {});
-          throw new Error(`ApiError${response.status}`);
+          if (attempt < maxRetries - 1) {
+            await response.text().catch(() => {});
+            throw new Error(`ApiError${response.status}`);
+          }
+          return response;
         }
 
         return response;
@@ -225,6 +228,7 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
     apiKey: "dummy-key-overridden-in-fetch",
     baseURL: providerConfig.baseURL || undefined,
     fetch: fetchWithRotation,
+    timeout: 3600000,
   });
 
   providerState.set(providerKey, { client, cacheKey: providerConfig.apiKey, rotator });

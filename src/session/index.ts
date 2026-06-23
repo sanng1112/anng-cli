@@ -119,6 +119,8 @@ class FileWriteQueue {
 }
 export const globalFileWriteQueue = new FileWriteQueue();
 
+const globalCachedSessionMessages = new Map<string, SessionMessage[]>();
+
 export class SessionManager {
   private readonly projectRoot: string;
   private readonly createOpenAIClient: CreateOpenAIClient;
@@ -149,7 +151,7 @@ export class SessionManager {
   private mcpToolDefinitions: ToolDefinition[] = [];
   private readonly messageConverter: OpenAIMessageConverter;
   private cachedSessionsIndex: SessionsIndex | null = null;
-  private cachedSessionMessages = new Map<string, SessionMessage[]>();
+  private readonly cachedSessionMessages = globalCachedSessionMessages;
 
   constructor(options: SessionManagerOptions) {
     this.projectRoot = options.projectRoot;
@@ -1210,7 +1212,7 @@ ${agentInstructions}
     this.sessionControllers.set(sessionId, sessionController);
 
     try {
-      const maxIterations = this.maxTurns || 100;
+      const maxIterations = this.maxTurns || 1000;
       let toolCalls: unknown[] | null = null;
 
       for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -1506,7 +1508,7 @@ ${agentInstructions}
 
     let cutoffId: string | null = null;
     for (let i = activeMessages.length - 1; i >= 0; i--) {
-      if (activeMessages[i].role === "assistant" && activeMessages[i].content) {
+      if (activeMessages[i].role === "assistant") {
         assistantMessageCount++;
         if (assistantMessageCount > cutoffAssistantCount) {
           cutoffId = activeMessages[i].id;

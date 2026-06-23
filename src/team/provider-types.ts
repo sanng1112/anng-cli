@@ -24,12 +24,14 @@ export type ModelEntry = {
 // File helpers
 // ---------------------------------------------------------------------------
 
-function providersPath(projectRoot: string): string {
-  return path.join(projectRoot, ".anng", "providers.json");
+import * as os from "os";
+
+function providersPath(_projectRoot: string): string {
+  return path.join(os.homedir(), ".anng", "providers.json");
 }
 
-function modelsPath(projectRoot: string): string {
-  return path.join(projectRoot, ".anng", "models.json");
+function modelsPath(_projectRoot: string): string {
+  return path.join(os.homedir(), ".anng", "models.json");
 }
 
 // ---------------------------------------------------------------------------

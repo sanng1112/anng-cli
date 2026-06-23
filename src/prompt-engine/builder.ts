@@ -107,6 +107,8 @@ function loadFileRules(projectRoot: string): string | undefined {
     // Note: AGENTS.md is handled separately by SessionManager.loadAgentInstructions()
     path.join(projectRoot, ".anng", "rules"),
     path.join(projectRoot, ".agents", "rules"),
+    // Long-term Memory / Knowledge Graph persistence
+    path.join(projectRoot, ".anng", "memory", "KNOWLEDGE_GRAPH.md"),
   ];
 
   const blocks: string[] = [];

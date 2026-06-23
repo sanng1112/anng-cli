@@ -15,7 +15,7 @@ import { RawMode, useRawModeContext } from "../../contexts";
 const PROMPT_ECHO_PREFIX_WIDTH = 2;
 
 export const MessageView = React.memo(
-  function MessageView({ message, collapsed, width = 80 }: MessageViewProps): React.ReactElement | null {
+  function MessageView({ message, collapsed, width = 80, isStreaming }: MessageViewProps): React.ReactElement | null {
     const { mode } = useRawModeContext();
     if (!message.visible) {
       return null;
@@ -49,7 +49,13 @@ export const MessageView = React.memo(
           <Box marginLeft={1} flexDirection="column" marginBottom={0} marginY={0}>
             <StatusLine width={width} bulletColor="gray" name="Thinking" params={content ? "" : summary} />
             <Box flexDirection="column" marginLeft={2}>
-              {content ? <Text dimColor>{renderMarkdown(content)}</Text> : null}
+              {content ? (
+                isStreaming ? (
+                  <Text dimColor>{content}</Text>
+                ) : (
+                  <Text dimColor>{renderMarkdown(content)}</Text>
+                )
+              ) : null}
             </Box>
           </Box>
         );
@@ -64,8 +70,11 @@ export const MessageView = React.memo(
             <Text color="#D4704B">✦</Text>
           </Box>
           <Box flexGrow={1} width={contentWidth} flexDirection="column">
-            {content
-              ? renderMarkdownSegments(content, Math.max(20, contentWidth - 4)).map((seg, i) => {
+            {content ? (
+              isStreaming ? (
+                <Text>{content}</Text>
+              ) : (
+                renderMarkdownSegments(content, Math.max(20, contentWidth - 4)).map((seg, i) => {
                   if (seg.kind === "table") {
                     return (
                       <Box key={i} flexDirection="column">
@@ -79,7 +88,8 @@ export const MessageView = React.memo(
                   }
                   return <Text key={i}>{seg.body}</Text>;
                 })
-              : null}
+              )
+            ) : null}
           </Box>
         </Box>
       );

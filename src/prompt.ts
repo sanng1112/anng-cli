@@ -707,12 +707,52 @@ export function getTools(_options: PromptToolOptions = {}, externalTools: ToolDe
     },
   });
 
+  tools.push({
+    type: "function",
+    function: {
+      name: "HttpRequest",
+      description: "Make an HTTP request to fetch content from a URL or query an API.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "The full URL to request.",
+          },
+          method: {
+            type: "string",
+            description: "HTTP method (e.g., GET, POST, PUT, DELETE). Default is GET.",
+            default: "GET",
+          },
+          headers: {
+            type: "object",
+            description: "Optional JSON object of key-value HTTP headers.",
+            additionalProperties: { type: "string" },
+          },
+          body: {
+            type: "string",
+            description: "Optional request body string (e.g., JSON stringified data).",
+          },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+    },
+  });
+
   for (const tool of externalTools) {
     tools.push(tool);
   }
 
   if (_options.planMode) {
-    const allowedPlanTools = new Set(["AnalyzeProject", "AskUserQuestion", "UpdatePlan", "read", "WebSearch"]);
+    const allowedPlanTools = new Set([
+      "AnalyzeProject",
+      "AskUserQuestion",
+      "UpdatePlan",
+      "read",
+      "WebSearch",
+      "HttpRequest",
+    ]);
     return tools.filter((t) => allowedPlanTools.has(t.function.name));
   }
 

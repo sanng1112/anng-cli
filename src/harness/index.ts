@@ -15,7 +15,7 @@
  *   baseURL: "https://api.openai.com/v1",
  *   mode: "yolo",
  *   outputMode: "json",
- *   maxTurns: 25,
+ *   maxTurns: 25000,
  *   cwd: process.cwd(),
  *   workspaceRoot: process.cwd(),
  *   consecutiveMistakeLimit: 3,

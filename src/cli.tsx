@@ -16,6 +16,7 @@ import { AppContainer } from "./ui";
 import { setOutputMode, runAgent, installSignalHandlers, writeErr } from "./harness";
 import type { AgentMode, OutputMode, HarnessConfig, RunResult } from "./harness";
 import { resolveCurrentSettings } from "./settings";
+import { globalFileWriteQueue } from "./session/index.js";
 
 // =============================================================================
 // Argument parsing
@@ -64,7 +65,7 @@ const mode: AgentMode = hasFlag(args, "--plan")
       ? "zen"
       : "act";
 
-const maxTurns = parseInt(extractFlag(args, "--max-turns") ?? "25", 10);
+const maxTurns = parseInt(extractFlag(args, "--max-turns") ?? "25000", 10);
 const verbose = hasFlag(args, "--verbose");
 
 const projectRoot = process.cwd();
@@ -90,6 +91,7 @@ async function main(): Promise<void> {
   if (mode === "yolo" || mode === "plan" || mode === "zen" || outputMode === "json") {
     const result = await runHeadless(effectivePrompt);
     uninstallSignals();
+    await globalFileWriteQueue.awaitIdle();
     process.exit(result.finishReason === "completed" ? 0 : 1);
   }
 
@@ -164,9 +166,10 @@ async function startInteractiveTUI(): Promise<void> {
       startApp();
     };
 
-    inkInstance.waitUntilExit().then(() => {
+    inkInstance.waitUntilExit().then(async () => {
       if (!restarting) {
         restartRef.current = null;
+        await globalFileWriteQueue.awaitIdle();
         process.exit(0);
       }
     });

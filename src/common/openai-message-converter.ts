@@ -62,7 +62,7 @@ export class OpenAIMessageConverter {
     const isAnthropic = model.includes("claude") || model.includes("anthropic");
     if (isAnthropic && openAIMessages.length > 0) {
       // 1. Pin the static system prompt
-      for (let i = openAIMessages.length - 1; i >= 0; i--) {
+      for (let i = 0; i < openAIMessages.length; i++) {
         if (openAIMessages[i].role === "system") {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const sysMsg = openAIMessages[i] as any;

@@ -23,7 +23,7 @@ const AppContainer: React.FC<{
             projectRoot={projectRoot}
             autoAccept={autoAccept ?? false}
             planMode={planMode ?? false}
-            maxTurns={maxTurns ?? 25}
+            maxTurns={maxTurns ?? 25000}
             headless={headless ?? false}
             onRestart={onRestart}
           />

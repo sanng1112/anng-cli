@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Box, Text } from "ink";
 import { useTerminalInput } from "../hooks/useTerminalInput";
 import DropdownMenu, { type DropdownMenuItem } from "../components/DropdownMenu";
@@ -47,6 +47,28 @@ const COMMON_BASE_URLS = [
 
 export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onExit: () => void }) {
   const [resolved, setResolved] = useState<ResolvedDeepcodingSettings>(() => resolveCurrentSettings(projectRoot));
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showTestResult = (msg: string | null, delay?: number) => {
+    setTestResult(msg);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    if (msg !== null && delay !== undefined) {
+      timeoutRef.current = setTimeout(() => {
+        setTestResult(null);
+      }, delay);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
   const [projectSettings, setProjectSettings] = useState<DeepcodingSettings>(
     () => readProjectSettings(projectRoot) || {}
   );
@@ -475,11 +497,10 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
         const allProviders = loadProviders(projectRoot);
         const provider = allProviders.length > 0 ? allProviders[0] : null;
         if (!provider || !provider.apiKey) {
-          setTestResult(`❌ ${modelName}: No provider configured`);
-          setTimeout(() => setTestResult(null), 4000);
+          showTestResult(`❌ ${modelName}: No provider configured`, 4000);
           return;
         }
-        setTestResult(`⏳ Testing ${modelName} with ${provider.id}...`);
+        showTestResult(`⏳ Testing ${modelName} with ${provider.id}...`);
         import("openai")
           .then(({ default: OpenAI }) => {
             const client = new OpenAI({
@@ -497,13 +518,11 @@ export function SettingsView({ projectRoot, onExit }: { projectRoot: string; onE
             const newModels = models.map((m) => (m.name === modelName ? { ...m, tested: true } : m));
             setModels(newModels);
             saveModels(projectRoot, newModels);
-            setTestResult(`✅ ${modelName} with ${provider.id}: OK`);
-            setTimeout(() => setTestResult(null), 5000);
+            showTestResult(`✅ ${modelName} with ${provider.id}: OK`, 5000);
           })
           .catch((err) => {
             const msg = err instanceof Error ? err.message : String(err);
-            setTestResult(`❌ ${modelName} with ${provider.id}: ${msg}`);
-            setTimeout(() => setTestResult(null), 8000);
+            showTestResult(`❌ ${modelName} with ${provider.id}: ${msg}`, 8000);
           });
       }
       return;
