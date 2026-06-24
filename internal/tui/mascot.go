@@ -7,12 +7,12 @@ import (
 )
 
 var colors = map[byte]lipgloss.TerminalColor{
-	'O': lipgloss.AdaptiveColor{Light: "#b85c37", Dark: "#D4704B"}, // Orange
-	'D': lipgloss.AdaptiveColor{Light: "#8a3c20", Dark: "#A65030"}, // Dark Orange Shading
-	'W': lipgloss.AdaptiveColor{Light: "#eaeaea", Dark: "#FFFFFF"}, // White
-	'B': lipgloss.AdaptiveColor{Light: "#3d3529", Dark: "#1c1c1c"}, // Black/Dark Brown
-	'e': lipgloss.AdaptiveColor{Light: "#3d3529", Dark: "#1c1c1c"},
-	'n': lipgloss.AdaptiveColor{Light: "#3d3529", Dark: "#1c1c1c"},
+	'O': lipgloss.Color("#D4704B"), // Orange
+	'D': lipgloss.Color("#A65030"), // Dark Orange Shading
+	'W': lipgloss.Color("#FFFFFF"), // White
+	'B': lipgloss.Color("#000000"), // Black
+	'e': lipgloss.Color("#000000"),
+	'n': lipgloss.Color("#000000"),
 }
 
 const FoxMap = `............BBBBBBBB....

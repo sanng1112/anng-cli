@@ -9,13 +9,13 @@ const (
 )
 
 var (
-	// Adaptive color palette (Light vs Dark)
-	colorBrandOrange = lipgloss.AdaptiveColor{Light: "#b85c37", Dark: "#D4704B"}
-	colorDarkOrange  = lipgloss.AdaptiveColor{Light: "#8a3c20", Dark: "#A65030"}
-	colorMutedGray   = lipgloss.AdaptiveColor{Light: "#7a7060", Dark: "#888888"}
-	colorGreen       = lipgloss.AdaptiveColor{Light: "#3d7a42", Dark: "#22c55e"}
-	colorAmber       = lipgloss.AdaptiveColor{Light: "#b07530", Dark: "#f59e0b"}
-	colorRed         = lipgloss.AdaptiveColor{Light: "#b5433a", Dark: "#ef4444"}
+	// Static color palette (restoring original colors)
+	colorBrandOrange = lipgloss.Color("#D4704B")
+	colorDarkOrange  = lipgloss.Color("#A65030")
+	colorMutedGray   = lipgloss.Color("#888888")
+	colorGreen       = lipgloss.Color("#22c55e")
+	colorAmber       = lipgloss.Color("#f59e0b")
+	colorRed         = lipgloss.Color("#ef4444")
 
 	// String color values (kept for backward compatibility where needed)
 	ColorBrandOrange = "#D4704B"
