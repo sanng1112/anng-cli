@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -58,6 +59,10 @@ func RunHeadless(ctx context.Context, prompt string, autoApprove bool) (*Headles
 	res, err := orch.Run(ctx, prompt)
 	if err != nil {
 		return &HeadlessResult{FinishReason: "failed", ExitCode: 1}, err
+	}
+
+	if res.Response != "" {
+		fmt.Println(res.Response)
 	}
 
 	return &HeadlessResult{FinishReason: res.FinishReason, ExitCode: 0}, nil

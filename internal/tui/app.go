@@ -163,10 +163,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ErrLine = msg.Err.Error()
 			m.ChatView.ErrLine = msg.Err.Error()
 		} else if msg.Result != nil {
-			if runRes, ok := msg.Result.(*agent.RunResult); ok && runRes.Turns > 0 {
-				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, fmt.Sprintf("Agent: Done in %d turns.", runRes.Turns))
-			} else if runRes, ok := msg.Result.(*agent.RunResult); ok && runRes.Turns == 0 {
-				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.FinishReason)
+			if runRes, ok := msg.Result.(*agent.RunResult); ok {
+				if runRes.Response != "" {
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.Response)
+				}
+				if runRes.Turns > 0 {
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, fmt.Sprintf("Agent: Done in %d turns.", runRes.Turns))
+				} else {
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.FinishReason)
+				}
 			}
 		}
 		return m, nil

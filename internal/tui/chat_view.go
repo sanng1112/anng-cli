@@ -51,8 +51,12 @@ func spinnerTick() tea.Cmd {
 }
 
 func NewChatViewModel(cfg AppConfig, slashItems []string) ChatViewModel {
+	buf := NewInputBuffer()
+	if cfg.InitialPrompt != "" {
+		buf.Insert(cfg.InitialPrompt)
+	}
 	return ChatViewModel{
-		Buffer:     NewInputBuffer(),
+		Buffer:     buf,
 		LogBuffer:  []string{},
 		SlashItems: slashItems,
 		Config:     cfg,
@@ -155,6 +159,14 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 					}
 				} else {
 					m.LogBuffer = append(m.LogBuffer, lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Render("> ")+text)
+					
+					// Print request summary to TUI log for user diagnostics
+					targetURL := m.Config.BaseURL
+					if targetURL == "" {
+						targetURL = "https://api.openai.com/v1"
+					}
+					m.LogBuffer = append(m.LogBuffer, fmt.Sprintf("System [Request]: Model=%s, Endpoint=%s", m.Config.Model, targetURL))
+					
 					m.Busy = true
 					m.ScrollOffset = 0 // Auto-scroll to bottom on submit
 					
@@ -297,6 +309,15 @@ func (m ChatViewModel) View() string {
 
 	var sb strings.Builder
 
+	// Permanent small header at the top of the chat view
+	headerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Bold(true)
+	titleLine := headerStyle.Render("ANNG CLI (v" + m.Config.Version + ")") + " • Model: " + m.Config.Model
+	if m.Config.BaseURL != "" {
+		titleLine += " • Endpoint: " + m.Config.BaseURL
+	}
+	sb.WriteString(titleLine + "\n")
+	sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#444444")).Render(strings.Repeat("─", w)) + "\n\n")
+
 	// Welcome screen on first render (no log yet)
 	if len(m.LogBuffer) == 0 {
 		sb.WriteString(RenderWelcomeScreen(WelcomeConfig{
@@ -309,7 +330,7 @@ func (m ChatViewModel) View() string {
 		sb.WriteString("\n\n")
 	} else {
 		// Scrollback chat log with offset paging
-		maxLog := h - 8
+		maxLog := h - 10 // Adjusted for header lines
 		if maxLog < 1 {
 			maxLog = 1
 		}

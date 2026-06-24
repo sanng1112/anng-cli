@@ -15,6 +15,7 @@ import (
 type RunResult struct {
 	FinishReason string
 	Turns        int
+	Response     string
 }
 
 type Orchestrator struct {
@@ -222,6 +223,7 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 
 	turns := 0
 	maxTurns := 10
+	var responseParts []string
 
 	for turns < maxTurns {
 		turns++
@@ -251,7 +253,11 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 			Tools:    openAiToolsList,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("API call failed: %w", err)
+			targetURL := o.BaseURL
+			if targetURL == "" {
+				targetURL = "https://api.openai.com/v1"
+			}
+			return nil, fmt.Errorf("API call failed (Endpoint: %s, Model: %s): %w", targetURL, o.Model, err)
 		}
 
 		if len(resp.Choices) == 0 {
@@ -260,6 +266,10 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 
 		msg := resp.Choices[0].Message
 		messages = append(messages, msg)
+
+		if msg.Content != "" {
+			responseParts = append(responseParts, msg.Content)
+		}
 
 		if len(msg.ToolCalls) == 0 {
 			break
@@ -296,7 +306,7 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 		}
 	}
 
-	return &RunResult{FinishReason: "completed", Turns: turns}, nil
+	return &RunResult{FinishReason: "completed", Turns: turns, Response: strings.Join(responseParts, "\n")}, nil
 }
 
 func (o *Orchestrator) checkForCompilerErrors(output string) bool {
