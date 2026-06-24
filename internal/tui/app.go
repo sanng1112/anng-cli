@@ -32,6 +32,9 @@ func init() {
 			ProgramInstance.Send(ProcessOutputMsg{Command: command, Output: output})
 		}
 	}
+	tools.PermissionCheck = func(command string, cwd string) error {
+		return nil
+	}
 }
 
 // AppConfig holds startup configuration passed from main.
@@ -113,12 +116,18 @@ func InitialModelWithConfig(cfg AppConfig) AppModel {
 
 	sessionID := generateUUID()
 
-	return AppModel{
+	model := AppModel{
 		CurrentView: ViewChat,
 		ChatView:    chatVM,
 		Config:      cfg,
 		SessionID:   sessionID,
 	}
+
+	if !cfg.AutoAccept && !cfg.PlanMode {
+		model.PermissionView = NewPermissionPromptModel(PermissionRequest{})
+	}
+
+	return model
 }
 
 func InitialModel() AppModel {
