@@ -147,7 +147,7 @@ git commit -m "feat: add CLI options parsing and main bootstrap structure"
 - Create: `internal/config/config.go`
 - Test: `internal/config/config_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/config/config_test.go` to test loading of environment variables and options:
 ```go
@@ -187,12 +187,12 @@ func TestLoadConfig(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/config/...`
 Expected: FAIL with "LoadConfig not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/config/config.go`:
 ```go
@@ -225,12 +225,12 @@ func LoadConfig(path string) (*Settings, error) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/config/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/config/config.go internal/config/config_test.go
