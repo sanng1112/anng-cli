@@ -491,7 +491,7 @@ git commit -m "feat: add Compacter context-trimming system with CJK weight calcu
 - Create: `internal/tools/executor.go`
 - Test: `internal/tools/executor_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tools/executor_test.go` to test registry, parsing and dispatching tool commands:
 ```go
@@ -518,12 +518,12 @@ func TestToolRegistry(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tools/...`
 Expected: FAIL with "NewToolRegistry not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/tools/executor.go`:
 ```go
@@ -560,12 +560,12 @@ func (tr *ToolRegistry) Execute(ctx context.Context, name string, args map[strin
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tools/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tools/executor.go internal/tools/executor_test.go
