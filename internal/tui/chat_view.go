@@ -326,6 +326,7 @@ func (m ChatViewModel) View() string {
 			ThinkingEnabled: false,
 			ReasoningEffort: "-",
 			Version:         m.Config.Version,
+			ShowMascot:      h >= 28,
 		}, w))
 		sb.WriteString("\n\n")
 	} else {

@@ -15,6 +15,7 @@ type WelcomeConfig struct {
 	ThinkingEnabled bool
 	ReasoningEffort string
 	Version         string
+	ShowMascot      bool
 }
 
 func FormatHomeRelativePath(path string, home string) string {
@@ -42,7 +43,10 @@ var WelcomeTips = []string{
 }
 
 func RenderWelcomeScreen(cfg WelcomeConfig, width int) string {
-	mascot := RenderMascot(width)
+	mascot := ""
+	if cfg.ShowMascot {
+		mascot = RenderMascot(width) + "\n\n"
+	}
 
 	borderStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -65,5 +69,5 @@ func RenderWelcomeScreen(cfg WelcomeConfig, width int) string {
 	tip := WelcomeTips[rand.Intn(len(WelcomeTips))]
 	tipsBar := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("Tips: " + tip)
 
-	return fmt.Sprintf("%s\n\n%s\n\n%s", mascot, box, tipsBar)
+	return fmt.Sprintf("%s%s\n\n%s", mascot, box, tipsBar)
 }
