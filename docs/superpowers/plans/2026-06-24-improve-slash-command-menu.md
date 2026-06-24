@@ -1,3 +1,57 @@
+# Slash Command Menu UI Redesign Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Fix the TUI layout issues where the slash command menu overlaps with the main interface and descriptions are truncated, by incorporating word wrapping and fixed-width formatting using lipgloss.
+
+**Architecture:** Update `RenderDropdownMenu` in `internal/tui/autocomplete.go` to split commands and descriptions. Use `lipgloss` to render them in a two-column layout with word wrapping for descriptions. Add auto-scrolling to the menu to constrain its height.
+
+**Tech Stack:** Go, lipgloss.
+
+---
+
+### Task 1: Refactor RenderDropdownMenu for Two-Column Layout
+
+**Files:**
+- Modify: `internal/tui/autocomplete.go`
+- Test: `internal/tui/autocomplete_test.go`
+
+- [ ] **Step 1: Write a test for the new dropdown layout**
+
+Update `internal/tui/autocomplete_test.go` to add a test checking if the rendered string handles the format properly:
+
+```go
+package tui
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestRenderDropdownMenu_Format(t *testing.T) {
+	matches := []string{
+		"/test — A very long description that should be wrapped properly by lipgloss",
+	}
+	output := RenderDropdownMenu(matches, 0, 80)
+	if output == "" {
+		t.Error("RenderDropdownMenu returned empty string")
+	}
+	if !strings.Contains(output, "/test") {
+		t.Error("RenderDropdownMenu output missing command name")
+	}
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails (or compiles)**
+
+Run: `CGO_ENABLED=0 go test ./internal/tui/... -run TestRenderDropdownMenu_Format`
+Expected: PASS or FAIL
+
+- [ ] **Step 3: Implement new RenderDropdownMenu in autocomplete.go**
+
+Modify `internal/tui/autocomplete.go` to implement word-wrapping, two columns and auto-scrolling:
+
+```go
 package tui
 
 import (
@@ -114,3 +168,18 @@ func RenderDropdownMenu(matches []string, selectedIdx int, width int) string {
 
 	return menuStyle.Render(strings.Join(rendered, "\n"))
 }
+```
+
+- [ ] **Step 4: Run tests to verify it passes**
+
+Run: `CGO_ENABLED=0 go test ./internal/tui/... -v`
+Expected: PASS
+
+- [ ] **Step 5: Commit changes**
+
+```bash
+git add internal/tui/autocomplete.go internal/tui/autocomplete_test.go
+git commit -m "style(tui): redesign slash command menu with word wrapping, columns, and scroll bounds"
+```
+
+---
