@@ -24,19 +24,25 @@ func RunHeadless(ctx context.Context, prompt string, autoApprove bool) (*Headles
 	}
 
 	var modelName, apiKey, baseURL string
-	cfg, err := config.LoadConfig(settingsPath)
-	if err == nil && cfg != nil {
-		modelName = cfg.Model
-		apiKey = cfg.ApiKey
-		baseURL = cfg.BaseURL
+	if os.Getenv("ANNG_TEST") == "true" {
+		modelName = "deepseek-chat"
+		apiKey = "mock-api-key"
+		baseURL = ""
 	} else {
-		// Use environment variables as fallback
-		modelName = os.Getenv("ANNG_MODEL")
-		if modelName == "" {
-			modelName = "deepseek-chat"
+		cfg, err := config.LoadConfig(settingsPath)
+		if err == nil && cfg != nil {
+			modelName = cfg.Model
+			apiKey = cfg.ApiKey
+			baseURL = cfg.BaseURL
+		} else {
+			// Use environment variables as fallback
+			modelName = os.Getenv("ANNG_MODEL")
+			if modelName == "" {
+				modelName = "deepseek-chat"
+			}
+			apiKey = os.Getenv("ANNG_API_KEY")
+			baseURL = os.Getenv("ANNG_BASE_URL")
 		}
-		apiKey = os.Getenv("ANNG_API_KEY")
-		baseURL = os.Getenv("ANNG_BASE_URL")
 	}
 
 	orch := NewOrchestrator(modelName, apiKey)

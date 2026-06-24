@@ -6,12 +6,14 @@ import (
 )
 
 type Settings struct {
-	Model     string            `json:"model"`
-	ApiKey    string            `json:"apiKey"`
-	BaseURL   string            `json:"baseUrl,omitempty"`
-	Provider  string            `json:"provider,omitempty"` // "openai", "anthropic", "deepseek"
-	Env       map[string]string `json:"env"`
-	Models    []string          `json:"models,omitempty"`
+	Model      string            `json:"model"`
+	ApiKey     string            `json:"apiKey"`
+	BaseURL    string            `json:"baseUrl,omitempty"`
+	Provider   string            `json:"provider,omitempty"` // "openai", "anthropic", "deepseek"
+	AutoAccept bool              `json:"autoAccept"`
+	PlanMode   bool              `json:"planMode"`
+	Env        map[string]string `json:"env"`
+	Models     []string          `json:"models,omitempty"`
 }
 
 func LoadConfig(path string) (*Settings, error) {

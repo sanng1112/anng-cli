@@ -163,6 +163,9 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 							home, _ := os.UserHomeDir()
 							expanded := skills.ExpandPromptWithActiveSkills(text, m.Config.ActiveSkills, m.Config.ProjectRoot, home)
 							orch := agent.NewOrchestrator(m.Config.Model, m.Config.ApiKey)
+							if m.Config.BaseURL != "" {
+								orch.BaseURL = m.Config.BaseURL
+							}
 							ctx := context.WithValue(context.Background(), contextkeys.ProjectRootKey, m.Config.ProjectRoot)
 							ctx = context.WithValue(ctx, contextkeys.SessionIDKey, "session-tui")
 							res, err := orch.Run(ctx, expanded)

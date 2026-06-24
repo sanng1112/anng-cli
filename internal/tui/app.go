@@ -39,6 +39,7 @@ type AppConfig struct {
 	MaxTurns      int
 	Model         string
 	ApiKey        string
+	BaseURL       string
 	Models        []string
 	SettingsPath  string
 	ActiveSkills  []string

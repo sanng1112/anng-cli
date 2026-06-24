@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"anng-cli/internal/config"
 	"anng-cli/internal/tui"
@@ -58,6 +59,15 @@ func ParseCLIOptions(argv []string) (CLIOptions, error) {
 			}
 			opts.MaxTurns = val
 			i++
+		default:
+			if strings.HasPrefix(argv[i], "-") {
+				return opts, fmt.Errorf("unrecognized flag: %s", argv[i])
+			}
+			if opts.Prompt == "" {
+				opts.Prompt = argv[i]
+			} else {
+				opts.Prompt += " " + argv[i]
+			}
 		}
 	}
 	return opts, nil
@@ -117,38 +127,53 @@ func main() {
 	cwd, _ := os.Getwd()
 
 	home, _ := os.UserHomeDir()
-	settingsPath := filepath.Join(home, ".anng", "settings.json")
+	settingsPath := filepath.Join(".anng", "settings.json")
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
-		settingsPath = filepath.Join(".anng", "settings.json")
+		settingsPath = filepath.Join(home, ".anng", "settings.json")
 	}
 
-	var modelName, apiKey string
+	var modelName, apiKey, baseURL string
 	var modelsList []string
+	var autoAccept, planMode bool
 	cfgLoaded, err := config.LoadConfig(settingsPath)
 	if err == nil && cfgLoaded != nil {
 		modelName = cfgLoaded.Model
 		apiKey = cfgLoaded.ApiKey
+		baseURL = cfgLoaded.BaseURL
 		modelsList = cfgLoaded.Models
+		autoAccept = cfgLoaded.AutoAccept
+		planMode = cfgLoaded.PlanMode
 	} else {
 		modelName = os.Getenv("ANNG_MODEL")
 		apiKey = os.Getenv("ANNG_API_KEY")
+		baseURL = os.Getenv("ANNG_BASE_URL")
+	}
+
+	// CLI flags override config settings
+	if opts.Yolo {
+		autoAccept = true
+	}
+	if opts.Plan {
+		planMode = true
 	}
 
 	cfg := tui.AppConfig{
 		Version:       Version,
 		ProjectRoot:   cwd,
 		InitialPrompt: opts.Prompt,
-		AutoAccept:    opts.Yolo,
-		PlanMode:      opts.Plan,
+		AutoAccept:    autoAccept,
+		PlanMode:      planMode,
 		MaxTurns:      opts.MaxTurns,
 		Model:         modelName,
 		ApiKey:        apiKey,
+		BaseURL:       baseURL,
 		Models:        modelsList,
 		SettingsPath:  settingsPath,
 	}
 
 	model := tui.InitialModelWithConfig(cfg)
 	p := tea.NewProgram(model, tea.WithAltScreen())
+	tui.ProgramInstance = p
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
 		os.Exit(1)

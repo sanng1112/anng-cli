@@ -6,6 +6,7 @@ import (
 )
 
 func TestHeadlessExecutionFlow(t *testing.T) {
+	t.Setenv("ANNG_TEST", "true")
 	res, err := RunHeadless(context.Background(), "refactor task", true)
 	if err != nil {
 		t.Fatalf("Headless execution failed: %v", err)
