@@ -3,31 +3,37 @@ package tools
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"anng-cli/internal/contextkeys"
 )
 
 func TestEditTool(t *testing.T) {
-	tempFile, err := os.CreateTemp("", "test_edit.txt")
+	workspaceDir, err := os.MkdirTemp("", "test_edit_workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer os.RemoveAll(workspaceDir)
+
+	tempFile := filepath.Join(workspaceDir, "test_edit.txt")
 
 	content := "line 1\nline 2\nline 3"
-	if err := os.WriteFile(tempFile.Name(), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(tempFile, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
 
+	ctx := context.WithValue(context.Background(), contextkeys.ProjectRootKey, workspaceDir)
 	args := map[string]interface{}{
-		"file_path":           tempFile.Name(),
+		"file_path":           "test_edit.txt",
 		"target_content":      "line 2",
 		"replacement_content": "line 2 modified",
 		"start_line":          float64(2),
 		"end_line":            float64(2),
 	}
 
-	res, err := EditTool(context.Background(), args)
+	res, err := EditTool(ctx, args)
 	if err != nil {
 		t.Fatalf("EditTool failed: %v", err)
 	}
@@ -36,7 +42,7 @@ func TestEditTool(t *testing.T) {
 		t.Errorf("Expected 'Content replaced successfully', got %q", res)
 	}
 
-	updated, err := os.ReadFile(tempFile.Name())
+	updated, err := os.ReadFile(tempFile)
 	if err != nil {
 		t.Fatal(err)
 	}

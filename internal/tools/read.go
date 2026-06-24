@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"anng-cli/internal/contextkeys"
@@ -25,9 +24,9 @@ func ReadTool(ctx context.Context, args map[string]interface{}) (string, error) 
 		projectRoot = pr
 	}
 
-	filePath := filePathVal
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(projectRoot, filePath)
+	filePath, err := resolveWorkspacePath(projectRoot, filePathVal)
+	if err != nil {
+		return "", err
 	}
 
 	stat, err := os.Stat(filePath)

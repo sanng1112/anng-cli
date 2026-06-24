@@ -28,9 +28,9 @@ func WriteTool(ctx context.Context, args map[string]interface{}) (string, error)
 		projectRoot = pr
 	}
 
-	filePath := filePathVal
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(projectRoot, filePath)
+	filePath, err := resolveWorkspacePath(projectRoot, filePathVal)
+	if err != nil {
+		return "", err
 	}
 
 	exists := true
