@@ -340,7 +340,7 @@ git commit -m "feat: add core Domain structures for messages and checkpoints"
 - Create: `internal/tokenizer/compacter.go`
 - Test: `internal/tokenizer/compacter_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tokenizer/compacter_test.go` to verify context truncation triggers and CJK character weight adjustments:
 ```go
@@ -374,12 +374,12 @@ func TestShouldCompact(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tokenizer/...`
 Expected: FAIL with "Message undefined" / "ShouldCompactContext undefined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/tokenizer/compacter.go`:
 ```go
@@ -471,12 +471,12 @@ func ShouldCompactContext(messages []Message, threshold int) CompactionDecision 
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tokenizer/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tokenizer/compacter.go internal/tokenizer/compacter_test.go
