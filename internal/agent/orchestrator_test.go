@@ -71,3 +71,23 @@ func TestStandardToolsRegistration(t *testing.T) {
 		}
 	}
 }
+
+func TestAutoCorrectiveLoopOnCompileError(t *testing.T) {
+	orchestrator := NewOrchestrator("deepseek-chat", "mock-key")
+	orchestrator.BaseURL = "mock-url"
+
+	// Mock register bash tool
+	orchestrator.RegisterTool("bash", func(ctx context.Context, args map[string]interface{}) (string, error) {
+		return "exit status 1: main.go:10: syntax error: unexpected semicolon", nil
+	})
+
+	shouldCorrect := orchestrator.checkForCompilerErrors("exit status 1: main.go:10: syntax error: unexpected semicolon")
+	if !shouldCorrect {
+		t.Error("Expected checkForCompilerErrors to return true for syntax error stack trace")
+	}
+
+	shouldNotCorrect := orchestrator.checkForCompilerErrors("hello world no error")
+	if shouldNotCorrect {
+		t.Error("Expected checkForCompilerErrors to return false for regular output")
+	}
+}

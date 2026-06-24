@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"anng-cli/internal/contextkeys"
+	"anng-cli/internal/tokenizer"
 	"anng-cli/internal/tools"
 	"github.com/sashabaranov/go-openai"
 )
@@ -20,6 +22,147 @@ type Orchestrator struct {
 	ApiKey       string
 	BaseURL      string
 	ToolRegistry map[string]func(ctx context.Context, args map[string]interface{}) (string, error)
+}
+
+var openAiToolsList = []openai.Tool{
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "bash",
+			Description: "Propose a shell command to execute on the system. Use 'cwd' for path.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"command": map[string]interface{}{
+						"type":        "string",
+						"description": "The exact bash command line string to run.",
+					},
+					"cwd": map[string]interface{}{
+						"type":        "string",
+						"description": "Optional working directory.",
+					},
+				},
+				"required": []string{"command"},
+			},
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "read_file",
+			Description: "Read the full text content of a file from the workspace path.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"file_path": map[string]interface{}{
+						"type":        "string",
+						"description": "Path to read, relative or absolute.",
+					},
+				},
+				"required": []string{"file_path"},
+			},
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "write_to_file",
+			Description: "Create a new file or overwrite an existing file. If file already exists and is non-empty, you must read it first.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"file_path": map[string]interface{}{
+						"type": "string",
+					},
+					"content": map[string]interface{}{
+						"type": "string",
+					},
+				},
+				"required": []string{"file_path", "content"},
+			},
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "replace_file_content",
+			Description: "Edit an existing file by replacing a single contiguous block of code.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"file_path": map[string]interface{}{
+						"type": "string",
+					},
+					"target_content": map[string]interface{}{
+						"type": "string",
+					},
+					"replacement_content": map[string]interface{}{
+						"type": "string",
+					},
+				},
+				"required": []string{"file_path", "target_content", "replacement_content"},
+			},
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "multi_replace_file_content",
+			Description: "Edit multiple non-adjacent blocks of code in a file.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"file_path": map[string]interface{}{
+						"type": "string",
+					},
+					"chunks": map[string]interface{}{
+						"type": "array",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"target_content":      map[string]interface{}{"type": "string"},
+								"replacement_content": map[string]interface{}{"type": "string"},
+							},
+							"required": []string{"target_content", "replacement_content"},
+						},
+					},
+				},
+				"required": []string{"file_path", "chunks"},
+			},
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "ask_question",
+			Description: "Ask the user a clarifying question when requirements are ambiguous.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"question": map[string]interface{}{
+						"type": "string",
+					},
+				},
+				"required": []string{"question"},
+			},
+		},
+	},
+	{
+		Type: openai.ToolTypeFunction,
+		Function: &openai.FunctionDefinition{
+			Name:        "search_web",
+			Description: "Query search engines to get web information or documentation.",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{
+						"type": "string",
+					},
+				},
+				"required": []string{"query"},
+			},
+		},
+	},
 }
 
 // NewOrchestrator creates an Orchestrator pre-registered with all standard tools.
@@ -82,9 +225,30 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 
 	for turns < maxTurns {
 		turns++
+
+		// Perform Context Compaction check
+		var tokMsgs []tokenizer.Message
+		for _, m := range messages {
+			tokMsgs = append(tokMsgs, tokenizer.Message{
+				Role:    m.Role,
+				Content: m.Content,
+			})
+		}
+		decision := tokenizer.ShouldCompactContext(tokMsgs, 4000) // threshold of 4000 tokens
+		if decision.ShouldCompact {
+			messages = messages[decision.KeepFromIndex:]
+			messages = append([]openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleSystem,
+					Content: "System: Historical messages were compacted to fit the context window limit.",
+				},
+			}, messages...)
+		}
+
 		resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 			Model:    o.Model,
 			Messages: messages,
+			Tools:    openAiToolsList,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("API call failed: %w", err)
@@ -118,6 +282,9 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 					if toolErr != nil {
 						toolResult = fmt.Sprintf("Error: %v", toolErr)
 					}
+					if tc.Function.Name == "bash" && o.checkForCompilerErrors(toolResult) && turns < maxTurns {
+						toolResult = fmt.Sprintf("%s\n\n[SYSTEM CHECKPOINT]: The execution resulted in a compiler error. Please analyze the error trace, make the necessary file corrections using write/edit, and run the verification command again.", toolResult)
+					}
 				}
 			}
 
@@ -130,4 +297,22 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 	}
 
 	return &RunResult{FinishReason: "completed", Turns: turns}, nil
+}
+
+func (o *Orchestrator) checkForCompilerErrors(output string) bool {
+	errorKeywords := []string{
+		"syntax error:",
+		"undefined:",
+		"type mismatch",
+		"exit status 1",
+		"build failed",
+		"compiler error",
+		"not used",
+	}
+	for _, kw := range errorKeywords {
+		if strings.Contains(strings.ToLower(output), kw) {
+			return true
+		}
+	}
+	return false
 }
