@@ -41,6 +41,8 @@ type ExecutePromptMsg struct {
 	Prompt string
 }
 
+type NewSessionMsg struct{}
+
 type SpinnerTickMsg struct{}
 
 func spinnerTick() tea.Cmd {
@@ -135,6 +137,7 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 					case "/new":
 						m.LogBuffer = []string{}
 						m.ErrLine = ""
+						return m, func() tea.Msg { return NewSessionMsg{} }
 					case "/resume":
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewSessionList} }
 					case "/undo":

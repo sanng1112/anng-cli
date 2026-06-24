@@ -246,7 +246,7 @@ func (m *SettingsViewModel) saveSettings() {
 		targetPath = filepath.Join(home, ".anng", "settings.json")
 	} else {
 		// Project Scope
-		targetPath = filepath.Join(".anng", "settings.json")
+		targetPath = filepath.Join(m.Config.ProjectRoot, ".anng", "settings.json")
 	}
 	m.Config.SettingsPath = targetPath
 

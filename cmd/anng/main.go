@@ -127,7 +127,7 @@ func main() {
 	cwd, _ := os.Getwd()
 
 	home, _ := os.UserHomeDir()
-	settingsPath := filepath.Join(".anng", "settings.json")
+	settingsPath := filepath.Join(cwd, ".anng", "settings.json")
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
 		settingsPath = filepath.Join(home, ".anng", "settings.json")
 	}

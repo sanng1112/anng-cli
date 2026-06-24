@@ -2,14 +2,17 @@ package tui
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"anng-cli/internal/agent"
+	"anng-cli/internal/config"
 	"anng-cli/internal/contextkeys"
 	"anng-cli/internal/skills"
 	"anng-cli/internal/tools"
@@ -71,6 +74,7 @@ type AppModel struct {
 	Busy              bool
 	ErrLine           string
 	ActiveCancel      context.CancelFunc
+	SessionID         string
 }
 
 func InitialModelWithConfig(cfg AppConfig) AppModel {
@@ -105,10 +109,13 @@ func InitialModelWithConfig(cfg AppConfig) AppModel {
 
 	chatVM := NewChatViewModel(cfg, slashItems)
 
+	sessionID := generateUUID()
+
 	return AppModel{
 		CurrentView: ViewChat,
 		ChatView:    chatVM,
 		Config:      cfg,
+		SessionID:   sessionID,
 	}
 }
 
@@ -178,6 +185,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ErrLine = ""
 		m.ChatView.ErrLine = ""
 		
+		_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "user", msg.Prompt)
+
 		var ctx context.Context
 		ctx, m.ActiveCancel = context.WithCancel(context.Background())
 
@@ -197,7 +206,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				orch.ProjectRoot = m.Config.ProjectRoot
 
 				ctx = context.WithValue(ctx, contextkeys.ProjectRootKey, m.Config.ProjectRoot)
-				ctx = context.WithValue(ctx, contextkeys.SessionIDKey, "session-tui")
+				ctx = context.WithValue(ctx, contextkeys.SessionIDKey, m.SessionID)
 
 				res, err := orch.Run(ctx, expanded)
 				return AgentFinishedMsg{Result: res, Err: err}
@@ -211,18 +220,27 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.ErrLine = msg.Err.Error()
 			m.ChatView.ErrLine = msg.Err.Error()
+			_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "system", "Error: "+msg.Err.Error())
 		} else if msg.Result != nil {
 			if runRes, ok := msg.Result.(*agent.RunResult); ok {
 				if runRes.Response != "" {
 					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.Response)
+					_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "assistant", runRes.Response)
 				}
+				
+				var statusLine string
 				if runRes.Turns > 0 {
-					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, fmt.Sprintf("Agent: Done in %d turns. Tokens: %d input, %d output (%d total).", runRes.Turns, runRes.PromptTokens, runRes.CompletionTokens, runRes.TotalTokens))
+					statusLine = fmt.Sprintf("Agent: Done in %d turns. Tokens: %d input, %d output (%d total).", runRes.Turns, runRes.PromptTokens, runRes.CompletionTokens, runRes.TotalTokens)
 				} else {
-					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.FinishReason)
+					statusLine = runRes.FinishReason
 				}
+				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, statusLine)
+				_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "system", statusLine)
 			}
 		}
+		return m, nil
+	case NewSessionMsg:
+		m.SessionID = generateUUID()
 		return m, nil
 	}
 
@@ -280,6 +298,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.CurrentView = ViewChat
 		} else if res, ok := msg.(ResumeSessionMsg); ok {
 			m.CurrentView = ViewChat
+			m.SessionID = res.SessionName
 			if logs, err := LoadSessionContent(m.Config.ProjectRoot, res.SessionName); err == nil {
 				m.ChatView.LogBuffer = logs
 			} else {
@@ -337,6 +356,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Config.Model = sw.Model
 			m.ChatView.Config.Model = sw.Model
 			m.CurrentView = ViewChat
+			saveConfig(m.Config)
 		} else if _, ok := msg.(AddCustomModelMsg); ok {
 			m.CurrentView = ViewInput
 			m.ChatView.Buffer.Clear()
@@ -507,4 +527,76 @@ func LoadGitCheckpoints(projectRoot string) []string {
 		return []string{"No git checkpoints found"}
 	}
 	return checkpoints
+}
+
+type SessionMessage struct {
+	ID         string    `json:"id"`
+	SessionID  string    `json:"sessionId"`
+	Role       string    `json:"role"`
+	Content    string    `json:"content"`
+	CreateTime time.Time `json:"createTime"`
+	UpdateTime time.Time `json:"updateTime"`
+}
+
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+func SaveSessionMessage(projectRoot, sessionID, role, content string) error {
+	if sessionID == "" {
+		return nil
+	}
+	home, _ := os.UserHomeDir()
+	projectCode := strings.ReplaceAll(projectRoot, "/", "-")
+	projectCode = strings.ReplaceAll(projectCode, "\\", "-")
+	projectCode = strings.ReplaceAll(projectCode, ":", "")
+
+	dir := filepath.Join(home, ".anng", "projects", projectCode)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	msg := SessionMessage{
+		ID:         generateUUID(),
+		SessionID:  sessionID,
+		Role:       role,
+		Content:    content,
+		CreateTime: time.Now(),
+		UpdateTime: time.Now(),
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	filePath := filepath.Join(dir, sessionID+".jsonl")
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func saveConfig(cfg AppConfig) {
+	if cfg.SettingsPath == "" {
+		return
+	}
+	s := &config.Settings{
+		Model:      cfg.Model,
+		ApiKey:     cfg.ApiKey,
+		BaseURL:    cfg.BaseURL,
+		AutoAccept: cfg.AutoAccept,
+		PlanMode:   cfg.PlanMode,
+		Models:     cfg.Models,
+	}
+	_ = config.SaveConfig(cfg.SettingsPath, s)
 }
