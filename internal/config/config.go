@@ -6,9 +6,11 @@ import (
 )
 
 type Settings struct {
-	Model  string            `json:"model"`
-	ApiKey string            `json:"apiKey"`
-	Env    map[string]string `json:"env"`
+	Model     string            `json:"model"`
+	ApiKey    string            `json:"apiKey"`
+	BaseURL   string            `json:"baseUrl,omitempty"`
+	Provider  string            `json:"provider,omitempty"` // "openai", "anthropic", "deepseek"
+	Env       map[string]string `json:"env"`
 }
 
 func LoadConfig(path string) (*Settings, error) {

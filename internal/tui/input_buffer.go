@@ -71,6 +71,20 @@ func (ib *InputBuffer) MoveWordLeft() {
 	ib.cursor = idx
 }
 
+func (ib *InputBuffer) MoveWordRight() {
+	if ib.cursor >= len(ib.runes) {
+		return
+	}
+	idx := ib.cursor
+	for idx < len(ib.runes) && ib.runes[idx] == ' ' {
+		idx++
+	}
+	for idx < len(ib.runes) && ib.runes[idx] != ' ' {
+		idx++
+	}
+	ib.cursor = idx
+}
+
 func (ib *InputBuffer) DeleteWordBefore() {
 	if ib.cursor == 0 {
 		return

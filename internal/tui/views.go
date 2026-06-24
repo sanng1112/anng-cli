@@ -15,6 +15,7 @@ const (
 	ViewUndo        TuiView = "undo"
 	ViewMcpStatus   TuiView = "mcp-status"
 	ViewSettings    TuiView = "settings"
+	ViewModelSelect TuiView = "model-select"
 )
 
 func RenderSessionList(sessions []string, selectedIdx int) string {
@@ -64,5 +65,21 @@ func RenderMcpStatus(mcpServers []string, statuses map[string]string) string {
 	}
 	lines = append(lines, "")
 	lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("esc: return to chat"))
+	return strings.Join(lines, "\n")
+}
+
+func RenderModelSelector(models []string, selectedIdx int) string {
+	var lines []string
+	lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Select AI Provider Model:"))
+	lines = append(lines, "")
+	for idx, m := range models {
+		if idx == selectedIdx {
+			lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Render(fmt.Sprintf("> %s", m)))
+		} else {
+			lines = append(lines, fmt.Sprintf("  %s", m))
+		}
+	}
+	lines = append(lines, "")
+	lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("enter: select model  •  esc: cancel"))
 	return strings.Join(lines, "\n")
 }

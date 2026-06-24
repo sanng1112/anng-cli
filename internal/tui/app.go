@@ -307,10 +307,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.LogBuffer = append(m.LogBuffer, lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Render("> ")+text)
 					m.Busy = true
 					return m, func() tea.Msg {
+						home, _ := os.UserHomeDir()
+						expanded := skills.ExpandPrompt(text, m.Config.ProjectRoot, home)
 						orch := agent.NewOrchestrator(m.Config.Model, m.Config.ApiKey)
 						ctx := context.WithValue(context.Background(), contextkeys.ProjectRootKey, m.Config.ProjectRoot)
 						ctx = context.WithValue(ctx, contextkeys.SessionIDKey, "session-tui")
-						res, err := orch.Run(ctx, text)
+						res, err := orch.Run(ctx, expanded)
 						return AgentFinishedMsg{Result: res, Err: err}
 					}
 				}
