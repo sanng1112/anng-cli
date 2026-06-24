@@ -24,3 +24,21 @@ func TestInputBufferEdit(t *testing.T) {
 		t.Errorf("Expected deleted word, got %q", buf.GetText())
 	}
 }
+
+func TestWordMovementAndDeletion(t *testing.T) {
+	ib := NewInputBuffer()
+	ib.Insert("hello world developer")
+
+	// Move cursor to start of "world"
+	ib.SetCursor(6)
+	ib.MoveWordLeft()
+	if ib.GetCursor() != 0 {
+		t.Errorf("Expected cursor at 0, got %d", ib.GetCursor())
+	}
+
+	ib.SetCursor(6)
+	ib.MoveWordRight()
+	if ib.GetCursor() != 11 {
+		t.Errorf("Expected cursor at 11, got %d", ib.GetCursor())
+	}
+}
