@@ -22,3 +22,16 @@ func TestBrandThemeStyles(t *testing.T) {
 		t.Errorf("Expected quadrant blocks in border frame, got %q", mascotBorder)
 	}
 }
+
+func TestThemeDesignTokens(t *testing.T) {
+	if BrandOrangeColor != "#D4704B" {
+		t.Errorf("expected BrandOrangeColor to be '#D4704B', got %s", BrandOrangeColor)
+	}
+	styled := OrangeStyle.Render("Test Title")
+	_ = styled
+	expectedFg := colorBrandOrange
+	if OrangeStyle.GetForeground() != expectedFg {
+		t.Errorf("OrangeStyle foreground mismatch")
+	}
+}
+

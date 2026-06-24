@@ -6,13 +6,13 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var colors = map[byte]string{
-	'O': "#D4704B", // Orange
-	'D': "#A65030", // Dark Orange Shading
-	'W': "#FFFFFF", // White
-	'B': "#000000", // Black
-	'e': "#000000",
-	'n': "#000000",
+var colors = map[byte]lipgloss.TerminalColor{
+	'O': lipgloss.AdaptiveColor{Light: "#b85c37", Dark: "#D4704B"}, // Orange
+	'D': lipgloss.AdaptiveColor{Light: "#8a3c20", Dark: "#A65030"}, // Dark Orange Shading
+	'W': lipgloss.AdaptiveColor{Light: "#eaeaea", Dark: "#FFFFFF"}, // White
+	'B': lipgloss.AdaptiveColor{Light: "#3d3529", Dark: "#1c1c1c"}, // Black/Dark Brown
+	'e': lipgloss.AdaptiveColor{Light: "#3d3529", Dark: "#1c1c1c"},
+	'n': lipgloss.AdaptiveColor{Light: "#3d3529", Dark: "#1c1c1c"},
 }
 
 const FoxMap = `............BBBBBBBB....
@@ -60,30 +60,30 @@ func RenderMascot(width int) string {
 		for i := 0; i < len(upperRow); i++ {
 			u := upperRow[i]
 			l := lowerRow[i]
-			colorU := colors[u]
-			colorL := colors[l]
+			colorU, existsU := colors[u]
+			colorL, existsL := colors[l]
 
 			if u == l {
-				if colorU != "" {
-					style := lipgloss.NewStyle().Foreground(lipgloss.Color(colorU))
+				if existsU {
+					style := lipgloss.NewStyle().Foreground(colorU)
 					rowStr += style.Render("█")
 				} else {
 					rowStr += " "
 				}
-			} else if colorU != "" && colorL == "" {
-				style := lipgloss.NewStyle().Foreground(lipgloss.Color(colorU))
+			} else if existsU && !existsL {
+				style := lipgloss.NewStyle().Foreground(colorU)
 				rowStr += style.Render("▀")
-			} else if colorU == "" && colorL != "" {
-				style := lipgloss.NewStyle().Foreground(lipgloss.Color(colorL))
+			} else if !existsU && existsL {
+				style := lipgloss.NewStyle().Foreground(colorL)
 				rowStr += style.Render("▄")
-			} else if colorU != "" && colorL != "" {
-				style := lipgloss.NewStyle().Foreground(lipgloss.Color(colorU)).Background(lipgloss.Color(colorL))
+			} else if existsU && existsL {
+				style := lipgloss.NewStyle().Foreground(colorU).Background(colorL)
 				rowStr += style.Render("▀")
 			}
 		}
 
 		if r/2 >= 1 && r/2 <= 6 {
-			logoStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor))
+			logoStyle := lipgloss.NewStyle().Foreground(colorBrandOrange)
 			rowStr += " " + logoStyle.Render(LogoLines[r/2-1])
 		}
 		result = append(result, rowStr)
