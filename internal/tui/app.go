@@ -27,18 +27,24 @@ var (
 )
 
 type AppModel struct {
-	InputText string
-	LogBuffer []string
-	Width     int
-	Height    int
-	ShowMenu  bool
+	InputText     string
+	LogBuffer     []string
+	Width         int
+	Height        int
+	ShowMenu      bool
+	CurrentView   TuiView
+	Sessions      []string
+	SessionIdx    int
+	Checkpoints   []string
+	CheckpointIdx int
 }
 
 func InitialModel() AppModel {
 	return AppModel{
-		InputText: "",
-		LogBuffer: []string{},
-		ShowMenu:  false,
+		InputText:   "",
+		LogBuffer:   []string{},
+		ShowMenu:    false,
+		CurrentView: ViewChat,
 	}
 }
 
@@ -82,6 +88,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m AppModel) View() string {
+	switch m.CurrentView {
+	case ViewSessionList:
+		return "\n" + RenderSessionList(m.Sessions, m.SessionIdx)
+	case ViewUndo:
+		return "\n" + RenderUndoSelector(m.Checkpoints, m.CheckpointIdx)
+	case ViewMcpStatus:
+		return "\n" + RenderMcpStatus([]string{"filesystem", "google-search"}, map[string]string{"filesystem": "connected", "google-search": "connected"})
+	}
+
 	title := titleStyle.Render("ANNG CLI (Go) — v0.2.000")
 
 	// Log history
