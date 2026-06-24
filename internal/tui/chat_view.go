@@ -316,8 +316,8 @@ func (m ChatViewModel) View() string {
 		sb.WriteString(RenderWelcomeScreen(WelcomeConfig{
 			ProjectRoot:     m.Config.ProjectRoot,
 			Model:           m.Config.Model,
-			ThinkingEnabled: false,
-			ReasoningEffort: "-",
+			ThinkingEnabled: m.Config.ThinkingEnabled,
+			ReasoningEffort: m.Config.ReasoningEffort,
 			Version:         m.Config.Version,
 			ShowMascot:      h >= 28,
 		}, w))

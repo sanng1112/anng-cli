@@ -44,16 +44,16 @@ func TestSettingsWizardFlow(t *testing.T) {
 	}
 
 	// Test case 2: Toggle auto_accept
-	// auto_accept is index 4
-	model.Dropdown.ActiveIndex = 4
+	// auto_accept is index 6
+	model.Dropdown.ActiveIndex = 6
 	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if !model.Config.AutoAccept {
 		t.Errorf("expected AutoAccept to be true after toggle")
 	}
 
 	// Test case 3: Toggle plan_mode
-	// plan_mode is index 5
-	model.Dropdown.ActiveIndex = 5
+	// plan_mode is index 7
+	model.Dropdown.ActiveIndex = 7
 	model, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if !model.Config.PlanMode {
 		t.Errorf("expected PlanMode to be true after toggle")

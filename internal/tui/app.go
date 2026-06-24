@@ -36,18 +36,20 @@ func init() {
 
 // AppConfig holds startup configuration passed from main.
 type AppConfig struct {
-	Version       string
-	ProjectRoot   string
-	InitialPrompt string
-	AutoAccept    bool
-	PlanMode      bool
-	MaxTurns      int
-	Model         string
-	ApiKey        string
-	BaseURL       string
-	Models        []string
-	SettingsPath  string
-	ActiveSkills  []string
+	Version         string
+	ProjectRoot     string
+	InitialPrompt   string
+	AutoAccept      bool
+	PlanMode        bool
+	MaxTurns        int
+	Model           string
+	ApiKey          string
+	BaseURL         string
+	Models          []string
+	SettingsPath    string
+	ActiveSkills    []string
+	ThinkingEnabled bool
+	ReasoningEffort string
 }
 
 type AppModel struct {
@@ -591,12 +593,14 @@ func saveConfig(cfg AppConfig) {
 		return
 	}
 	s := &config.Settings{
-		Model:      cfg.Model,
-		ApiKey:     cfg.ApiKey,
-		BaseURL:    cfg.BaseURL,
-		AutoAccept: cfg.AutoAccept,
-		PlanMode:   cfg.PlanMode,
-		Models:     cfg.Models,
+		Model:           cfg.Model,
+		ApiKey:          cfg.ApiKey,
+		BaseURL:         cfg.BaseURL,
+		AutoAccept:      cfg.AutoAccept,
+		PlanMode:        cfg.PlanMode,
+		ThinkingEnabled: cfg.ThinkingEnabled,
+		ReasoningEffort: cfg.ReasoningEffort,
+		Models:          cfg.Models,
 	}
 	_ = config.SaveConfig(cfg.SettingsPath, s)
 }

@@ -39,6 +39,13 @@ func getBaseURLDesc(url string) string {
 	return url
 }
 
+func getReasoningEffortDesc(effort string) string {
+	if effort == "" {
+		return "-"
+	}
+	return effort
+}
+
 func (m *SettingsViewModel) updateMainItems() {
 	scopeLabel := "Settings Scope: Project-Specific"
 	if m.Scope == "user" {
@@ -50,6 +57,8 @@ func (m *SettingsViewModel) updateMainItems() {
 		{Key: "model", Label: "Active AI Model", Description: m.Config.Model},
 		{Key: "apiKey", Label: "API Key", Description: maskKey(m.Config.ApiKey)},
 		{Key: "baseURL", Label: "Base URL", Description: getBaseURLDesc(m.Config.BaseURL)},
+		{Key: "thinking", Label: fmt.Sprintf("Thinking Enabled: %v", m.Config.ThinkingEnabled), Description: "Press enter to toggle"},
+		{Key: "reasoning", Label: fmt.Sprintf("Reasoning Effort: %s", getReasoningEffortDesc(m.Config.ReasoningEffort)), Description: "Press enter to edit"},
 		{Key: "auto_accept", Label: fmt.Sprintf("Auto-Accept: %v", m.Config.AutoAccept), Description: "Press enter to toggle"},
 		{Key: "plan_mode", Label: fmt.Sprintf("Plan Mode: %v", m.Config.PlanMode), Description: "Press enter to toggle"},
 	}
@@ -70,7 +79,7 @@ func NewSettingsViewModel(cfg AppConfig) SettingsViewModel {
 		Config:    cfg,
 	}
 	m.updateMainItems()
-	m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+	m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 	return m
 }
 
@@ -97,7 +106,7 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 						m.Scope = "project"
 					}
 					m.updateMainItems()
-					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 					m.Dropdown.ActiveIndex = 0
 					m.saveSettings()
 				case "model":
@@ -114,17 +123,26 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 				case "baseURL":
 					m.Step = "baseURLInput"
 					m.Input.Clear()
+				case "thinking":
+					m.Config.ThinkingEnabled = !m.Config.ThinkingEnabled
+					m.updateMainItems()
+					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
+					m.Dropdown.ActiveIndex = 4
+					m.saveSettings()
+				case "reasoning":
+					m.Step = "reasoningInput"
+					m.Input.Clear()
 				case "auto_accept":
 					m.Config.AutoAccept = !m.Config.AutoAccept
 					m.updateMainItems()
-					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
-					m.Dropdown.ActiveIndex = 4
+					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
+					m.Dropdown.ActiveIndex = 6
 					m.saveSettings()
 				case "plan_mode":
 					m.Config.PlanMode = !m.Config.PlanMode
 					m.updateMainItems()
-					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
-					m.Dropdown.ActiveIndex = 5
+					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
+					m.Dropdown.ActiveIndex = 7
 					m.saveSettings()
 				}
 			}
@@ -135,7 +153,7 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 			switch msg.Type {
 			case tea.KeyEsc:
 				m.Step = "main"
-				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 				m.Dropdown.ActiveIndex = 1
 			case tea.KeyUp, tea.KeyDown:
 				var cmd tea.Cmd
@@ -148,9 +166,14 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 					m.Input.Clear()
 				} else {
 					m.Config.Model = selectedKey
+					// Default to thinking enabled for deepseek-v4 models
+					isV4Model := selectedKey == "deepseek-v4-flash" || selectedKey == "deepseek-v4-pro" || selectedKey == "deepseek-v4-flash-free" || selectedKey == "deepseek-v4-pro-free"
+					if isV4Model {
+						m.Config.ThinkingEnabled = true
+					}
 					m.updateMainItems()
 					m.Step = "main"
-					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+					m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 					m.Dropdown.ActiveIndex = 1
 					m.saveSettings()
 				}
@@ -173,11 +196,15 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 				if newModelName != "" {
 					m.Config.Models = append(m.Config.Models, newModelName)
 					m.Config.Model = newModelName
+					isV4Model := newModelName == "deepseek-v4-flash" || newModelName == "deepseek-v4-pro" || newModelName == "deepseek-v4-flash-free" || newModelName == "deepseek-v4-pro-free"
+					if isV4Model {
+						m.Config.ThinkingEnabled = true
+					}
 					m.updateMainItems()
 					m.saveSettings()
 				}
 				m.Step = "main"
-				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 				m.Dropdown.ActiveIndex = 1
 			case tea.KeyBackspace:
 				m.Input.Backspace()
@@ -193,7 +220,7 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 			switch msg.Type {
 			case tea.KeyEsc:
 				m.Step = "main"
-				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 				m.Dropdown.ActiveIndex = 2
 			case tea.KeyEnter:
 				newVal := strings.TrimSpace(m.Input.GetText())
@@ -201,7 +228,7 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 				m.updateMainItems()
 				m.saveSettings()
 				m.Step = "main"
-				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 				m.Dropdown.ActiveIndex = 2
 			case tea.KeyBackspace:
 				m.Input.Backspace()
@@ -217,7 +244,7 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 			switch msg.Type {
 			case tea.KeyEsc:
 				m.Step = "main"
-				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 				m.Dropdown.ActiveIndex = 3
 			case tea.KeyEnter:
 				newVal := strings.TrimSpace(m.Input.GetText())
@@ -225,8 +252,32 @@ func (m SettingsViewModel) Update(msg tea.Msg) (SettingsViewModel, tea.Cmd) {
 				m.updateMainItems()
 				m.saveSettings()
 				m.Step = "main"
-				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 6)
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
 				m.Dropdown.ActiveIndex = 3
+			case tea.KeyBackspace:
+				m.Input.Backspace()
+			case tea.KeyRunes:
+				m.Input.Insert(string(msg.Runes))
+			case tea.KeySpace:
+				m.Input.Insert(" ")
+			}
+		}
+	case "reasoningInput":
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.Step = "main"
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
+				m.Dropdown.ActiveIndex = 5
+			case tea.KeyEnter:
+				newVal := strings.TrimSpace(m.Input.GetText())
+				m.Config.ReasoningEffort = newVal
+				m.updateMainItems()
+				m.saveSettings()
+				m.Step = "main"
+				m.Dropdown = NewDropdownMenuModel("Settings Menu", "enter: select  •  esc: return to chat", m.Items, 8)
+				m.Dropdown.ActiveIndex = 5
 			case tea.KeyBackspace:
 				m.Input.Backspace()
 			case tea.KeyRunes:
@@ -255,12 +306,14 @@ func (m *SettingsViewModel) saveSettings() {
 	_ = os.MkdirAll(dir, 0755)
 
 	cfg := &config.Settings{
-		Model:      m.Config.Model,
-		ApiKey:     m.Config.ApiKey,
-		BaseURL:    m.Config.BaseURL,
-		AutoAccept: m.Config.AutoAccept,
-		PlanMode:   m.Config.PlanMode,
-		Models:     m.Config.Models,
+		Model:           m.Config.Model,
+		ApiKey:          m.Config.ApiKey,
+		BaseURL:         m.Config.BaseURL,
+		AutoAccept:      m.Config.AutoAccept,
+		PlanMode:        m.Config.PlanMode,
+		ThinkingEnabled: m.Config.ThinkingEnabled,
+		ReasoningEffort: m.Config.ReasoningEffort,
+		Models:          m.Config.Models,
 	}
 	_ = config.SaveConfig(targetPath, cfg)
 }
@@ -278,6 +331,8 @@ func (m SettingsViewModel) View() string {
 		sb.WriteString("Enter API Key:\n\n  " + m.Input.GetText() + "█\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(ColorMutedGray)).Render("enter: save  •  esc: cancel"))
 	case "baseURLInput":
 		sb.WriteString("Enter Base URL:\n\n  " + m.Input.GetText() + "█\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(ColorMutedGray)).Render("enter: save  •  esc: cancel"))
+	case "reasoningInput":
+		sb.WriteString("Enter Reasoning Effort (e.g., low, medium, high, max, -):\n\n  " + m.Input.GetText() + "█\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(ColorMutedGray)).Render("enter: save  •  esc: cancel"))
 	}
 
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(BrandOrangeColor)).Padding(1, 2).Render(sb.String())

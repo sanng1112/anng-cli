@@ -22,12 +22,14 @@ type RunResult struct {
 }
 
 type Orchestrator struct {
-	Model        string
-	ApiKey       string
-	BaseURL      string
-	Mode         string
-	ProjectRoot  string
-	ToolRegistry map[string]func(ctx context.Context, args map[string]interface{}) (string, error)
+	Model           string
+	ApiKey          string
+	BaseURL         string
+	Mode            string
+	ProjectRoot     string
+	ThinkingEnabled bool
+	ReasoningEffort string
+	ToolRegistry    map[string]func(ctx context.Context, args map[string]interface{}) (string, error)
 }
 
 var openAiToolsList = []openai.Tool{
@@ -268,11 +270,16 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 			}, messages...)
 		}
 
-		resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		req := openai.ChatCompletionRequest{
 			Model:    o.Model,
 			Messages: messages,
 			Tools:    openAiToolsList,
-		})
+		}
+		if o.ReasoningEffort != "" && o.ReasoningEffort != "-" {
+			req.ReasoningEffort = o.ReasoningEffort
+		}
+
+		resp, err := client.CreateChatCompletion(ctx, req)
 		if err != nil {
 			targetURL := o.BaseURL
 			if targetURL == "" {

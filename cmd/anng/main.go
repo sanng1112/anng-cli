@@ -134,7 +134,9 @@ func main() {
 
 	var modelName, apiKey, baseURL string
 	var modelsList []string
-	var autoAccept, planMode bool
+	var autoAccept, planMode, thinkingEnabled bool
+	var reasoningEffort string
+
 	cfgLoaded, err := config.LoadConfig(settingsPath)
 	if err == nil && cfgLoaded != nil {
 		modelName = cfgLoaded.Model
@@ -143,10 +145,25 @@ func main() {
 		modelsList = cfgLoaded.Models
 		autoAccept = cfgLoaded.AutoAccept
 		planMode = cfgLoaded.PlanMode
+		thinkingEnabled = cfgLoaded.ThinkingEnabled
+		reasoningEffort = cfgLoaded.ReasoningEffort
 	} else {
 		modelName = os.Getenv("ANNG_MODEL")
 		apiKey = os.Getenv("ANNG_API_KEY")
 		baseURL = os.Getenv("ANNG_BASE_URL")
+		if os.Getenv("ANNG_THINKING_ENABLED") == "true" {
+			thinkingEnabled = true
+		}
+		reasoningEffort = os.Getenv("ANNG_REASONING_EFFORT")
+	}
+
+	// Default to thinking enabled for deepseek-v4 models if not explicitly set
+	isV4Model := modelName == "deepseek-v4-flash" || modelName == "deepseek-v4-pro" || modelName == "deepseek-v4-flash-free" || modelName == "deepseek-v4-pro-free"
+	if isV4Model && (err != nil || !thinkingEnabled) {
+		thinkingEnabled = true
+	}
+	if reasoningEffort == "" && thinkingEnabled {
+		reasoningEffort = "-"
 	}
 
 	// CLI flags override config settings
@@ -158,17 +175,19 @@ func main() {
 	}
 
 	cfg := tui.AppConfig{
-		Version:       Version,
-		ProjectRoot:   cwd,
-		InitialPrompt: opts.Prompt,
-		AutoAccept:    autoAccept,
-		PlanMode:      planMode,
-		MaxTurns:      opts.MaxTurns,
-		Model:         modelName,
-		ApiKey:        apiKey,
-		BaseURL:       baseURL,
-		Models:        modelsList,
-		SettingsPath:  settingsPath,
+		Version:         Version,
+		ProjectRoot:     cwd,
+		InitialPrompt:   opts.Prompt,
+		AutoAccept:      autoAccept,
+		PlanMode:        planMode,
+		MaxTurns:        opts.MaxTurns,
+		Model:           modelName,
+		ApiKey:          apiKey,
+		BaseURL:         baseURL,
+		Models:          modelsList,
+		SettingsPath:    settingsPath,
+		ThinkingEnabled: thinkingEnabled,
+		ReasoningEffort: reasoningEffort,
 	}
 
 	model := tui.InitialModelWithConfig(cfg)
