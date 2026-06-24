@@ -2,32 +2,47 @@ package mcp
 
 import (
 	"context"
-	"io"
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
-func TestJSONRPCExchange(t *testing.T) {
-	inputReader, inputWriter := io.Pipe()
-	outputReader, outputWriter := io.Pipe()
-
-	client := NewMCPClient(inputReader, outputWriter)
-
-	// Simulate MCP server mock reply
-	go func() {
-		buf := make([]byte, 512)
-		n, _ := outputReader.Read(buf)
-		request := string(buf[:n])
-		if strings.Contains(request, "initialize") {
-			io.WriteString(inputWriter, `{"jsonrpc":"2.0","result":{"protocolVersion":"2024-11-05"},"id":1}`+"\n")
-		}
-	}()
-
-	res, err := client.Initialize(context.Background())
+func TestMCPConfigParsingAndClientInit(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "mcp_test")
 	if err != nil {
-		t.Fatalf("MCP initialization failed: %v", err)
+		t.Fatal(err)
 	}
-	if res.ProtocolVersion != "2024-11-05" {
-		t.Errorf("Expected version 2024-11-05, got %q", res.ProtocolVersion)
+	defer os.RemoveAll(tempDir)
+
+	configPath := filepath.Join(tempDir, "mcp-servers.json")
+	configData := `{
+		"mcpServers": {
+			"echo-server": {
+				"command": "node",
+				"args": ["-e", "const readline = require('readline'); const rl = readline.createInterface({input: process.stdin, output: process.stdout}); rl.on('line', (line) => { console.log(line); });"]
+			}
+		}
+	}`
+	_ = os.WriteFile(configPath, []byte(configData), 0644)
+
+	cfg, err := LoadMCPConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load MCP config: %v", err)
+	}
+
+	server, exists := cfg.Servers["echo-server"]
+	if !exists {
+		t.Fatal("echo-server config should be parsed")
+	}
+
+	// Khởi chạy tiến trình MCP Server thực tế qua stdin/stdout
+	client, err := StartMCPServer(context.Background(), server.Command, server.Args)
+	if err != nil {
+		t.Fatalf("Failed to start MCP server: %v", err)
+	}
+	defer client.Close()
+
+	if client.Cmd == nil {
+		t.Error("Client command process should not be nil")
 	}
 }

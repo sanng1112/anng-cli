@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os/exec"
 )
 
 type MCPClient struct {
 	reader *bufio.Reader
 	writer io.Writer
+	Cmd    *exec.Cmd
 }
 
 type InitializeResult struct {
@@ -29,6 +31,31 @@ func NewMCPClient(r io.Reader, w io.Writer) *MCPClient {
 		reader: bufio.NewReader(r),
 		writer: w,
 	}
+}
+
+func StartMCPServer(ctx context.Context, command string, args []string) (*MCPClient, error) {
+	cmd := exec.CommandContext(ctx, command, args...)
+	
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	client := &MCPClient{
+		reader: bufio.NewReader(stdout),
+		writer: stdin,
+		Cmd:    cmd,
+	}
+
+	return client, nil
 }
 
 func (c *MCPClient) Initialize(ctx context.Context) (*InitializeResult, error) {
@@ -63,5 +90,11 @@ func (c *MCPClient) Initialize(ctx context.Context) (*InitializeResult, error) {
 			return nil, fmt.Errorf("JSON-RPC error returned: %v", resp.Error)
 		}
 		return &resp.Result, nil
+	}
+}
+
+func (c *MCPClient) Close() {
+	if c.Cmd != nil && c.Cmd.Process != nil {
+		_ = c.Cmd.Process.Kill()
 	}
 }
