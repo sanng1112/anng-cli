@@ -9,6 +9,7 @@ import (
 
 	"anng-cli/internal/agent"
 	"anng-cli/internal/contextkeys"
+	"anng-cli/internal/skills"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -92,19 +93,26 @@ func InitialModelWithConfig(cfg AppConfig) AppModel {
 		cwd = cfg.ProjectRoot
 	}
 
+	slashItems := []string{
+		"/exit    — Thoát",
+		"/new     — Phiên hội thoại mới",
+		"/resume  — Tiếp tục phiên cũ",
+		"/undo    — Hoàn tác checkpoint",
+		"/mcp     — Trạng thái MCP servers",
+		"/settings — Cài đặt",
+		"/model   — Chọn model AI",
+	}
+
+	loadedSkills := skills.LoadAllSkills(cfg.ProjectRoot, home)
+	for _, s := range loadedSkills {
+		slashItems = append(slashItems, fmt.Sprintf("/%s — %s", s.Name, s.Description))
+	}
+
 	return AppModel{
 		CurrentView: ViewChat,
 		Buffer:      NewInputBuffer(),
 		LogBuffer:   []string{},
-		SlashItems: []string{
-			"/exit    — Thoát",
-			"/new     — Phiên hội thoại mới",
-			"/resume  — Tiếp tục phiên cũ",
-			"/undo    — Hoàn tác checkpoint",
-			"/mcp     — Trạng thái MCP servers",
-			"/settings — Cài đặt",
-			"/model   — Chọn model AI",
-		},
+		SlashItems:  slashItems,
 		Config: AppConfig{
 			Version:       cfg.Version,
 			ProjectRoot:   cwd,
