@@ -17,6 +17,7 @@ const (
 	ViewSettings    TuiView = "settings"
 	ViewModelSelect TuiView = "model-select"
 	ViewSkillsList  TuiView = "skills-list"
+	ViewInput       TuiView = "input"
 )
 
 func RenderSessionList(sessions []string, selectedIdx int) string {

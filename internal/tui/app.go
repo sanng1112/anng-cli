@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"anng-cli/internal/agent"
+	"anng-cli/internal/config"
 	"anng-cli/internal/contextkeys"
 	"anng-cli/internal/skills"
 	tea "github.com/charmbracelet/bubbletea"
@@ -48,6 +49,8 @@ type AppConfig struct {
 	MaxTurns      int
 	Model         string
 	ApiKey        string
+	Models        []string
+	SettingsPath  string
 }
 
 // AppModel is the root Bubble Tea model that drives the entire TUI.
@@ -62,6 +65,7 @@ type AppModel struct {
 	SessionIdx    int
 	Checkpoints   []string
 	CheckpointIdx int
+	InputPrompt   string
 
 	// chat/input state
 	Buffer    *InputBuffer
@@ -136,6 +140,8 @@ func InitialModelWithConfig(cfg AppConfig) AppModel {
 			MaxTurns:      cfg.MaxTurns,
 			Model:         cfg.Model,
 			ApiKey:        cfg.ApiKey,
+			Models:        cfg.Models,
+			SettingsPath:  cfg.SettingsPath,
 		},
 	}
 }
@@ -195,6 +201,39 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// 0=Allow, 1=AlwaysAllow, 2=Deny
 				m.PendingPermission = nil
 				m.PermCursor = 0
+			}
+			return m, nil
+		}
+
+		// ── Input view ──────────────────────────────────────────────────────
+		if m.CurrentView == ViewInput {
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.CurrentView = ViewChat
+				m.Buffer.Clear()
+			case tea.KeyEnter:
+				text := strings.TrimSpace(m.Buffer.GetText())
+				if text != "" {
+					if m.InputPrompt == "Add Model:" {
+						m.Config.Models = append(m.Config.Models, text)
+						m.Sessions = append(m.Config.Models, "+ Add custom model...")
+						m.SessionIdx = len(m.Config.Models) - 1
+						m.CurrentView = ViewModelSelect
+						if m.Config.SettingsPath != "" {
+							if cfg, err := config.LoadConfig(m.Config.SettingsPath); err == nil {
+								cfg.Models = m.Config.Models
+								config.SaveConfig(m.Config.SettingsPath, cfg)
+							}
+						}
+					}
+				}
+				m.Buffer.Clear()
+			case tea.KeyBackspace:
+				m.Buffer.Backspace()
+			case tea.KeyRunes:
+				m.Buffer.Insert(string(msg.Runes))
+			case tea.KeySpace:
+				m.Buffer.Insert(" ")
 			}
 			return m, nil
 		}
@@ -267,9 +306,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.SessionIdx++
 				}
 			case tea.KeyEnter:
-				m.Config.Model = m.Sessions[m.SessionIdx]
-				m.LogBuffer = append(m.LogBuffer, fmt.Sprintf("System: Switched model to %s", m.Config.Model))
-				m.CurrentView = ViewChat
+				if m.Sessions[m.SessionIdx] == "+ Add custom model..." {
+					m.InputPrompt = "Add Model:"
+					m.CurrentView = ViewInput
+					m.Buffer.Clear()
+				} else {
+					m.Config.Model = m.Sessions[m.SessionIdx]
+					m.LogBuffer = append(m.LogBuffer, fmt.Sprintf("System: Switched model to %s", m.Config.Model))
+					m.CurrentView = ViewChat
+					if m.Config.SettingsPath != "" {
+						if cfg, err := config.LoadConfig(m.Config.SettingsPath); err == nil {
+							cfg.Model = m.Config.Model
+							config.SaveConfig(m.Config.SettingsPath, cfg)
+						}
+					}
+				}
 			}
 			return m, nil
 		}
@@ -335,7 +386,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.CurrentView = ViewSettings
 			case "/model":
 				m.CurrentView = ViewModelSelect
-				m.Sessions = []string{"gpt-4o", "claude-3-5-sonnet", "deepseek-chat", "gemini-1.5-pro"}
+				if len(m.Config.Models) == 0 {
+					m.Config.Models = []string{"gpt-4o", "claude-3-5-sonnet", "deepseek-chat", "gemini-1.5-pro"}
+				}
+				m.Sessions = append([]string{}, m.Config.Models...)
+				m.Sessions = append(m.Sessions, "+ Add custom model...")
 				m.SessionIdx = 0
 			case "/skills":
 				m.CurrentView = ViewSkillsList
@@ -524,6 +579,8 @@ func (m AppModel) View() string {
 			skills = append(skills, item)
 		}
 		return "\n" + RenderSkillsList(skills)
+	case ViewInput:
+		return "\n" + lipgloss.NewStyle().Bold(true).Render(m.InputPrompt) + "\n\n  " + m.Buffer.GetText() + "█\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("enter: save  •  esc: cancel")
 	}
 
 	if m.ShowStdout {

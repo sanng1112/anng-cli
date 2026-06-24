@@ -123,10 +123,12 @@ func main() {
 	}
 
 	var modelName, apiKey string
+	var modelsList []string
 	cfgLoaded, err := config.LoadConfig(settingsPath)
 	if err == nil && cfgLoaded != nil {
 		modelName = cfgLoaded.Model
 		apiKey = cfgLoaded.ApiKey
+		modelsList = cfgLoaded.Models
 	} else {
 		modelName = os.Getenv("ANNG_MODEL")
 		apiKey = os.Getenv("ANNG_API_KEY")
@@ -141,6 +143,8 @@ func main() {
 		MaxTurns:      opts.MaxTurns,
 		Model:         modelName,
 		ApiKey:        apiKey,
+		Models:        modelsList,
+		SettingsPath:  settingsPath,
 	}
 
 	model := tui.InitialModelWithConfig(cfg)

@@ -79,6 +79,9 @@ func LoadAllSkills(projectRoot string, homeDir string) []SkillInfo {
 	roots := []string{
 		filepath.Join(homeDir, ".gemini", "antigravity-cli", "builtin", "skills"),
 		filepath.Join(homeDir, ".gemini", "config", "skills"),
+		filepath.Join(homeDir, ".anng", "skills"),
+		filepath.Join(homeDir, ".agents", "skills"),
+		filepath.Join(projectRoot, ".anng", "skills"),
 		filepath.Join(projectRoot, ".agents", "skills"),
 	}
 
