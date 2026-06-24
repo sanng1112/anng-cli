@@ -65,3 +65,49 @@ func TestAnalyzeProjectToolDefaultRoot(t *testing.T) {
 		t.Error("Expected non-empty output")
 	}
 }
+
+func TestASTAnalyzeProjectTool(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_ast_project")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	srcDir := filepath.Join(tempDir, "src")
+	_ = os.MkdirAll(srcDir, 0755)
+
+	sampleGo := filepath.Join(srcDir, "service.go")
+	content := `package src
+
+type Runner interface {
+	Run(ctx context.Context) error
+}
+
+type MyRunner struct {
+	Name string
+}
+
+func (r *MyRunner) Run(ctx context.Context) error {
+	return nil
+}
+`
+	_ = os.WriteFile(sampleGo, []byte(content), 0644)
+
+	ctx := context.WithValue(context.Background(), contextkeys.ProjectRootKey, tempDir)
+	args := map[string]interface{}{"depth": float64(3)}
+
+	res, err := AnalyzeProjectTool(ctx, args)
+	if err != nil {
+		t.Fatalf("AST analyze failed: %v", err)
+	}
+
+	if !strings.Contains(res, "Runner [Interface]") {
+		t.Errorf("Expected interface details in output, got: %q", res)
+	}
+	if !strings.Contains(res, "MyRunner [Struct]") {
+		t.Errorf("Expected struct details in output, got: %q", res)
+	}
+	if !strings.Contains(res, "Method: Run") {
+		t.Errorf("Expected struct method details in output, got: %q", res)
+	}
+}

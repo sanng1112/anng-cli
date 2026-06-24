@@ -1,21 +1,21 @@
 package tools
 
 import (
-	"bufio"
 	"context"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"anng-cli/internal/contextkeys"
 )
 
-// AnalyzeProjectTool generates a structural and semantic map of the project workspace.
-// Runs `find` to list the directory tree and scans Go files for exported symbols.
+// AnalyzeProjectTool generates a structural and semantic map of the project workspace using AST parsing.
 func AnalyzeProjectTool(ctx context.Context, args map[string]interface{}) (string, error) {
 	projectRoot := "."
 	if pr, ok := ctx.Value(contextkeys.ProjectRootKey).(string); ok {
@@ -53,13 +53,11 @@ func AnalyzeProjectTool(ctx context.Context, args map[string]interface{}) (strin
 		pkgJsonContent = pkgJsonContent[:3000] + "\n...[truncated]"
 	}
 
-	// Scan Go files for exported symbols (types, interfaces, functions)
+	// Scan Go files for exported symbols using Go AST parser
 	var semanticMap strings.Builder
 	semanticMap.WriteString("Semantic Export Map (Structs, Interfaces, Funcs):\n")
 
-	typeReg := regexp.MustCompile(`^type\s+([A-Z][a-zA-Z0-9_]*)\s+(struct|interface)`)
-	funcReg := regexp.MustCompile(`^func\s+(?:\([^)]+\)\s+)?([A-Z][a-zA-Z0-9_]*)\(`)
-
+	fset := token.NewFileSet()
 	filepath.WalkDir(projectRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -71,24 +69,52 @@ func AnalyzeProjectTool(ctx context.Context, args map[string]interface{}) (strin
 			}
 			return nil
 		}
-		if filepath.Ext(path) != ".go" {
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 
-		file, err := os.Open(path)
+		fileAST, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
 		if err != nil {
 			return nil
 		}
-		defer file.Close()
 
 		var symbols []string
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if matches := typeReg.FindStringSubmatch(line); len(matches) > 1 {
-				symbols = append(symbols, matches[1])
-			} else if matches := funcReg.FindStringSubmatch(line); len(matches) > 1 {
-				symbols = append(symbols, matches[1])
+		for _, decl := range fileAST.Decls {
+			switch gd := decl.(type) {
+			case *ast.GenDecl:
+				if gd.Tok == token.TYPE {
+					for _, spec := range gd.Specs {
+						ts, ok := spec.(*ast.TypeSpec)
+						if !ok {
+							continue
+						}
+						switch ts.Type.(type) {
+						case *ast.StructType:
+							symbols = append(symbols, fmt.Sprintf("%s [Struct]", ts.Name.Name))
+						case *ast.InterfaceType:
+							symbols = append(symbols, fmt.Sprintf("%s [Interface]", ts.Name.Name))
+						}
+					}
+				}
+			case *ast.FuncDecl:
+				symbolName := gd.Name.Name
+				if gd.Recv != nil && len(gd.Recv.List) > 0 {
+					var receiverName string
+					switch rt := gd.Recv.List[0].Type.(type) {
+					case *ast.Ident:
+						receiverName = rt.Name
+					case *ast.StarExpr:
+						if ident, ok := rt.X.(*ast.Ident); ok {
+							receiverName = ident.Name
+						}
+					}
+					if receiverName != "" {
+						symbolName = fmt.Sprintf("%s.Method: %s", receiverName, gd.Name.Name)
+					}
+				} else {
+					symbolName = fmt.Sprintf("Func: %s", symbolName)
+				}
+				symbols = append(symbols, symbolName)
 			}
 		}
 
