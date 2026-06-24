@@ -245,7 +245,7 @@ git commit -m "feat: add Settings structure and configuration loader"
 - Create: `internal/domain/session.go`
 - Test: `internal/domain/session_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/domain/session_test.go` to test session state marshalling and unmarshalling:
 ```go
@@ -284,12 +284,12 @@ func TestSessionCheckpoint(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/domain/...`
 Expected: FAIL with "Session / Message not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/domain/session.go`:
 ```go
@@ -320,12 +320,12 @@ func (s *Session) Unmarshal(data []byte) error {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/domain/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/domain/session.go internal/domain/session_test.go
