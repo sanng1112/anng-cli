@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"anng-cli/internal/agent"
+	"anng-cli/internal/contextkeys"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -41,6 +45,8 @@ type AppConfig struct {
 	AutoAccept    bool
 	PlanMode      bool
 	MaxTurns      int
+	Model         string
+	ApiKey        string
 }
 
 // AppModel is the root Bubble Tea model that drives the entire TUI.
@@ -106,6 +112,8 @@ func InitialModelWithConfig(cfg AppConfig) AppModel {
 			AutoAccept:    cfg.AutoAccept,
 			PlanMode:      cfg.PlanMode,
 			MaxTurns:      cfg.MaxTurns,
+			Model:         cfg.Model,
+			ApiKey:        cfg.ApiKey,
 		},
 	}
 }
@@ -119,13 +127,35 @@ func (m AppModel) Init() tea.Cmd {
 	return nil
 }
 
+type AgentFinishedMsg struct {
+	Result *agent.RunResult
+	Err    error
+}
+
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case AgentFinishedMsg:
+		m.Busy = false
+		if msg.Err != nil {
+			m.ErrLine = msg.Err.Error()
+		} else if msg.Result != nil {
+			m.LogBuffer = append(m.LogBuffer, fmt.Sprintf("Agent: Done in %d turns.", msg.Result.Turns))
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
 
 	case tea.KeyMsg:
+		// ── Busy blocking ─────────────────────────────────────────────────
+		if m.Busy {
+			if msg.Type == tea.KeyCtrlC || msg.Type == tea.KeyCtrlD {
+				return m, tea.Quit
+			}
+			return m, nil
+		}
+
 		// ── Permission overlay ─────────────────────────────────────────────
 		if m.PendingPermission != nil {
 			switch msg.Type {
@@ -193,6 +223,27 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// ── Model-select view ──────────────────────────────────────────────
+		if m.CurrentView == ViewModelSelect {
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.CurrentView = ViewChat
+			case tea.KeyUp:
+				if m.SessionIdx > 0 {
+					m.SessionIdx--
+				}
+			case tea.KeyDown:
+				if m.SessionIdx < len(m.Sessions)-1 {
+					m.SessionIdx++
+				}
+			case tea.KeyEnter:
+				m.Config.Model = m.Sessions[m.SessionIdx]
+				m.LogBuffer = append(m.LogBuffer, fmt.Sprintf("System: Switched model to %s", m.Config.Model))
+				m.CurrentView = ViewChat
+			}
+			return m, nil
+		}
+
 		// ── Chat / input view ──────────────────────────────────────────────
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
@@ -208,6 +259,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case tea.KeyEnter:
+			if m.ShowMenu && len(m.MenuMatches) > 0 {
+				selected := strings.SplitN(m.MenuMatches[m.MenuIdx], " ", 2)[0]
+				m.Buffer.Clear()
+				m.Buffer.Insert(selected)
+				m.ShowMenu = false
+				m.MenuMatches = nil
+				return m, nil
+			}
+
 			text := strings.TrimSpace(m.Buffer.GetText())
 			m.Buffer.Clear()
 			m.ShowMenu = false
@@ -221,6 +281,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.LogBuffer = []string{}
 				m.ErrLine = ""
 			case "/resume":
+				m.Sessions = LoadSessions(m.Config.ProjectRoot)
+				m.SessionIdx = 0
 				m.CurrentView = ViewSessionList
 			case "/undo":
 				m.CurrentView = ViewUndo
@@ -228,14 +290,30 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.CurrentView = ViewMcpStatus
 			case "/settings":
 				m.CurrentView = ViewSettings
+			case "/model":
+				m.CurrentView = ViewModelSelect
+				m.Sessions = []string{"gpt-4o", "claude-3-5-sonnet", "deepseek-chat", "gemini-1.5-pro"}
+				m.SessionIdx = 0
 			default:
 				if text != "" {
 					m.LogBuffer = append(m.LogBuffer, lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Render("> ")+text)
+					m.Busy = true
+					return m, func() tea.Msg {
+						orch := agent.NewOrchestrator(m.Config.Model, m.Config.ApiKey)
+						ctx := context.WithValue(context.Background(), contextkeys.ProjectRootKey, m.Config.ProjectRoot)
+						ctx = context.WithValue(ctx, contextkeys.SessionIDKey, "session-tui")
+						res, err := orch.Run(ctx, text)
+						return AgentFinishedMsg{Result: res, Err: err}
+					}
 				}
 			}
 
 		case tea.KeyBackspace:
 			m.Buffer.Backspace()
+			m.updateMenu()
+
+		case tea.KeyCtrlW:
+			m.Buffer.DeleteWordBefore()
 			m.updateMenu()
 
 		case tea.KeyDelete:
@@ -250,10 +328,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case tea.KeyRight:
 			if msg.Alt {
-				// MoveWordRight not yet impl, skip
+				m.Buffer.MoveWordRight()
 			} else {
 				m.Buffer.MoveRight()
 			}
+
+		case tea.KeyHome:
+			m.Buffer.SetCursor(0)
+
+		case tea.KeyEnd:
+			m.Buffer.SetCursor(len([]rune(m.Buffer.GetText())))
 
 		case tea.KeyUp:
 			if m.ShowMenu && len(m.MenuMatches) > 0 {
@@ -335,6 +419,8 @@ func (m AppModel) View() string {
 		)
 	case ViewSettings:
 		return "\n" + renderSettings(m.Config)
+	case ViewModelSelect:
+		return "\n" + RenderModelSelector(m.Sessions, m.SessionIdx)
 	}
 
 	if m.ShowStdout {
@@ -391,7 +477,18 @@ func (m AppModel) View() string {
 	if inputWidth < 20 {
 		inputWidth = 20
 	}
-	inputContent := m.Buffer.GetText() + "█"
+	textRunes := []rune(m.Buffer.GetText())
+	cursorPos := m.Buffer.GetCursor()
+	var inputContent string
+	if cursorPos >= len(textRunes) {
+		inputContent = string(textRunes) + lipgloss.NewStyle().Background(lipgloss.Color(BrandOrangeColor)).Foreground(lipgloss.Color("#FFFFFF")).Render(" ")
+	} else {
+		before := string(textRunes[:cursorPos])
+		cursorChar := string(textRunes[cursorPos])
+		after := string(textRunes[cursorPos+1:])
+		styledCursor := lipgloss.NewStyle().Background(lipgloss.Color(BrandOrangeColor)).Foreground(lipgloss.Color("#FFFFFF")).Render(cursorChar)
+		inputContent = before + styledCursor + after
+	}
 	styledInput := inputStyle.Width(inputWidth).Render(inputContent)
 	sb.WriteString(styledInput)
 	sb.WriteString("\n")
@@ -428,4 +525,30 @@ func renderSettings(cfg AppConfig) string {
 	lines = append(lines, helpStyle.Render("esc: back to chat"))
 
 	return border.Render(strings.Join(lines, "\n"))
+}
+
+func LoadSessions(projectRoot string) []string {
+	var sessions []string
+	home, _ := os.UserHomeDir()
+	
+	projectCode := strings.ReplaceAll(projectRoot, "/", "-")
+	projectCode = strings.ReplaceAll(projectCode, "\\", "-")
+	projectCode = strings.ReplaceAll(projectCode, ":", "")
+
+	dir := filepath.Join(home, ".anng", "projects", projectCode)
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return []string{"No sessions found"}
+	}
+	for _, f := range files {
+		if !f.IsDir() && (strings.HasSuffix(f.Name(), ".jsonl") || strings.HasSuffix(f.Name(), ".json")) {
+			if f.Name() != "sessions-index.json" {
+				sessions = append(sessions, strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())))
+			}
+		}
+	}
+	if len(sessions) == 0 {
+		return []string{"No sessions found"}
+	}
+	return sessions
 }

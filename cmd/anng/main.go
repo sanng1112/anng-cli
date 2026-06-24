@@ -4,13 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
+	"anng-cli/internal/config"
 	"anng-cli/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const Version = "0.2.000"
+const Version = "0.2.1"
 
 type CLIOptions struct {
 	Yolo     bool
@@ -114,6 +116,22 @@ func main() {
 
 	cwd, _ := os.Getwd()
 
+	home, _ := os.UserHomeDir()
+	settingsPath := filepath.Join(home, ".anng", "settings.json")
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
+		settingsPath = filepath.Join(".anng", "settings.json")
+	}
+
+	var modelName, apiKey string
+	cfgLoaded, err := config.LoadConfig(settingsPath)
+	if err == nil && cfgLoaded != nil {
+		modelName = cfgLoaded.Model
+		apiKey = cfgLoaded.ApiKey
+	} else {
+		modelName = os.Getenv("ANNG_MODEL")
+		apiKey = os.Getenv("ANNG_API_KEY")
+	}
+
 	cfg := tui.AppConfig{
 		Version:       Version,
 		ProjectRoot:   cwd,
@@ -121,6 +139,8 @@ func main() {
 		AutoAccept:    opts.Yolo,
 		PlanMode:      opts.Plan,
 		MaxTurns:      opts.MaxTurns,
+		Model:         modelName,
+		ApiKey:        apiKey,
 	}
 
 	model := tui.InitialModelWithConfig(cfg)

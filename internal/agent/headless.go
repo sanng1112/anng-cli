@@ -2,6 +2,11 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+
+	"anng-cli/internal/config"
+	"anng-cli/internal/contextkeys"
 )
 
 type HeadlessResult struct {
@@ -10,7 +15,44 @@ type HeadlessResult struct {
 }
 
 func RunHeadless(ctx context.Context, prompt string, autoApprove bool) (*HeadlessResult, error) {
-	// Directly execute agent iterations without starting Bubble Tea TUI
-	// Skips permissions verification step loops if autoApprove is true
-	return &HeadlessResult{FinishReason: "completed", ExitCode: 0}, nil
+	// Attempt to load settings from standard location (~/.anng/settings.json or ./.anng/settings.json)
+	home, _ := os.UserHomeDir()
+	settingsPath := filepath.Join(home, ".anng", "settings.json")
+	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
+		// Try project directory path
+		settingsPath = filepath.Join(".anng", "settings.json")
+	}
+
+	var modelName, apiKey, baseURL string
+	cfg, err := config.LoadConfig(settingsPath)
+	if err == nil && cfg != nil {
+		modelName = cfg.Model
+		apiKey = cfg.ApiKey
+		baseURL = cfg.BaseURL
+	} else {
+		// Use environment variables as fallback
+		modelName = os.Getenv("ANNG_MODEL")
+		if modelName == "" {
+			modelName = "deepseek-chat"
+		}
+		apiKey = os.Getenv("ANNG_API_KEY")
+		baseURL = os.Getenv("ANNG_BASE_URL")
+	}
+
+	orch := NewOrchestrator(modelName, apiKey)
+	if baseURL != "" {
+		orch.BaseURL = baseURL
+	}
+
+	// Inject project root and session ID into context for tool use
+	cwd, _ := os.Getwd()
+	ctx = context.WithValue(ctx, contextkeys.ProjectRootKey, cwd)
+	ctx = context.WithValue(ctx, contextkeys.SessionIDKey, "session-headless")
+
+	res, err := orch.Run(ctx, prompt)
+	if err != nil {
+		return &HeadlessResult{FinishReason: "failed", ExitCode: 1}, err
+	}
+
+	return &HeadlessResult{FinishReason: res.FinishReason, ExitCode: 0}, nil
 }
