@@ -71,3 +71,24 @@ func ReadSkill(filePath string, fallbackName string) (SkillInfo, error) {
 		Description: description,
 	}, nil
 }
+
+func LoadAllSkills(projectRoot string, homeDir string) []SkillInfo {
+	var all []SkillInfo
+	seen := make(map[string]bool)
+
+	roots := []string{
+		filepath.Join(homeDir, ".gemini", "antigravity-cli", "builtin", "skills"),
+		filepath.Join(homeDir, ".gemini", "config", "skills"),
+		filepath.Join(projectRoot, ".agents", "skills"),
+	}
+
+	for _, root := range roots {
+		for _, s := range DiscoverSkillsInRoot(root) {
+			if !seen[s.Name] {
+				seen[s.Name] = true
+				all = append(all, s)
+			}
+		}
+	}
+	return all
+}

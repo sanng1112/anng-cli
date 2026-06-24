@@ -41,3 +41,10 @@ description: Write comprehensive implementation plans
 		t.Errorf("Expected description, got %q", s.Description)
 	}
 }
+
+func TestLoadAllSkills(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	// Mock or verify loaded paths do not crash
+	skills := LoadAllSkills(".", home)
+	_ = skills
+}
