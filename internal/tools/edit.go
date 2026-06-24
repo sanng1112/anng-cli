@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"errors"
-	"path/filepath"
 
 	"anng-cli/internal/contextkeys"
 )
@@ -37,12 +36,12 @@ func EditTool(ctx context.Context, args map[string]interface{}) (string, error) 
 		projectRoot = pr
 	}
 
-	filePath := filePathVal
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(projectRoot, filePath)
+	filePath, err := resolveWorkspacePath(projectRoot, filePathVal)
+	if err != nil {
+		return "", err
 	}
 
-	err := ReplaceFileContent(filePath, targetVal, replacementVal, int(startLineVal), int(endLineVal))
+	err = ReplaceFileContent(filePath, targetVal, replacementVal, int(startLineVal), int(endLineVal))
 	if err != nil {
 		return "", err
 	}
@@ -56,12 +55,15 @@ func MultiEditTool(ctx context.Context, args map[string]interface{}) (string, er
 	if !ok || filePathVal == "" {
 		return "", errors.New("missing required argument 'file_path'")
 	}
-	
+
 	chunksRaw, ok := args["replacement_chunks"].([]interface{})
+	if !ok {
+		chunksRaw, ok = args["chunks"].([]interface{})
+	}
 	if !ok {
 		return "", errors.New("missing or invalid required argument 'replacement_chunks'")
 	}
-	
+
 	var chunks []ReplacementChunk
 	for _, cr := range chunksRaw {
 		cMap, ok := cr.(map[string]interface{})
@@ -72,7 +74,7 @@ func MultiEditTool(ctx context.Context, args map[string]interface{}) (string, er
 		rc, _ := cMap["replacement_content"].(string)
 		sl, _ := cMap["start_line"].(float64)
 		el, _ := cMap["end_line"].(float64)
-		
+
 		chunks = append(chunks, ReplacementChunk{
 			TargetContent:      tc,
 			ReplacementContent: rc,
@@ -86,12 +88,12 @@ func MultiEditTool(ctx context.Context, args map[string]interface{}) (string, er
 		projectRoot = pr
 	}
 
-	filePath := filePathVal
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(projectRoot, filePath)
+	filePath, err := resolveWorkspacePath(projectRoot, filePathVal)
+	if err != nil {
+		return "", err
 	}
 
-	err := MultiReplaceFileContent(filePath, chunks)
+	err = MultiReplaceFileContent(filePath, chunks)
 	if err != nil {
 		return "", err
 	}
