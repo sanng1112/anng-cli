@@ -2,7 +2,12 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
+
+	"anng-cli/internal/tui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type CLIOptions struct {
@@ -49,5 +54,17 @@ func ParseCLIOptions(argv []string) (CLIOptions, error) {
 }
 
 func main() {
-	// Bootstrap CLI execution
+	opts, err := ParseCLIOptions(os.Args[1:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing arguments: %v\n", err)
+		os.Exit(1)
+	}
+
+	_ = opts // We can use options in the future
+
+	p := tea.NewProgram(tui.InitialModel())
+	if _, err := p.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error running TUI: %v\n", err)
+		os.Exit(1)
+	}
 }
