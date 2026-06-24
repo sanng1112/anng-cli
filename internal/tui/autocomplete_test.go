@@ -72,3 +72,22 @@ description: Viết kế hoạch triển khai
 		t.Errorf("Expected '/writing-plans' in SlashItems, but not found. Items: %v", m.SlashItems)
 	}
 }
+
+func TestBuiltinCommandsExist(t *testing.T) {
+	cfg := AppConfig{Version: "0.2.1", ProjectRoot: "."}
+	m := InitialModelWithConfig(cfg)
+	
+	expectedCmds := []string{"/skills", "/init", "/continue", "/raw", "/team", "/team-dp", "/team-wf", "/custom-agents"}
+	for _, expected := range expectedCmds {
+		found := false
+		for _, item := range m.SlashItems {
+			if len(item) >= len(expected) && item[:len(expected)] == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected builtin command %q not found in SlashItems", expected)
+		}
+	}
+}

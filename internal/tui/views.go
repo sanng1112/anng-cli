@@ -16,6 +16,7 @@ const (
 	ViewMcpStatus   TuiView = "mcp-status"
 	ViewSettings    TuiView = "settings"
 	ViewModelSelect TuiView = "model-select"
+	ViewSkillsList  TuiView = "skills-list"
 )
 
 func RenderSessionList(sessions []string, selectedIdx int) string {
@@ -83,3 +84,16 @@ func RenderModelSelector(models []string, selectedIdx int) string {
 	lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("enter: select model  •  esc: cancel"))
 	return strings.Join(lines, "\n")
 }
+
+func RenderSkillsList(skills []string) string {
+	var lines []string
+	lines = append(lines, lipgloss.NewStyle().Bold(true).Render("Available Skills:"))
+	lines = append(lines, "")
+	for _, s := range skills {
+		lines = append(lines, fmt.Sprintf("  • %s", s))
+	}
+	lines = append(lines, "")
+	lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("esc: return to chat"))
+	return strings.Join(lines, "\n")
+}
+

@@ -94,13 +94,21 @@ func InitialModelWithConfig(cfg AppConfig) AppModel {
 	}
 
 	slashItems := []string{
-		"/exit    — Thoát",
+		"/exit    — Thoát ANNG CLI",
 		"/new     — Phiên hội thoại mới",
 		"/resume  — Tiếp tục phiên cũ",
+		"/continue — Tiếp tục phiên hiện tại hoặc chọn phiên cũ",
 		"/undo    — Hoàn tác checkpoint",
 		"/mcp     — Trạng thái MCP servers",
-		"/settings — Cài đặt",
+		"/settings — Cài đặt API, Model",
 		"/model   — Chọn model AI",
+		"/skills  — Danh sách các kỹ năng hiện có",
+		"/init    — Khởi tạo file AGENTS.md",
+		"/raw     — Chuyển đổi hiển thị (lite/normal/raw)",
+		"/team    — Quản lý đội nhóm agent (team orchestration)",
+		"/team-dp — Tự động mở rộng team song song (Data Parallelism)",
+		"/team-wf — Chạy luồng công việc với pipeline tuần tự",
+		"/custom-agents — Tùy chỉnh danh sách agent",
 	}
 
 	loadedSkills := skills.LoadAllSkills(cfg.ProjectRoot, home)
@@ -231,6 +239,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// ── Skills List view ──────────────────────────────────────────────
+		if m.CurrentView == ViewSkillsList {
+			if msg.Type == tea.KeyEsc || msg.Type == tea.KeyEnter {
+				m.CurrentView = ViewChat
+			}
+			return m, nil
+		}
+
 		// ── Model-select view ──────────────────────────────────────────────
 		if m.CurrentView == ViewModelSelect {
 			switch msg.Type {
@@ -302,6 +318,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.CurrentView = ViewModelSelect
 				m.Sessions = []string{"gpt-4o", "claude-3-5-sonnet", "deepseek-chat", "gemini-1.5-pro"}
 				m.SessionIdx = 0
+			case "/skills":
+				m.CurrentView = ViewSkillsList
+			case "/init":
+				m.LogBuffer = append(m.LogBuffer, "System: Please create AGENTS.md or use a skill.")
+			case "/continue":
+				m.LogBuffer = append(m.LogBuffer, "System: Continuing session...")
+			case "/raw":
+				m.LogBuffer = append(m.LogBuffer, "System: Toggled raw output mode.")
+			case "/team", "/team-dp", "/team-wf", "/custom-agents":
+				m.LogBuffer = append(m.LogBuffer, "System: Subagent team features are coming soon.")
 			default:
 				if text != "" {
 					m.LogBuffer = append(m.LogBuffer, lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Render("> ")+text)
@@ -431,6 +457,15 @@ func (m AppModel) View() string {
 		return "\n" + renderSettings(m.Config)
 	case ViewModelSelect:
 		return "\n" + RenderModelSelector(m.Sessions, m.SessionIdx)
+	case ViewSkillsList:
+		var skills []string
+		for _, item := range m.SlashItems {
+			if !strings.HasPrefix(item, "/") || strings.Contains(item, "Thoát") || strings.Contains(item, "Phiên") || strings.Contains(item, "Hoàn tác") || strings.Contains(item, "Trạng thái") || strings.Contains(item, "Cài đặt") || strings.Contains(item, "Chọn model") || strings.Contains(item, "Danh sách") || strings.Contains(item, "Khởi tạo") || strings.Contains(item, "Chuyển đổi") || strings.Contains(item, "Quản lý đội") || strings.Contains(item, "song song") || strings.Contains(item, "tuần tự") || strings.Contains(item, "Tùy chỉnh") {
+				continue
+			}
+			skills = append(skills, item)
+		}
+		return "\n" + RenderSkillsList(skills)
 	}
 
 	if m.ShowStdout {
