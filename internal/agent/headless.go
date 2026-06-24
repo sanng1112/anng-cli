@@ -46,7 +46,11 @@ func RunHeadless(ctx context.Context, prompt string, autoApprove bool) (*Headles
 		}
 	}
 
-	orch := NewOrchestrator(modelName, apiKey)
+	mode := "act"
+	if autoApprove {
+		mode = "yolo"
+	}
+	orch := NewOrchestrator(modelName, apiKey, mode)
 	if baseURL != "" {
 		orch.BaseURL = baseURL
 	}

@@ -1,15 +1,10 @@
 package tui
 
 import (
-	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	"anng-cli/internal/agent"
-	"anng-cli/internal/contextkeys"
-	"anng-cli/internal/skills"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -40,6 +35,10 @@ type ChatViewModel struct {
 type TriggerViewMsg struct {
 	View TuiView
 	Mode string
+}
+
+type ExecutePromptMsg struct {
+	Prompt string
 }
 
 type SpinnerTickMsg struct{}
@@ -172,16 +171,7 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 					
 					return m, tea.Batch(
 						func() tea.Msg {
-							home, _ := os.UserHomeDir()
-							expanded := skills.ExpandPromptWithActiveSkills(text, m.Config.ActiveSkills, m.Config.ProjectRoot, home)
-							orch := agent.NewOrchestrator(m.Config.Model, m.Config.ApiKey)
-							if m.Config.BaseURL != "" {
-								orch.BaseURL = m.Config.BaseURL
-							}
-							ctx := context.WithValue(context.Background(), contextkeys.ProjectRootKey, m.Config.ProjectRoot)
-							ctx = context.WithValue(ctx, contextkeys.SessionIDKey, "session-tui")
-							res, err := orch.Run(ctx, expanded)
-							return AgentFinishedMsg{Result: res, Err: err}
+							return ExecutePromptMsg{Prompt: text}
 						},
 						spinnerTick(),
 					)

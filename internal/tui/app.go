@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"anng-cli/internal/agent"
+	"anng-cli/internal/contextkeys"
 	"anng-cli/internal/skills"
 	"anng-cli/internal/tools"
 	tea "github.com/charmbracelet/bubbletea"
@@ -68,6 +70,7 @@ type AppModel struct {
 	StdoutCommand     string
 	Busy              bool
 	ErrLine           string
+	ActiveCancel      context.CancelFunc
 }
 
 func InitialModelWithConfig(cfg AppConfig) AppModel {
@@ -146,7 +149,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if msg.Type == tea.KeyCtrlC || msg.Type == tea.KeyCtrlD {
+			if m.ActiveCancel != nil {
+				m.ActiveCancel()
+			}
 			return m, tea.Quit
+		}
+
+		if m.Busy {
+			if msg.Type == tea.KeyEsc {
+				if m.ActiveCancel != nil {
+					m.ActiveCancel()
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, "System: User interrupted execution.")
+				}
+			}
+			return m, nil
 		}
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -156,9 +172,42 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.TeamView.Width = msg.Width
 		m.TeamView.Height = msg.Height
 		return m, nil
+	case ExecutePromptMsg:
+		m.Busy = true
+		m.ChatView.Busy = true
+		m.ErrLine = ""
+		m.ChatView.ErrLine = ""
+		
+		var ctx context.Context
+		ctx, m.ActiveCancel = context.WithCancel(context.Background())
+
+		return m, tea.Batch(
+			func() tea.Msg {
+				home, _ := os.UserHomeDir()
+				expanded := skills.ExpandPromptWithActiveSkills(msg.Prompt, m.Config.ActiveSkills, m.Config.ProjectRoot, home)
+				
+				mode := "act"
+				if m.Config.PlanMode {
+					mode = "plan"
+				} else if m.Config.AutoAccept {
+					mode = "yolo"
+				}
+				orch := agent.NewOrchestrator(m.Config.Model, m.Config.ApiKey, mode)
+				orch.BaseURL = m.Config.BaseURL
+				orch.ProjectRoot = m.Config.ProjectRoot
+
+				ctx = context.WithValue(ctx, contextkeys.ProjectRootKey, m.Config.ProjectRoot)
+				ctx = context.WithValue(ctx, contextkeys.SessionIDKey, "session-tui")
+
+				res, err := orch.Run(ctx, expanded)
+				return AgentFinishedMsg{Result: res, Err: err}
+			},
+			spinnerTick(),
+		)
 	case AgentFinishedMsg:
 		m.Busy = false
 		m.ChatView.Busy = false
+		m.ActiveCancel = nil
 		if msg.Err != nil {
 			m.ErrLine = msg.Err.Error()
 			m.ChatView.ErrLine = msg.Err.Error()
@@ -168,7 +217,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.Response)
 				}
 				if runRes.Turns > 0 {
-					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, fmt.Sprintf("Agent: Done in %d turns.", runRes.Turns))
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, fmt.Sprintf("Agent: Done in %d turns. Tokens: %d input, %d output (%d total).", runRes.Turns, runRes.PromptTokens, runRes.CompletionTokens, runRes.TotalTokens))
 				} else {
 					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.FinishReason)
 				}

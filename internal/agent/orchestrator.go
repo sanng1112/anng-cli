@@ -16,12 +16,17 @@ type RunResult struct {
 	FinishReason string
 	Turns        int
 	Response     string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
 }
 
 type Orchestrator struct {
 	Model        string
 	ApiKey       string
 	BaseURL      string
+	Mode         string
+	ProjectRoot  string
 	ToolRegistry map[string]func(ctx context.Context, args map[string]interface{}) (string, error)
 }
 
@@ -167,10 +172,11 @@ var openAiToolsList = []openai.Tool{
 }
 
 // NewOrchestrator creates an Orchestrator pre-registered with all standard tools.
-func NewOrchestrator(model string, apiKey string) *Orchestrator {
+func NewOrchestrator(model string, apiKey string, mode string) *Orchestrator {
 	o := &Orchestrator{
 		Model:        model,
 		ApiKey:       apiKey,
+		Mode:         mode,
 		ToolRegistry: make(map[string]func(ctx context.Context, args map[string]interface{}) (string, error)),
 	}
 
@@ -214,7 +220,21 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 	}
 	client := openai.NewClientWithConfig(config)
 
+	// Fetch system prompt
+	root := o.ProjectRoot
+	if root == "" {
+		if pr, ok := ctx.Value(contextkeys.ProjectRootKey).(string); ok {
+			root = pr
+		}
+	}
+	engine := NewPromptEngine()
+	systemPrompt := engine.BuildSystemPrompt(o.Model, root, o.Mode)
+
 	messages := []openai.ChatCompletionMessage{
+		{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: systemPrompt,
+		},
 		{
 			Role:    openai.ChatMessageRoleUser,
 			Content: prompt,
@@ -224,6 +244,7 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 	turns := 0
 	maxTurns := 10
 	var responseParts []string
+	var promptTokens, completionTokens, totalTokens int
 
 	for turns < maxTurns {
 		turns++
@@ -259,6 +280,11 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 			}
 			return nil, fmt.Errorf("API call failed (Endpoint: %s, Model: %s): %w", targetURL, o.Model, err)
 		}
+
+		// Accumulate tokens
+		promptTokens += resp.Usage.PromptTokens
+		completionTokens += resp.Usage.CompletionTokens
+		totalTokens += resp.Usage.TotalTokens
 
 		if len(resp.Choices) == 0 {
 			break
@@ -306,7 +332,14 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 		}
 	}
 
-	return &RunResult{FinishReason: "completed", Turns: turns, Response: strings.Join(responseParts, "\n")}, nil
+	return &RunResult{
+		FinishReason:     "completed",
+		Turns:            turns,
+		Response:         strings.Join(responseParts, "\n"),
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      totalTokens,
+	}, nil
 }
 
 func (o *Orchestrator) checkForCompilerErrors(output string) bool {

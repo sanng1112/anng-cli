@@ -7,7 +7,7 @@ import (
 )
 
 func TestOrchestratorRun(t *testing.T) {
-	orchestrator := NewOrchestrator("deepseek-v4", "mock-api-key")
+	orchestrator := NewOrchestrator("deepseek-v4", "mock-api-key", "act")
 
 	// Run with mock prompt — should succeed in mock mode
 	result, err := orchestrator.Run(context.Background(), "Run command mock test")
@@ -21,7 +21,7 @@ func TestOrchestratorRun(t *testing.T) {
 }
 
 func TestOrchestratorArgumentParsing(t *testing.T) {
-	orchestrator := NewOrchestrator("deepseek-v4", "mock-api-key")
+	orchestrator := NewOrchestrator("deepseek-v4", "mock-api-key", "act")
 	called := false
 	orchestrator.RegisterTool("test_args", func(ctx context.Context, args map[string]interface{}) (string, error) {
 		called = true
@@ -60,7 +60,7 @@ func TestOrchestratorArgumentParsing(t *testing.T) {
 }
 
 func TestStandardToolsRegistration(t *testing.T) {
-	orchestrator := NewOrchestrator("deepseek-v4", "mock-api-key")
+	orchestrator := NewOrchestrator("deepseek-v4", "mock-api-key", "act")
 	standardTools := []string{
 		"read_file", "write_to_file", "replace_file_content", "multi_replace_file_content", "ask_question", "UpdatePlan", "search_web", "HttpRequest", "AnalyzeProject",
 	}
@@ -73,7 +73,7 @@ func TestStandardToolsRegistration(t *testing.T) {
 }
 
 func TestAutoCorrectiveLoopOnCompileError(t *testing.T) {
-	orchestrator := NewOrchestrator("deepseek-chat", "mock-key")
+	orchestrator := NewOrchestrator("deepseek-chat", "mock-key", "act")
 	orchestrator.BaseURL = "mock-url"
 
 	// Mock register bash tool
