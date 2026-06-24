@@ -75,12 +75,13 @@ anng --yolo -p "dọn dẹp thư mục dist và dọn dẹp log"
 Sử dụng thư mục `.anng` để tinh chỉnh cấu hình của riêng bạn:
 ```json
 {
-  "env": {
-    "BASE_URL": "https://api.openai.com/v1",
-    "API_KEY": "sk-...",
-    "ANNG_MODEL": "gpt-4o",
-    "ANNG_REASONING_EFFORT": "high"
-  }
+  "model": "gpt-4o",
+  "apiKey": "sk-...",
+  "baseUrl": "https://api.openai.com/v1",
+  "autoAccept": false,
+  "planMode": false,
+  "thinkingEnabled": false,
+  "reasoningEffort": "medium"
 }
 ```
 

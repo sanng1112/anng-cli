@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"anng-cli/internal/agent"
 	"anng-cli/internal/config"
 	"anng-cli/internal/tui"
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,15 +18,22 @@ import (
 const Version = "0.2.1"
 
 type CLIOptions struct {
-	Yolo     bool
-	Plan     bool
-	Json     bool
-	Verbose  bool
-	Prompt   string
-	MaxTurns int
+	Yolo        bool
+	Plan        bool
+	Json        bool
+	Verbose     bool
+	Prompt      string
+	MaxTurns    int
 	ShowHelp    bool
 	ShowVersion bool
 }
+
+type runMode string
+
+const (
+	runModeTUI      runMode = "tui"
+	runModeHeadless runMode = "headless"
+)
 
 func ParseCLIOptions(argv []string) (CLIOptions, error) {
 	var opts CLIOptions
@@ -105,6 +114,13 @@ Inside the TUI:
   /exit            Quit
   ctrl+c           Quit
 `)
+}
+
+func buildRunMode(opts CLIOptions) runMode {
+	if strings.TrimSpace(opts.Prompt) != "" {
+		return runModeHeadless
+	}
+	return runModeTUI
 }
 
 func main() {
@@ -188,6 +204,20 @@ func main() {
 		SettingsPath:    settingsPath,
 		ThinkingEnabled: thinkingEnabled,
 		ReasoningEffort: reasoningEffort,
+	}
+
+	mode := buildRunMode(opts)
+	if mode == runModeHeadless {
+		ctx := context.Background()
+		res, err := agent.RunHeadless(ctx, opts.Prompt, autoAccept)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error running headless mode: %v\n", err)
+			os.Exit(1)
+		}
+		if res.ExitCode != 0 {
+			os.Exit(res.ExitCode)
+		}
+		return
 	}
 
 	model := tui.InitialModelWithConfig(cfg)
