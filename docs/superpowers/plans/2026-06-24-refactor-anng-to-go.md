@@ -580,7 +580,7 @@ git commit -m "feat: add generic ToolRegistry structure and runner interface"
 - Create: `internal/tools/bash.go`
 - Test: `internal/tools/bash_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tools/bash_test.go` to verify running a shell command and capturing output using pseudo-terminals (`github.com/creack/pty`):
 ```go
@@ -603,12 +603,12 @@ func TestExecuteBashCommand(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tools/...`
 Expected: FAIL with "ExecuteBashCommand not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Install the PTY dependency:
 `go get github.com/creack/pty`
@@ -655,12 +655,12 @@ func ExecuteBashCommand(ctx context.Context, command string, cwd string) (string
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tools/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tools/bash.go internal/tools/bash_test.go
@@ -675,7 +675,7 @@ git commit -m "feat: add bash tool execution engine via pseudo-terminal isolatio
 - Create: `internal/tools/file.go`
 - Test: `internal/tools/file_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tools/file_test.go` to test safe file read, write, and line replace logic:
 ```go
@@ -715,12 +715,12 @@ func TestReplaceFileContent(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tools/...`
 Expected: FAIL with "ReplaceFileContent not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/tools/file.go`:
 ```go
@@ -762,12 +762,12 @@ func ReplaceFileContent(filePath string, targetContent string, replacementConten
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tools/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tools/file.go internal/tools/file_test.go
@@ -782,7 +782,7 @@ git commit -m "feat: add file replacement and file system execution tools"
 - Create: `internal/tools/search.go`
 - Test: `internal/tools/search_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tools/search_test.go` to verify URL fetch conversion to clean markdown formatting:
 ```go
@@ -814,12 +814,12 @@ func TestReadURLContent(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tools/...`
 Expected: FAIL with "ReadURLContent not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/tools/search.go` to load and strip simple HTML wrappers into basic markdown strings:
 ```go
@@ -867,12 +867,12 @@ func ReadURLContent(ctx context.Context, url string) (string, error) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tools/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tools/search.go internal/tools/search_test.go
@@ -887,7 +887,7 @@ git commit -m "feat: add search fetcher and HTML-to-markdown translation tool"
 - Create: `internal/mcp/client.go`
 - Test: `internal/mcp/client_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/mcp/client_test.go` to test JSON-RPC messaging exchange over processes stdin/stdout pipes:
 ```go
@@ -926,12 +926,12 @@ func TestJSONRPCExchange(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/mcp/...`
 Expected: FAIL with "NewMCPClient not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/mcp/client.go`:
 ```go
@@ -1005,12 +1005,12 @@ func (c *MCPClient) Initialize(ctx context.Context) (*InitializeResult, error) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/mcp/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/mcp/client.go internal/mcp/client_test.go
@@ -1025,7 +1025,7 @@ git commit -m "feat: add Model Context Protocol client engine with JSON-RPC pars
 - Create: `internal/agent/orchestrator.go`
 - Test: `internal/agent/orchestrator_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/agent/orchestrator_test.go` to test multi-turn agent tool execution reasoning loop:
 ```go
@@ -1054,12 +1054,12 @@ func TestOrchestratorRun(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/agent/...`
 Expected: FAIL with "NewOrchestrator not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/agent/orchestrator.go`:
 ```go
@@ -1099,12 +1099,12 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/agent/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agent/orchestrator.go internal/agent/orchestrator_test.go
@@ -1119,7 +1119,7 @@ git commit -m "feat: add main Agent reasoning orchestrator engine"
 - Create: `internal/tui/app.go`
 - Test: `internal/tui/app_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tui/app_test.go` to verify Bubble Tea central state updates upon input:
 ```go
@@ -1144,12 +1144,12 @@ func TestTUIAppUpdates(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tui/...`
 Expected: FAIL with "InitialModel not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Install Bubble Tea framework package:
 `go get github.com/charmbracelet/bubbletea`
@@ -1206,12 +1206,12 @@ func (m AppModel) View() string {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tui/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tui/app.go internal/tui/app_test.go
@@ -1226,7 +1226,7 @@ git commit -m "feat: add central TUI AppModel state machine using Bubble Tea"
 - Create: `internal/tui/theme.go`
 - Test: `internal/tui/theme_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tui/theme_test.go` to verify brand color formatting and mascot quadrant border styling rules:
 ```go
@@ -1251,12 +1251,12 @@ func TestBrandThemeStyles(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tui/...`
 Expected: FAIL with "ApplyOrangeColor not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Install Lipgloss package dependency:
 `go get github.com/charmbracelet/lipgloss`
@@ -1301,12 +1301,12 @@ func GetQuadrantBorder() string {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tui/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tui/theme.go internal/tui/theme_test.go
@@ -1321,7 +1321,7 @@ git commit -m "feat: add Lipgloss layouts and ANNG brand colors styling"
 - Modify: `internal/tui/app.go`
 - Test: `internal/tui/app_command_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/tui/app_command_test.go` to test intercepting key strokes for command menus and `Shift+Enter` newlines:
 ```go
@@ -1346,12 +1346,12 @@ func TestKeyboardInterceptors(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/tui/...`
 Expected: FAIL with "ShowMenu field missing"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Modify `internal/tui/app.go` to add ShowMenu parameter flag and trigger key interceptors:
 ```go
@@ -1411,12 +1411,12 @@ func (m AppModel) View() string {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/tui/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/tui/app.go internal/tui/app_command_test.go
@@ -1431,7 +1431,7 @@ git commit -m "feat: add keyboard interceptors for slash menus and Esc key comma
 - Create: `internal/agent/headless.go`
 - Test: `internal/agent/headless_test.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `internal/agent/headless_test.go` to test execution without TUI display (YOLO auto-approve path):
 ```go
@@ -1453,12 +1453,12 @@ func TestHeadlessExecutionFlow(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `go test -v ./internal/agent/...`
 Expected: FAIL with "RunHeadless not defined"
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `internal/agent/headless.go`:
 ```go
@@ -1480,12 +1480,12 @@ func RunHeadless(ctx context.Context, prompt string, autoApprove bool) (*Headles
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `go test -v ./internal/agent/...`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/agent/headless.go internal/agent/headless_test.go
@@ -1499,7 +1499,7 @@ git commit -m "feat: add headless execution and YOLO mode pathways"
 **Files:**
 - Create: `.goreleaser.yml`
 
-- [ ] **Step 1: Write configuration**
+- [x] **Step 1: Write configuration**
 
 Create `.goreleaser.yml` to support automated compiled release pipelines for macOS, Linux, and Windows:
 ```yaml
@@ -1540,12 +1540,12 @@ changelog:
       - '^test:'
 ```
 
-- [ ] **Step 2: Verify configuration syntax**
+- [x] **Step 2: Verify configuration syntax**
 
 Run: `goreleaser check` (Ensure goreleaser is installed)
 Expected: "config is valid"
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add .goreleaser.yml
