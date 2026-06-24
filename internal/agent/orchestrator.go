@@ -13,9 +13,9 @@ import (
 )
 
 type RunResult struct {
-	FinishReason string
-	Turns        int
-	Response     string
+	FinishReason     string
+	Turns            int
+	Response         string
 	PromptTokens     int
 	CompletionTokens int
 	TotalTokens      int
@@ -30,147 +30,6 @@ type Orchestrator struct {
 	ThinkingEnabled bool
 	ReasoningEffort string
 	ToolRegistry    map[string]func(ctx context.Context, args map[string]interface{}) (string, error)
-}
-
-var openAiToolsList = []openai.Tool{
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "bash",
-			Description: "Propose a shell command to execute on the system. Use 'cwd' for path.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"command": map[string]interface{}{
-						"type":        "string",
-						"description": "The exact bash command line string to run.",
-					},
-					"cwd": map[string]interface{}{
-						"type":        "string",
-						"description": "Optional working directory.",
-					},
-				},
-				"required": []string{"command"},
-			},
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "read_file",
-			Description: "Read the full text content of a file from the workspace path.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"file_path": map[string]interface{}{
-						"type":        "string",
-						"description": "Path to read, relative or absolute.",
-					},
-				},
-				"required": []string{"file_path"},
-			},
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "write_to_file",
-			Description: "Create a new file or overwrite an existing file. If file already exists and is non-empty, you must read it first.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"file_path": map[string]interface{}{
-						"type": "string",
-					},
-					"content": map[string]interface{}{
-						"type": "string",
-					},
-				},
-				"required": []string{"file_path", "content"},
-			},
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "replace_file_content",
-			Description: "Edit an existing file by replacing a single contiguous block of code.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"file_path": map[string]interface{}{
-						"type": "string",
-					},
-					"target_content": map[string]interface{}{
-						"type": "string",
-					},
-					"replacement_content": map[string]interface{}{
-						"type": "string",
-					},
-				},
-				"required": []string{"file_path", "target_content", "replacement_content"},
-			},
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "multi_replace_file_content",
-			Description: "Edit multiple non-adjacent blocks of code in a file.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"file_path": map[string]interface{}{
-						"type": "string",
-					},
-					"chunks": map[string]interface{}{
-						"type": "array",
-						"items": map[string]interface{}{
-							"type": "object",
-							"properties": map[string]interface{}{
-								"target_content":      map[string]interface{}{"type": "string"},
-								"replacement_content": map[string]interface{}{"type": "string"},
-							},
-							"required": []string{"target_content", "replacement_content"},
-						},
-					},
-				},
-				"required": []string{"file_path", "chunks"},
-			},
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "ask_question",
-			Description: "Ask the user a clarifying question when requirements are ambiguous.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"question": map[string]interface{}{
-						"type": "string",
-					},
-				},
-				"required": []string{"question"},
-			},
-		},
-	},
-	{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        "search_web",
-			Description: "Query search engines to get web information or documentation.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"query": map[string]interface{}{
-						"type": "string",
-					},
-				},
-				"required": []string{"query"},
-			},
-		},
-	},
 }
 
 // NewOrchestrator creates an Orchestrator pre-registered with all standard tools.
@@ -231,6 +90,11 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 	}
 	engine := NewPromptEngine()
 	systemPrompt := engine.BuildSystemPrompt(o.Model, root, o.Mode)
+	execCtx := NewExecutionContext(ExecutionContextOptions{
+		SessionID:     sessionIDFromContext(ctx),
+		WorkspaceRoot: root,
+		Mode:          Mode(o.Mode),
+	})
 
 	messages := []openai.ChatCompletionMessage{
 		{
@@ -273,7 +137,7 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 		req := openai.ChatCompletionRequest{
 			Model:    o.Model,
 			Messages: messages,
-			Tools:    openAiToolsList,
+			Tools:    toolSpecs(),
 		}
 		if o.ReasoningEffort != "" && o.ReasoningEffort != "-" {
 			req.ReasoningEffort = o.ReasoningEffort
@@ -321,12 +185,16 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 				if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 					toolResult = fmt.Sprintf("Error parsing arguments: %v", err)
 				} else {
-					toolResult, toolErr = handler(ctx, args)
-					if toolErr != nil {
-						toolResult = fmt.Sprintf("Error: %v", toolErr)
-					}
-					if tc.Function.Name == "bash" && o.checkForCompilerErrors(toolResult) && turns < maxTurns {
-						toolResult = fmt.Sprintf("%s\n\n[SYSTEM CHECKPOINT]: The execution resulted in a compiler error. Please analyze the error trace, make the necessary file corrections using write/edit, and run the verification command again.", toolResult)
+					if err := EvaluateToolCall(execCtx, tc.Function.Name, args); err != nil {
+						toolResult = fmt.Sprintf("Error: %v", err)
+					} else {
+						toolResult, toolErr = handler(ctx, args)
+						if toolErr != nil {
+							toolResult = fmt.Sprintf("Error: %v", toolErr)
+						}
+						if tc.Function.Name == "bash" && o.checkForCompilerErrors(toolResult) && turns < maxTurns {
+							toolResult = fmt.Sprintf("%s\n\n[SYSTEM CHECKPOINT]: The execution resulted in a compiler error. Please analyze the error trace, make the necessary file corrections using write/edit, and run the verification command again.", toolResult)
+						}
 					}
 				}
 			}
@@ -347,6 +215,13 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,
 	}, nil
+}
+
+func sessionIDFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(contextkeys.SessionIDKey).(string); ok {
+		return v
+	}
+	return "default"
 }
 
 func (o *Orchestrator) checkForCompilerErrors(output string) bool {

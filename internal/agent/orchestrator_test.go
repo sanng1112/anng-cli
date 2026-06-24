@@ -91,3 +91,46 @@ func TestAutoCorrectiveLoopOnCompileError(t *testing.T) {
 		t.Error("Expected checkForCompilerErrors to return false for regular output")
 	}
 }
+
+func TestPolicyDeniesMutatingToolsInPlanMode(t *testing.T) {
+	ctx := NewExecutionContext(ExecutionContextOptions{
+		SessionID:     "session-1",
+		WorkspaceRoot: "/tmp/project",
+		Mode:          ModePlan,
+	})
+
+	if err := EvaluateToolCall(ctx, "write_to_file", map[string]interface{}{"file_path": "a.txt"}); err == nil {
+		t.Fatal("expected write_to_file to be denied in plan mode")
+	}
+}
+
+func TestPolicyAllowsReadInPlanMode(t *testing.T) {
+	ctx := NewExecutionContext(ExecutionContextOptions{
+		SessionID:     "session-1",
+		WorkspaceRoot: "/tmp/project",
+		Mode:          ModePlan,
+	})
+
+	if err := EvaluateToolCall(ctx, "read_file", map[string]interface{}{"file_path": "a.txt"}); err != nil {
+		t.Fatalf("expected read_file to be allowed: %v", err)
+	}
+}
+
+func TestRegisteredToolSchemasMatchRuntimeHandlers(t *testing.T) {
+	orch := NewOrchestrator("gpt-4o", "mock-key", "act")
+	schemas := toolSpecs()
+
+	for _, schema := range schemas {
+		if _, ok := orch.ToolRegistry[schema.Function.Name]; !ok {
+			t.Fatalf("tool schema %q has no runtime handler", schema.Function.Name)
+		}
+	}
+}
+
+func TestInvariantPlanModeBlocksMutations(t *testing.T) {
+	TestPolicyDeniesMutatingToolsInPlanMode(t)
+}
+
+func TestInvariantToolSchemasMatchHandlers(t *testing.T) {
+	TestRegisteredToolSchemasMatchRuntimeHandlers(t)
+}
