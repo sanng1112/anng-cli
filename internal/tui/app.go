@@ -71,6 +71,12 @@ type AppModel struct {
 	SlashItems []string
 	MenuMatches []string
 
+	// file mentions state
+	ShowFileMenu    bool
+	FileMatches     []string
+	FileMenuIdx     int
+	MentionWordStart int
+
 	// permission prompt
 	PendingPermission *PermissionRequest
 	PermCursor        int
@@ -290,13 +296,26 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ShowMenu = false
 				m.MenuMatches = nil
 				return m, nil
+			} else if m.ShowFileMenu && len(m.FileMatches) > 0 {
+				selected := m.FileMatches[m.FileMenuIdx]
+				cursor := m.Buffer.GetCursor()
+				for i := 0; i < cursor - m.MentionWordStart; i++ {
+					m.Buffer.Backspace()
+				}
+				m.Buffer.Insert(selected + " ")
+				m.ShowFileMenu = false
+				m.FileMatches = nil
+				return m, nil
 			}
 
 			text := strings.TrimSpace(m.Buffer.GetText())
 			m.Buffer.Clear()
 			m.ShowMenu = false
+			m.ShowFileMenu = false
 			m.MenuMatches = nil
+			m.FileMatches = nil
 			m.MenuIdx = 0
+			m.FileMenuIdx = 0
 
 			switch text {
 			case "/exit":
@@ -380,12 +399,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.MenuIdx > 0 {
 					m.MenuIdx--
 				}
+			} else if m.ShowFileMenu && len(m.FileMatches) > 0 {
+				if m.FileMenuIdx > 0 {
+					m.FileMenuIdx--
+				}
 			}
 
 		case tea.KeyDown:
 			if m.ShowMenu && len(m.MenuMatches) > 0 {
 				if m.MenuIdx < len(m.MenuMatches)-1 {
 					m.MenuIdx++
+				}
+			} else if m.ShowFileMenu && len(m.FileMatches) > 0 {
+				if m.FileMenuIdx < len(m.FileMatches)-1 {
+					m.FileMenuIdx++
 				}
 			}
 
@@ -396,6 +423,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Buffer.Insert(selected)
 				m.ShowMenu = false
 				m.MenuMatches = nil
+			} else if m.ShowFileMenu && len(m.FileMatches) > 0 {
+				selected := m.FileMatches[m.FileMenuIdx]
+				cursor := m.Buffer.GetCursor()
+				for i := 0; i < cursor - m.MentionWordStart; i++ {
+					m.Buffer.Backspace()
+				}
+				m.Buffer.Insert(selected + " ")
+				m.ShowFileMenu = false
+				m.FileMatches = nil
 			}
 
 		case tea.KeyRunes:
@@ -411,20 +447,42 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateMenu refreshes slash-command autocomplete state.
+// updateMenu refreshes slash-command autocomplete state and file mention state.
 func (m *AppModel) updateMenu() {
 	text := m.Buffer.GetText()
-	if strings.HasPrefix(text, "/") {
+	cursor := m.Buffer.GetCursor()
+	
+	m.ShowMenu = false
+	m.ShowFileMenu = false
+
+	if strings.HasPrefix(text, "/") && cursor <= len([]rune(text)) && !strings.Contains(text[:cursor], " ") {
 		matches := FilterAutocomplete(m.SlashItems, text)
 		m.MenuMatches = matches
 		m.ShowMenu = len(matches) > 0
 		if m.MenuIdx >= len(matches) {
 			m.MenuIdx = 0
 		}
-	} else {
-		m.ShowMenu = false
-		m.MenuMatches = nil
-		m.MenuIdx = 0
+		return
+	}
+
+	runes := []rune(text)
+	if cursor > 0 && cursor <= len(runes) {
+		start := cursor - 1
+		for start > 0 && runes[start-1] != ' ' {
+			start--
+		}
+		currentWord := string(runes[start:cursor])
+		
+		if strings.HasPrefix(currentWord, "@") {
+			m.MentionWordStart = start
+			query := currentWord[1:]
+			matches := GetFileMentions(m.Config.ProjectRoot, query)
+			m.FileMatches = matches
+			m.ShowFileMenu = len(matches) > 0
+			if m.FileMenuIdx >= len(matches) {
+				m.FileMenuIdx = 0
+			}
+		}
 	}
 }
 
@@ -514,6 +572,9 @@ func (m AppModel) View() string {
 	// Autocomplete dropdown (above input)
 	if m.ShowMenu && len(m.MenuMatches) > 0 {
 		sb.WriteString(RenderDropdownMenu(m.MenuMatches, m.MenuIdx, w))
+		sb.WriteString("\n")
+	} else if m.ShowFileMenu && len(m.FileMatches) > 0 {
+		sb.WriteString(RenderDropdownMenu(m.FileMatches, m.FileMenuIdx, w))
 		sb.WriteString("\n")
 	}
 
