@@ -62,9 +62,7 @@ func TestOrchestratorArgumentParsing(t *testing.T) {
 func TestStandardToolsRegistration(t *testing.T) {
 	orchestrator := NewOrchestrator("deepseek-v4", "mock-api-key")
 	standardTools := []string{
-		"bash", "read", "write", "edit",
-		"AskUserQuestion", "UpdatePlan",
-		"WebSearch", "HttpRequest", "AnalyzeProject",
+		"read_file", "write_to_file", "replace_file_content", "multi_replace_file_content", "ask_question", "UpdatePlan", "search_web", "HttpRequest", "AnalyzeProject",
 	}
 
 	for _, tool := range standardTools {

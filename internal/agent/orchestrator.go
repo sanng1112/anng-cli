@@ -41,12 +41,13 @@ func NewOrchestrator(model string, apiKey string) *Orchestrator {
 		}
 		return tools.ExecuteBashCommand(ctx, cmd, cwd)
 	})
-	o.RegisterTool("read", tools.ReadTool)
-	o.RegisterTool("write", tools.WriteTool)
-	o.RegisterTool("edit", tools.EditTool)
-	o.RegisterTool("AskUserQuestion", tools.AskUserQuestionTool)
+	o.RegisterTool("read_file", tools.ReadTool)
+	o.RegisterTool("write_to_file", tools.WriteTool)
+	o.RegisterTool("replace_file_content", tools.EditTool)
+	o.RegisterTool("multi_replace_file_content", tools.MultiEditTool)
+	o.RegisterTool("ask_question", tools.AskUserQuestionTool)
 	o.RegisterTool("UpdatePlan", tools.UpdatePlanTool)
-	o.RegisterTool("WebSearch", tools.WebSearchTool)
+	o.RegisterTool("search_web", tools.WebSearchTool)
 	o.RegisterTool("HttpRequest", tools.HttpRequestTool)
 	o.RegisterTool("AnalyzeProject", tools.AnalyzeProjectTool)
 

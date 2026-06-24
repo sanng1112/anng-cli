@@ -49,3 +49,52 @@ func EditTool(ctx context.Context, args map[string]interface{}) (string, error) 
 
 	return "Content replaced successfully", nil
 }
+
+// MultiEditTool applies multiple replacement chunks to a file.
+func MultiEditTool(ctx context.Context, args map[string]interface{}) (string, error) {
+	filePathVal, ok := args["file_path"].(string)
+	if !ok || filePathVal == "" {
+		return "", errors.New("missing required argument 'file_path'")
+	}
+	
+	chunksRaw, ok := args["replacement_chunks"].([]interface{})
+	if !ok {
+		return "", errors.New("missing or invalid required argument 'replacement_chunks'")
+	}
+	
+	var chunks []ReplacementChunk
+	for _, cr := range chunksRaw {
+		cMap, ok := cr.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		tc, _ := cMap["target_content"].(string)
+		rc, _ := cMap["replacement_content"].(string)
+		sl, _ := cMap["start_line"].(float64)
+		el, _ := cMap["end_line"].(float64)
+		
+		chunks = append(chunks, ReplacementChunk{
+			TargetContent:      tc,
+			ReplacementContent: rc,
+			StartLine:          int(sl),
+			EndLine:            int(el),
+		})
+	}
+
+	projectRoot := "."
+	if pr, ok := ctx.Value(contextkeys.ProjectRootKey).(string); ok {
+		projectRoot = pr
+	}
+
+	filePath := filePathVal
+	if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(projectRoot, filePath)
+	}
+
+	err := MultiReplaceFileContent(filePath, chunks)
+	if err != nil {
+		return "", err
+	}
+
+	return "Multiple contents replaced successfully", nil
+}
