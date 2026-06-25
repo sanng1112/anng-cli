@@ -13,4 +13,6 @@ dist/
 ainovel-cli/
 .codegraph/
 cline/
+# Legacy TypeScript sources (project migrated to Go)
+src/
 
