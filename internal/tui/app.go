@@ -579,12 +579,12 @@ func LoadSessionContent(projectRoot string, sessionName string) ([]ChatLogEntry,
 			} `json:"messages"`
 		}
 		if err := json.Unmarshal(data, &sess); err == nil {
-			var logs []string
+			var logs []ChatLogEntry
 			for _, m := range sess.Messages {
 				if m.Role == "user" {
-					logs = append(logs, "> "+m.Content)
+					logs = append(logs, UserChatEntry(m.Content))
 				} else {
-					logs = append(logs, m.Content)
+					logs = append(logs, AssistantChatEntry(m.Content))
 				}
 			}
 			return logs, nil
