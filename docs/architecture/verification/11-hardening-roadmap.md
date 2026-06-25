@@ -1,5 +1,7 @@
 # Architecture Hardening Roadmap
 
+> Historical verification artifact: this roadmap contains migration-period hardening goals and still references legacy TypeScript paths in several steps.
+
 To resolve the remaining risks and achieve full Verification, the following roadmap must be executed:
 
 ## Step 1: Formalize State Transitions

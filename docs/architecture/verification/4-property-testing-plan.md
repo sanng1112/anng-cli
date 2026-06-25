@@ -1,5 +1,7 @@
 # Phase H4: Property-Based Verification Plan
 
+> Historical verification artifact: this plan predates the current Go runtime surface and still includes legacy TypeScript paths and tooling references.
+
 To prove that the architecture is safe and the `PolicyEngine` is watertight, we must implement property-based testing (fuzzing) using a library like `fast-check`.
 
 ## Verification Objective

@@ -1,5 +1,7 @@
 # Phase H1: Invariant Registry Matrix
 
+> Historical verification artifact: this matrix was produced during migration and still references legacy TypeScript-era enforcement points and tests.
+
 ## Safety Invariants
 
 | Invariant ID | Description | Enforcement Location | Verification Status | Tests | Assertions | Telemetry |

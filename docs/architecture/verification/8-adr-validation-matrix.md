@@ -1,5 +1,7 @@
 # Phase H8: ADR Validation Matrix
 
+> Historical verification artifact: this matrix records migration-period ADR reasoning and includes references to legacy TypeScript components.
+
 This matrix evaluates whether the architectural design records and specifications are mathematically and practically proven in the current codebase.
 
 | ADR / Specification | Core Claim | Required Proof | Current Evidence | Status |

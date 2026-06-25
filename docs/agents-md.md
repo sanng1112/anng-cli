@@ -65,9 +65,8 @@ Describe the main directories and where new code should go.
 
 ## Development Commands
 
-- `npm install` — Install dependencies.
-- `npm test` — Run the test suite.
-- `npm run build` — Build the project.
+- `go test ./...` — Run the test suite.
+- `go build ./cmd/anng` — Build the CLI.
 
 ## Coding Style
 
@@ -97,9 +96,8 @@ Good:
 ```markdown
 ## Development Commands
 
-- `npm install` — Install dependencies.
-- `npm test` — Run all tests.
-- `npm run build` — Type-check and build the CLI.
+- `go test ./...` — Run all tests.
+- `go build ./cmd/anng` — Build the CLI.
 ```
 
 Avoid:
@@ -116,7 +114,7 @@ Good:
 ## Testing
 
 Add or update tests when changing behavior. Before reporting completion, run
-`npm test` for test-only changes and `npm run build` for code changes.
+`go test ./...` for behavior changes and `go build ./cmd/anng` for build verification.
 ```
 
 Avoid:
@@ -132,15 +130,15 @@ Good:
 ```markdown
 ## Project Structure
 
-- `src/` contains application code.
-- `tests/` contains automated tests.
+- `cmd/` contains entrypoints.
+- `internal/` contains application code.
 - `docs/` contains user-facing documentation.
 ```
 
 Avoid:
 
 ```markdown
-This is a normal TypeScript project.
+This is a normal project.
 ```
 
 ### Write Safety Boundaries
@@ -169,26 +167,25 @@ Here is a complete `AGENTS.md` example:
 
 ## Project Structure
 
-- `src/` contains application code.
-- `src/tests/` contains automated tests.
+- `cmd/` contains entrypoints.
+- `internal/` contains application code and tests.
 - `docs/` contains user-facing documentation.
-- `config/` contains project configuration examples.
+- `.anng/` contains local project settings.
 
 ## Development Commands
 
-- `npm install` — Install dependencies.
-- `npm test` — Run automated tests.
-- `npm run build` — Run checks and build the CLI.
+- `go test ./...` — Run automated tests.
+- `go build ./cmd/anng` — Build the CLI.
 
 ## Coding Style
 
-Use TypeScript. Keep code readable, prefer clear names, and follow the existing
+Use Go. Keep code readable, prefer clear names, and follow the existing
 formatting style. Do not introduce unrelated refactors.
 
 ## Testing
 
 Add tests when changing behavior. Run the narrowest relevant test first, then
-run `npm test` or `npm run build` before reporting completion when practical.
+run `go test ./...` or `go build ./cmd/anng` before reporting completion when practical.
 
 ## Agent Notes
 

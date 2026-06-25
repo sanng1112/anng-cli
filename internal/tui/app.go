@@ -1,0 +1,725 @@
+package tui
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"anng-cli/internal/agent"
+	"anng-cli/internal/config"
+	"anng-cli/internal/contextkeys"
+	"anng-cli/internal/mcp"
+	"anng-cli/internal/skills"
+	"anng-cli/internal/tools"
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+var ProgramInstance *tea.Program
+
+type ProcessOutputMsg struct {
+	Command string
+	Output  string
+}
+
+type PermissionRequiredMsg struct {
+	Command  string
+	Cwd      string
+	Response chan bool
+}
+
+func init() {
+	tools.BashOutputCallback = func(command string, output string) {
+		if ProgramInstance != nil {
+			ProgramInstance.Send(ProcessOutputMsg{Command: command, Output: output})
+		}
+	}
+	tools.PermissionCheck = func(command string, cwd string) error {
+		if ProgramInstance == nil {
+			return nil
+		}
+		resp := make(chan bool, 1)
+		ProgramInstance.Send(PermissionRequiredMsg{
+			Command:  command,
+			Cwd:      cwd,
+			Response: resp,
+		})
+		allowed := <-resp
+		if !allowed {
+			return fmt.Errorf("Permission denied by user: %s", command)
+		}
+		return nil
+	}
+}
+
+// AppConfig holds startup configuration passed from main.
+type AppConfig struct {
+	Version         string
+	ProjectRoot     string
+	InitialPrompt   string
+	AutoAccept      bool
+	PlanMode        bool
+	MaxTurns        int
+	Model           string
+	ApiKey          string
+	BaseURL         string
+	Provider        string
+	GeminiApiKey    string
+	GeminiBaseURL   string
+	Models          []string
+	SettingsPath    string
+	ActiveSkills    []string
+	ThinkingEnabled bool
+	ReasoningEffort string
+
+	// New fields v0.2.2
+	MaxTokens          int
+	Temperature        float64
+	RequestTimeout     int
+	CustomInstructions string
+	ContextBudget      int
+	ContextCompaction  string
+	Theme              string
+	Language           string
+	AllowedTools       []string
+	BlockedTools       []string
+}
+
+type AppModel struct {
+	Width  int
+	Height int
+
+	CurrentView TuiView
+
+	ChatView        ChatViewModel
+	SettingsView    SettingsViewModel
+	SessionListView SessionListModel
+	UndoView        UndoSelectorModel
+	ModelSelectView ModelSelectModel
+	SkillsListView  SkillsListModel
+	McpStatusView   McpStatusModel
+	PermissionView  PermissionPromptModel
+	TeamView        TeamViewModel
+	MCPManager      *mcp.MCPManager
+
+	Config                 AppConfig
+	PendingPermission      *PermissionRequest
+	PermissionResponseChan chan bool
+	ShowStdout             bool
+	StdoutBuf              string
+	StdoutCommand          string
+	Busy                   bool
+	ErrLine                string
+	ActiveCancel           context.CancelFunc
+	SessionID              string
+}
+
+func InitialModelWithConfig(cfg AppConfig) AppModel {
+	home, _ := os.UserHomeDir()
+	cwd := FormatHomeRelativePath(cfg.ProjectRoot, home)
+	if cwd == "" {
+		cwd = cfg.ProjectRoot
+	}
+
+	slashItems := []string{
+		"/exit    — Thoát ANNG CLI",
+		"/new     — Phiên hội thoại mới",
+		"/resume  — Tiếp tục phiên cũ",
+		"/continue — Tiếp tục phiên hiện tại hoặc chọn phiên cũ",
+		"/undo    — Hoàn tác checkpoint",
+		"/mcp     — Trạng thái MCP servers",
+		"/settings — Cài đặt API, Model",
+		"/model   — Chọn model AI",
+		"/models  — Chọn model AI (alias)",
+		"/skills  — Danh sách các kỹ năng hiện có",
+		"/init    — Khởi tạo file AGENTS.md",
+		"/raw     — Chuyển đổi hiển thị (lite/normal/raw)",
+		"/team    — Quản lý đội nhóm agent (team orchestration)",
+		"/team-dp — Tự động mở rộng team song song (Data Parallelism)",
+		"/team-wf — Chạy luồng công việc với pipeline tuần tự",
+		"/custom-agents — Tùy chỉnh danh sách agent",
+	}
+
+	loadedSkills := skills.LoadAllSkills(cwd, home)
+	for _, s := range loadedSkills {
+		slashItems = append(slashItems, fmt.Sprintf("/%s — %s", s.Name, s.Description))
+	}
+
+	chatVM := NewChatViewModel(cfg, slashItems)
+
+	sessionID := generateUUID()
+
+	model := AppModel{
+		CurrentView: ViewChat,
+		ChatView:    chatVM,
+		Config:      cfg,
+		SessionID:   sessionID,
+	}
+
+	if !cfg.AutoAccept && !cfg.PlanMode {
+		model.PermissionView = NewPermissionPromptModel(PermissionRequest{})
+	}
+
+	return model
+}
+
+func InitialModel() AppModel {
+	return InitialModelWithConfig(AppConfig{Version: "0.2.0"})
+}
+
+func (m AppModel) Init() tea.Cmd {
+	return nil
+}
+
+type AgentFinishedMsg struct {
+	Result interface{}
+	Err    error
+}
+
+func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case ProcessOutputMsg:
+		m.ShowStdout = true
+		m.StdoutCommand = msg.Command
+		m.StdoutBuf += msg.Output
+		return m, nil
+
+	case SpinnerTickMsg:
+		var cmd tea.Cmd
+		m.ChatView, cmd = m.ChatView.Update(msg)
+		return m, cmd
+
+	case PermissionRequiredMsg:
+		m.PendingPermission = &PermissionRequest{Command: msg.Command}
+		m.PermissionResponseChan = msg.Response
+		m.PermissionView = NewPermissionPromptModel(PermissionRequest{Command: msg.Command})
+		return m, nil
+	case tea.KeyMsg:
+		// Capture Esc to close stdout overlay screen
+		if m.ShowStdout {
+			if msg.Type == tea.KeyEsc {
+				m.ShowStdout = false
+				m.StdoutBuf = ""
+			}
+			return m, nil
+		}
+
+		if msg.Type == tea.KeyCtrlC || msg.Type == tea.KeyCtrlD {
+			if m.ActiveCancel != nil {
+				m.ActiveCancel()
+			}
+			return m, tea.Quit
+		}
+
+		if m.Busy {
+			if msg.Type == tea.KeyEsc {
+				if m.ActiveCancel != nil {
+					m.ActiveCancel()
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, SystemChatEntry("User interrupted execution."))
+				}
+			}
+			return m, nil
+		}
+	case tea.WindowSizeMsg:
+		m.Width = msg.Width
+		m.Height = msg.Height
+		m.ChatView.Width = msg.Width
+		m.ChatView.Height = msg.Height
+		m.TeamView.Width = msg.Width
+		m.TeamView.Height = msg.Height
+		return m, nil
+	case ExecutePromptMsg:
+		m.Busy = true
+		m.ChatView.Busy = true
+		m.ErrLine = ""
+		m.ChatView.ErrLine = ""
+
+		_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "user", msg.Prompt)
+
+		var ctx context.Context
+		ctx, m.ActiveCancel = context.WithCancel(context.Background())
+
+		return m, tea.Batch(
+			func() tea.Msg {
+				home, _ := os.UserHomeDir()
+				expanded := skills.ExpandPromptWithActiveSkills(msg.Prompt, m.Config.ActiveSkills, m.Config.ProjectRoot, home)
+
+				mode := "act"
+				if m.Config.PlanMode {
+					mode = "plan"
+				} else if m.Config.AutoAccept {
+					mode = "yolo"
+				}
+				orch := agent.NewOrchestrator(m.Config.Model, m.Config.ApiKey, mode)
+				orch.MaxTurns = m.Config.MaxTurns
+				orch.BaseURL = m.Config.BaseURL
+				orch.ProjectRoot = m.Config.ProjectRoot
+				orch.Provider = m.Config.Provider
+				orch.ThinkingEnabled = m.Config.ThinkingEnabled
+				orch.ReasoningEffort = m.Config.ReasoningEffort
+				orch.MCPManager = m.MCPManager
+
+				ctx = context.WithValue(ctx, contextkeys.ProjectRootKey, m.Config.ProjectRoot)
+				ctx = context.WithValue(ctx, contextkeys.SessionIDKey, m.SessionID)
+
+				res, err := orch.Run(ctx, expanded)
+				return AgentFinishedMsg{Result: res, Err: err}
+			},
+			spinnerTick(),
+		)
+	case AgentFinishedMsg:
+		m.Busy = false
+		m.ChatView.Busy = false
+		m.ActiveCancel = nil
+		if msg.Err != nil {
+			m.ErrLine = msg.Err.Error()
+			m.ChatView.ErrLine = msg.Err.Error()
+			_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "system", "Error: "+msg.Err.Error())
+		} else if msg.Result != nil {
+			if runRes, ok := msg.Result.(*agent.RunResult); ok {
+				if runRes.Response != "" {
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, AssistantChatEntry(runRes.Response))
+					_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "assistant", runRes.Response)
+				}
+
+				var statusLine string
+				if runRes.Turns > 0 {
+					statusLine = fmt.Sprintf("Agent: Done in %d turns. Tokens: %d input, %d output (%d total).", runRes.Turns, runRes.PromptTokens, runRes.CompletionTokens, runRes.TotalTokens)
+				} else {
+					statusLine = runRes.FinishReason
+				}
+				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, SystemChatEntry(statusLine))
+				_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "system", statusLine)
+			}
+		}
+		return m, nil
+	case PermissionDecisionMsg:
+		// PermissionDecisionMsg is produced by PermissionView.Update() command,
+		// so it arrives as a new message in the next cycle.
+		if m.PermissionResponseChan != nil {
+			m.PermissionResponseChan <- msg.Allow
+			close(m.PermissionResponseChan)
+			m.PermissionResponseChan = nil
+		}
+		m.PendingPermission = nil
+		return m, nil
+
+	case NewSessionMsg:
+		m.SessionID = generateUUID()
+		return m, nil
+	}
+
+	// Delegate keyboard input to PermissionView when permission is pending
+	if m.PendingPermission != nil {
+		var cmd tea.Cmd
+		m.PermissionView, cmd = m.PermissionView.Update(msg)
+		return m, cmd
+	}
+
+	switch m.CurrentView {
+	case ViewChat:
+		var cmd tea.Cmd
+
+		// Settings overlay: process FIRST, before chat
+		// This prevents Esc/keys from being eaten by chat view
+		if m.SettingsView.Visible {
+			oldVisible := m.SettingsView.Visible
+			m.SettingsView, cmd = m.SettingsView.Update(msg)
+			if !m.SettingsView.Visible && oldVisible {
+				// Settings was closed — sync config back to chat
+				m.Config = m.SettingsView.Config
+				m.ChatView.Config = m.SettingsView.Config
+				// Also set the model's config to reflect changes immediately
+			}
+			return m, cmd
+		}
+
+		m.ChatView, cmd = m.ChatView.Update(msg)
+
+		if trigger, ok := msg.(TriggerViewMsg); ok {
+			switch trigger.View {
+			case ViewSessionList:
+				m.CurrentView = trigger.View
+				m.SessionListView = NewSessionListModel(m.Config.ProjectRoot)
+			case ViewUndo:
+				m.CurrentView = trigger.View
+				commits := LoadGitCheckpoints(m.Config.ProjectRoot)
+				m.UndoView = NewUndoSelectorModel(commits)
+			case ViewSettings:
+				// Settings is an OVERLAY — stay in ViewChat, just show overlay
+				m.SettingsView = NewSettingsViewModel(m.Config)
+				m.SettingsView.Visible = true
+				return m, cmd
+			case ViewModelSelect:
+				m.ModelSelectView = NewModelSelectModel(m.Config.Models, m.Config.Model)
+			case ViewSkillsList:
+				home, _ := os.UserHomeDir()
+				loaded := skills.LoadAllSkills(m.Config.ProjectRoot, home)
+				var names []string
+				for _, s := range loaded {
+					names = append(names, s.Name)
+				}
+				m.SkillsListView = NewSkillsListModel(names, m.Config.ActiveSkills)
+			case ViewMcpStatus:
+				var serverInfos []ServerStatusInfo
+				if m.MCPManager != nil {
+					statuses := m.MCPManager.ServerStatuses()
+					allTools := m.MCPManager.AllTools()
+					for _, name := range m.MCPManager.ServerNames() {
+						toolCount := 0
+						if tools, ok := allTools[name]; ok {
+							toolCount = len(tools)
+						}
+						info := ServerStatusInfo{
+							Name:      name,
+							Status:    statuses[name],
+							ToolCount: toolCount,
+						}
+						if s, ok := m.MCPManager.GetServer(name); ok {
+							info.LastError = s.LastError
+						}
+						serverInfos = append(serverInfos, info)
+					}
+				}
+				if len(serverInfos) == 0 {
+					serverInfos = []ServerStatusInfo{{Name: "(no MCP servers configured)", Status: "disconnected"}}
+				}
+				m.McpStatusView = NewMcpStatusModel(serverInfos)
+			}
+		}
+		return m, cmd
+
+	case ViewSessionList:
+		var cmd tea.Cmd
+		m.SessionListView, cmd = m.SessionListView.Update(msg)
+		if _, ok := msg.(BackToChatMsg); ok {
+			m.CurrentView = ViewChat
+		} else if res, ok := msg.(ResumeSessionMsg); ok {
+			m.CurrentView = ViewChat
+			m.SessionID = res.SessionName
+			if logs, err := LoadSessionContent(m.Config.ProjectRoot, res.SessionName); err == nil {
+				m.ChatView.LogBuffer = logs
+			} else {
+				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, SystemChatEntry("Loaded session "+res.SessionName))
+			}
+		}
+		return m, cmd
+
+	case ViewUndo:
+		var cmd tea.Cmd
+		m.UndoView, cmd = m.UndoView.Update(msg)
+		if _, ok := msg.(BackToChatMsg); ok {
+			m.CurrentView = ViewChat
+		} else if restore, ok := msg.(RestoreCheckpointMsg); ok {
+			m.CurrentView = ViewChat
+			parts := strings.Split(restore.Checkpoint, " ")
+			commitHash := parts[0]
+			if strings.HasPrefix(commitHash, "[Target]") && len(parts) > 1 {
+				commitHash = parts[1]
+			}
+
+			m.Busy = true
+			m.ChatView.Busy = true
+			return m, tea.Batch(
+				func() tea.Msg {
+					cmd := exec.Command("git", "reset", "--hard", commitHash)
+					cmd.Dir = m.Config.ProjectRoot
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						return AgentFinishedMsg{Err: fmt.Errorf("failed to restore checkpoint: %s, error: %w", string(output), err)}
+					}
+					return AgentFinishedMsg{Result: &agent.RunResult{FinishReason: "System: Restored git checkpoint " + commitHash, Turns: 0}}
+				},
+				spinnerTick(),
+			)
+		}
+		return m, cmd
+
+	case ViewSettings:
+		var cmd tea.Cmd
+		m.SettingsView, cmd = m.SettingsView.Update(msg)
+		if _, ok := msg.(BackToChatMsg); ok {
+			m.CurrentView = ViewChat
+			m.Config = m.SettingsView.Config
+			m.ChatView.Config = m.SettingsView.Config
+		}
+		return m, cmd
+
+	case ViewModelSelect:
+		var cmd tea.Cmd
+		m.ModelSelectView, cmd = m.ModelSelectView.Update(msg)
+		if _, ok := msg.(BackToChatMsg); ok {
+			m.CurrentView = ViewChat
+		} else if sw, ok := msg.(SwitchModelMsg); ok {
+			m.Config.Model = sw.Model
+			m.ChatView.Config.Model = sw.Model
+			m.CurrentView = ViewChat
+			saveConfig(m.Config)
+		} else if _, ok := msg.(AddCustomModelMsg); ok {
+			m.CurrentView = ViewInput
+			m.ChatView.Buffer.Clear()
+		}
+		return m, cmd
+
+	case ViewSkillsList:
+		var cmd tea.Cmd
+		m.SkillsListView, cmd = m.SkillsListView.Update(msg)
+		if _, ok := msg.(BackToChatMsg); ok {
+			m.CurrentView = ViewChat
+		} else if skMsg, ok := msg.(UpdateActiveSkillsMsg); ok {
+			m.Config.ActiveSkills = skMsg.ActiveSkills
+			m.ChatView.Config.ActiveSkills = skMsg.ActiveSkills
+			m.CurrentView = ViewChat
+		}
+		return m, cmd
+
+	case ViewMcpStatus:
+		var cmd tea.Cmd
+		m.McpStatusView, cmd = m.McpStatusView.Update(msg)
+		if _, ok := msg.(BackToChatMsg); ok {
+			m.CurrentView = ViewChat
+		}
+		return m, cmd
+
+	case ViewTeam:
+		var cmd tea.Cmd
+		m.TeamView, cmd = m.TeamView.Update(msg)
+		if _, ok := msg.(BackToChatMsg); ok {
+			m.CurrentView = ViewChat
+		}
+		return m, cmd
+	}
+
+	return m, nil
+}
+
+func (m AppModel) View() string {
+	if m.PendingPermission != nil {
+		return m.PermissionView.View()
+	}
+
+	// Render base view
+	var baseView string
+	switch m.CurrentView {
+	case ViewChat:
+		baseView = m.ChatView.View()
+	case ViewSessionList:
+		baseView = m.SessionListView.View()
+	case ViewUndo:
+		baseView = m.UndoView.View()
+	case ViewSettings:
+		baseView = m.ChatView.View() // settings now renders as overlay
+	case ViewModelSelect:
+		baseView = m.ModelSelectView.View()
+	case ViewSkillsList:
+		baseView = m.SkillsListView.View()
+	case ViewMcpStatus:
+		baseView = m.McpStatusView.View()
+	case ViewTeam:
+		baseView = m.TeamView.View()
+	default:
+		baseView = m.ChatView.View()
+	}
+
+	// Render settings overlay on top of base view
+	if m.SettingsView.Visible {
+		overlay := m.SettingsView.View()
+		if overlay != "" {
+			return baseView + "\n" + overlay
+		}
+	}
+
+	return baseView
+}
+
+func LoadSessions(projectRoot string) []string {
+	var sessions []string
+	home, _ := os.UserHomeDir()
+
+	projectCode := projectCodeHash(projectRoot)
+
+	dir := filepath.Join(home, ".anng", "projects", projectCode)
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return []string{"No sessions found"}
+	}
+	for _, f := range files {
+		if !f.IsDir() && (strings.HasSuffix(f.Name(), ".jsonl") || strings.HasSuffix(f.Name(), ".json")) {
+			if f.Name() != "sessions-index.json" {
+				sessions = append(sessions, strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())))
+			}
+		}
+	}
+	if len(sessions) == 0 {
+		return []string{"No sessions found"}
+	}
+	return sessions
+}
+
+func LoadSessionContent(projectRoot string, sessionName string) ([]ChatLogEntry, error) {
+	home, _ := os.UserHomeDir()
+	projectCode := projectCodeHash(projectRoot)
+
+	dir := filepath.Join(home, ".anng", "projects", projectCode)
+
+	// Try JSON first
+	jsonPath := filepath.Join(dir, sessionName+".json")
+	data, err := os.ReadFile(jsonPath)
+	if err == nil {
+		var sess struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.Unmarshal(data, &sess); err == nil {
+			var logs []ChatLogEntry
+			for _, m := range sess.Messages {
+				if m.Role == "user" {
+					logs = append(logs, UserChatEntry(m.Content))
+				} else {
+					logs = append(logs, AssistantChatEntry(m.Content))
+				}
+			}
+			return logs, nil
+		}
+	}
+
+	// Fallback to JSONL
+	jsonlPath := filepath.Join(dir, sessionName+".jsonl")
+	data, err = os.ReadFile(jsonlPath)
+	if err == nil {
+		var logs []ChatLogEntry
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			var m struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			}
+			if err := json.Unmarshal([]byte(line), &m); err == nil {
+				if m.Role == "user" {
+					logs = append(logs, UserChatEntry(m.Content))
+				} else {
+					logs = append(logs, AssistantChatEntry(m.Content))
+				}
+			}
+		}
+		return logs, nil
+	}
+
+	return nil, fmt.Errorf("session not found")
+}
+
+func LoadGitCheckpoints(projectRoot string) []string {
+	cmd := exec.Command("git", "log", "-n", "10", "--oneline")
+	cmd.Dir = projectRoot
+	output, err := cmd.Output()
+	if err != nil {
+		return []string{"No git checkpoints found"}
+	}
+	lines := strings.Split(string(output), "\n")
+	var checkpoints []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			checkpoints = append(checkpoints, trimmed)
+		}
+	}
+	if len(checkpoints) == 0 {
+		return []string{"No git checkpoints found"}
+	}
+	return checkpoints
+}
+
+type SessionMessage struct {
+	ID         string    `json:"id"`
+	SessionID  string    `json:"sessionId"`
+	Role       string    `json:"role"`
+	Content    string    `json:"content"`
+	CreateTime time.Time `json:"createTime"`
+	UpdateTime time.Time `json:"updateTime"`
+}
+
+func generateUUID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback: use timestamp-based UUID if crypto/rand fails
+		return fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// projectCodeHash generates a collision-resistant hash for a project root path.
+func projectCodeHash(projectRoot string) string {
+	h := sha256.Sum256([]byte(projectRoot))
+	return fmt.Sprintf("%x", h[:16]) // first 16 bytes = 32 hex chars
+}
+
+func SaveSessionMessage(projectRoot, sessionID, role, content string) error {
+	if sessionID == "" {
+		return nil
+	}
+	home, _ := os.UserHomeDir()
+	projectCode := projectCodeHash(projectRoot)
+
+	dir := filepath.Join(home, ".anng", "projects", projectCode)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	msg := SessionMessage{
+		ID:         generateUUID(),
+		SessionID:  sessionID,
+		Role:       role,
+		Content:    content,
+		CreateTime: time.Now(),
+		UpdateTime: time.Now(),
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	filePath := filepath.Join(dir, sessionID+".jsonl")
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func saveConfig(cfg AppConfig) {
+	if cfg.SettingsPath == "" {
+		return
+	}
+	s := &config.Settings{
+		Model:           cfg.Model,
+		ApiKey:          cfg.ApiKey,
+		BaseURL:         cfg.BaseURL,
+		Provider:        cfg.Provider,
+		GeminiApiKey:    cfg.GeminiApiKey,
+		GeminiBaseURL:   cfg.GeminiBaseURL,
+		AutoAccept:      cfg.AutoAccept,
+		PlanMode:        cfg.PlanMode,
+		ThinkingEnabled: cfg.ThinkingEnabled,
+		ReasoningEffort: cfg.ReasoningEffort,
+		Models:          cfg.Models,
+	}
+	_ = config.SaveConfig(cfg.SettingsPath, s)
+}

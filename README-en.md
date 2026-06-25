@@ -6,195 +6,165 @@
     <img src='https://avatars.githubusercontent.com/u/118287711?s=200&v=4' width='100' alt="anng-cli"/>
   </a>
 </p>
-<h1>ANNG CLI CLI</h1>
+<h1>ANNG CLI</h1>
 
-[![][npm-release-shield]][npm-release-link] [![][npm-downloads-shield]][npm-downloads-link] [![][github-contributors-shield]][github-contributors-link] [![][github-forks-shield]][github-forks-link] [![][github-stars-shield]][github-stars-link]
+[![][github-contributors-shield]][github-contributors-link] [![][github-forks-shield]][github-forks-link] [![][github-stars-shield]][github-stars-link]
 [![][github-issues-shield]][github-issues-link] [![][github-issues-pr-shield]][github-issues-pr-link] [![][github-license-shield]][github-license-link]
 
-English · [中文](./README.md)
+English · [中文](./README-zh_CN.md) · [Tiếng Việt](./README.md)
 
 <br/>
 </div>
 
-[ANNG CLI](https://github.com/lessweb/anng-cli) is a terminal AI coding assistant optimized for the `deepseek-v4` model, with support for deep thinking, reasoning effort control, Agent Skills, and MCP (Model Context Protocol) integration.
+[ANNG CLI v0.2.2](https://github.com/lessweb/anng-cli) is a Go-based terminal AI coding assistant with a Bubble Tea TUI, headless execution mode, skills, MCP integration, team orchestration, and file state safety.
 
+## Requirements
 
-## Installation
+- Go `1.24` or newer
+- An API key for the provider you want to use
+
+## Build
 
 ```bash
-npm install -g anng-cli
+go build -o anng ./cmd/anng
 ```
 
-Run `anng` inside any project directory to get started.
+Or use the `Makefile`:
 
-![intro2](resources/intro2.png)
+```bash
+make build
+```
+
+Run tests:
+
+```bash
+make test
+```
+
+## Run
+
+Start the interactive TUI:
+
+```bash
+./anng
+```
+
+Start with an initial prompt:
+
+```bash
+./anng -p "Summarize this project"
+```
+
+Run a headless task with automatic approval:
+
+```bash
+./anng --yolo --max-turns 10 -p "Run the test suite and fix failures"
+```
 
 ## Configuration
 
-Create `~/.anng/settings.json`:
+ANNG CLI reads `./.anng/settings.json` first, then falls back to `~/.anng/settings.json`.
+
+Example:
 
 ```json
 {
-  "env": {
-    "MODEL": "deepseek-v4-pro",
-    "BASE_URL": "https://api.deepseek.com",
-    "API_KEY": "sk-..."
-  },
+  "provider": "deepseek",
+  "model": "deepseek-v4-pro",
+  "apiKey": "sk-...",
+  "baseUrl": "https://api.deepseek.com",
+  "autoAccept": false,
+  "planMode": false,
   "thinkingEnabled": true,
   "reasoningEffort": "max"
 }
 ```
 
-The configuration file is shared with the [ANNG CLI VSCode extension](https://github.com/lessweb/anng) — configure once, use everywhere.
+Supported top-level fields in the current Go runtime:
 
-For complete configuration details (multi-level priority, environment variables, etc.), see [docs/configuration.md](docs/configuration.md).
+| Field | Description |
+| --- | --- |
+| `provider` | `openai`, `deepseek`, `anthropic`, or `google` |
+| `model` | Model identifier |
+| `apiKey` | API key for OpenAI-compatible providers |
+| `baseUrl` | Optional API base URL override |
+| `geminiApiKey` | Gemini API key when using the Google provider |
+| `geminiBaseUrl` | Optional Gemini endpoint override |
+| `autoAccept` | Auto-accept tool permission prompts |
+| `planMode` | Run in planning mode and block mutating tools |
+| `thinkingEnabled` | Enable thinking mode where supported |
+| `reasoningEffort` | One of `-`, `none`, `low`, `medium`, `high`, `max` |
+| `models` | Optional custom model list shown in the TUI |
+| `env` | Extra environment variables stored alongside settings |
 
-## Key Features
+Environment variables:
 
-### **Skills**
-ANNG CLI CLI supports agent skills that allow you to extend the assistant's capabilities:
+- `ANNG_PROVIDER`
+- `ANNG_MODEL`
+- `ANNG_API_KEY`
+- `ANNG_BASE_URL`
+- `ANNG_THINKING_ENABLED`
+- `ANNG_REASONING_EFFORT`
+- `GEMINI_API_KEY`
+- `GEMINI_BASE_URL`
 
-Skills are discovered from these locations, in priority order:
+## Commands
 
-| Scope   | Path                  | Purpose                       |
-| :------ | :-------------------- | :---------------------------- |
-| Project | `./.anng/skills/` | ANNG CLI's native location   |
-| Project | `./.agents/skills/`   | Cross-client interoperability |
-| User    | `~/.anng/skills/` | ANNG CLI's native location   |
-| User    | `~/.agents/skills/`   | Cross-client interoperability |
+Type `/` in the TUI to open the command menu.
 
-### **Optimized for DeepSeek**
-- Specifically tuned for DeepSeek model performance.
-- Reduce costs by using [Context Caching](https://api-docs.deepseek.com/guides/kv_cache).
-- Natively supports [Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode) and Effort Control.
+| Command | Action |
+| --- | --- |
+| `/new` | Start a new conversation |
+| `/resume` | Resume a previous session |
+| `/continue` | Continue the latest active session |
+| `/model` | Switch model and reasoning settings |
+| `/settings` | Edit runtime settings |
+| `/skills` | Show available skills |
+| `/mcp` | Show MCP server status |
+| `/undo` | Restore a previous checkpoint |
+| `/init` | Create an `AGENTS.md` file |
+| `/raw` | Toggle display mode |
+| `/team`, `/team-dp`, `/team-wf` | Open team orchestration views |
+| `/exit` | Quit the app |
 
-## Slash Commands & Keyboard Shortcuts
+## Basic Controls
 
-| Slash Command    | Action                                                  |
-|------------------|---------------------------------------------------------|
-| `/`              | Open the skills / commands menu                         |
-| `/new`           | Start a fresh conversation                              |
-| `/resume`        | Choose a previous conversation to continue              |
-| `/continue`      | Continue the active conversation or pick one to resume  |
-| `/model`         | Switch model, thinking mode, and reasoning effort       |
-| `/raw`           | Toggle display mode (Normal / Lite / Raw scrollback)    |
-| `/init`          | Initialize an AGENTS.md file (LLM project instructions) |
-| `/skills`        | List available skills                                   |
-| `/mcp`           | View MCP server status and available tools              |
-| `/undo`          | Restore code and/or conversation to a previous point    |
-| `/exit`          | Quit (also `Ctrl+D` twice)                              |
+| Key | Action |
+| --- | --- |
+| `Enter` | Send the prompt |
+| `Ctrl+J` | Insert a newline |
+| `Esc` | Interrupt or go back |
+| `Ctrl+C` / `Ctrl+D` | Quit |
 
-| Key              | Action                                                   |
-|------------------|----------------------------------------------------------|
-| `Enter`          | Send the prompt                                          |
-| `Shift+Enter`    | Insert a newline (also `Ctrl+J`)                         |
-| `Ctrl+V`         | Paste an image from the clipboard                        |
-| `Esc`            | Interrupt the current model turn                         |
-| `Ctrl+D` twice   | Quit ANNG CLI                                           |
+## Providers
 
-## Supported Models
+- `openai`
+- `deepseek`
+- `anthropic`
+- `google`
 
-- `deepseek-v4-pro` (Recommended)
-- `deepseek-v4-flash`
-- Any other OpenAI-compatible model
+## Documentation
 
-## FAQ
-
-### Does ANNG CLI have a VSCode extension?
-
-Yes. ANNG CLI offers a full-featured VSCode extension, available on the [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=vegamo.anng-vscode). The extension shares the `~/.anng/settings.json` configuration file with the CLI, so you can switch seamlessly between the terminal and the editor.
-
-### Does ANNG CLI support understanding images?
-
-ANNG CLI supports multimodal input — you can paste images from the clipboard with `Ctrl+V`. However, `deepseek-v4` does not support multimodal yet. Some models have multimodal capabilities but impose strict limits on multi-turn dialogue requests. For multimodal input, we recommend using the Volcano Ark `Doubao-Seed-2.0-pro` model, which has the best integration.
-
-### How to automatically send a Slack message after a task completes?
-
-Write a shell notification script that calls a Slack webhook, then set the `notify` field in `~/.anng/settings.json` to the full path of the script. For detailed steps, see [docs/notify_en.md](docs/notify_en.md).
-
-### How do I enable web search?
-
-ANNG CLI comes with a built-in, free Web Search tool that works well for most use cases. If you prefer to use a custom script for web search, set the `webSearchTool` field in `~/.anng/settings.json` to the full path of your script. For detailed steps, refer to: https://github.com/qorzj/web_search_cli
-
-### Does it support Coding Plan?
-
-Yes. Just set `env.BASE_URL` in `~/.anng/settings.json` to an OpenAI-compatible API endpoint. Take Volcano Ark's Coding Plan as an example:
-
-```json
-{
-  "env": {
-    "MODEL": "ark-code-latest",
-    "BASE_URL": "https://ark.cn-beijing.volces.com/api/coding/v3",
-    "API_KEY": "**************"
-  },
-  "thinkingEnabled": true
-}
-```
-
-### How do I configure MCP?
-
-ANNG CLI supports MCP (Model Context Protocol) to connect external services such as GitHub, browsers, databases, and more. Configure the `mcpServers` field in `settings.json` to enable it, then use the `/mcp` command to view MCP server status and available tools.
-
-For detailed setup instructions, see: [docs/mcp.md](docs/mcp.md)
-
-### How to configure ANNG CLI to send notifications after a task completes?
-
-When the AI assistant completes a task, ANNG CLI can automatically execute a notification script to send the task results to the specified channel (e.g., Slack, system notifications, etc.).
-
-For detailed configuration instructions, see: [docs/notify_en.md](docs/notify_en.md)
-
-### Does ANNG CLI only support YOLO mode?
-
-No. ANNG CLI has a built-in fine-grained permission control mechanism that lets you confirm operations before the AI assistant executes shell commands, reads/writes files, accesses the network, and more. You can configure each permission scope's policy — always allow, always ask, or deny — via the `permissions` field in `settings.json`. See [docs/permission.md](docs/permission.md) for details.
+- [Quickstart](./docs/quickstart_en.md)
+- [Configuration](./docs/configuration_en.md)
+- [MCP](./docs/mcp_en.md)
+- [Agent Skills](./docs/agent-skills_en.md)
 
 ## Contributing
 
-Contributions are welcome! Here's how to get started:
-
 ```bash
-# Clone the repository
 git clone https://github.com/lessweb/anng-cli.git
 cd anng-cli
-
-# Install dependencies
-npm install
-
-# Local development (typecheck + lint + format check + bundle)
-npm run build
-
-# Run tests
-npm test
-
-# Link globally (local global install)
-npm link
+make test
+make build
 ```
-
-- Make sure `npm run check` passes before submitting a PR (typecheck + lint + format check)
-- We recommend running `npm run format` before building to avoid errors
-
-## Getting Help
-
-- Report bugs or request features on GitHub Issues (https://github.com/lessweb/anng-cli/issues)
 
 ## License
 
-- MIT
-
-## Support Us
-
-If you find this tool helpful, please consider supporting us by:
-
-- Giving us a Star on GitHub (https://github.com/lessweb/anng-cli)
-- Submitting feedback and suggestions
-- Sharing with your friends and colleagues
-
+MIT
 
 <!-- LINK GROUP -->
 
-[npm-release-link]: https://www.npmjs.com/package/anng-cli
-[npm-release-shield]: https://img.shields.io/npm/v/anng-cli?color=4d6BFE&labelColor=black&logo=npm&logoColor=white&style=flat-square&cacheSeconds=1800
-[npm-downloads-link]: https://www.npmjs.com/package/anng-cli
-[npm-downloads-shield]: https://img.shields.io/npm/dt/anng-cli?labelColor=black&style=flat-square&color=4d6BFE&cacheSeconds=1800
 [github-contributors-link]: https://github.com/lessweb/anng-cli/graphs/contributors
 [github-contributors-shield]: https://img.shields.io/github/contributors/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
 [github-forks-link]: https://github.com/lessweb/anng-cli/network/members

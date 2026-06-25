@@ -1,90 +1,254 @@
+# ANNG CLI v0.2.2
+
 <div align="center">
-<br/>
-<h1>ANNG CLI</h1>
-
-<h3>Trợ lý Lập trình AI Tự trị Chạy Trên Terminal 🚀</h3>
-
-[![npm](https://img.shields.io/npm/v/anng-cli?color=D4704B&labelColor=black&logo=npm&logoColor=white&style=flat-square)](https://www.npmjs.com/package/anng-cli)
-[![github-stars](https://img.shields.io/github/stars/sanng1112/anng-cli?color=D4704B&labelColor=black&style=flat-square)](https://github.com/sanng1112/anng-cli/stargazers)
-[![github-license](https://img.shields.io/github/license/sanng1112/anng-cli?color=D4704B&labelColor=black&style=flat-square)](https://github.com/sanng1112/anng-cli/blob/main/LICENSE)
-
-<br/>
+  <p><strong>Trợ lý lập trình AI — Go runtime, TUI (Bubble Tea), headless, MCP, skills</strong></p>
+  <p>Tiếng Việt · <a href="./README-en.md">English</a> · <a href="./README-zh_CN.md">中文</a></p>
 </div>
 
----
-
-**ANNG CLI** là trợ lý lập trình trí tuệ nhân tạo (AI Coding Assistant) dạng terminal (dòng lệnh) được thiết kế tối ưu cho trải nghiệm lập trình tự trị. ANNG CLI giúp tự động hóa toàn bộ quá trình phát triển phần mềm: từ viết mã, sửa lỗi, tìm kiếm cấu trúc dự án thông qua Codegraph, cho đến điều phối toàn bộ đội ngũ Multi-Agent thông minh để giải quyết những task phức tạp nhất.
-
-Được phát triển độc lập và cá nhân hoá để mang lại trải nghiệm *"vibe coding"* cực kỳ mượt mà ngay trên giao diện dòng lệnh.
+ANNG CLI là trợ lý lập trình AI chạy trong terminal, viết bằng Go. Cung cấp TUI tương tác (Bubble Tea), headless mode cho CI/CD, tích hợp MCP, skills system, và team orchestration.
 
 ---
 
-## 🌟 Điểm nổi bật
+## Tính năng chính
 
-- ⚡ **Tốc độ & Thông minh:** Phân tích mã nguồn mạnh mẽ, đánh index codebase bằng Codegraph & tạo bộ nhớ cache thông minh vào `ANNG.md` để đọc hiểu toàn bộ dự án siêu tốc.
-- 🤖 **Đa nền tảng & Linh hoạt:** Hỗ trợ đa dạng các Provider LLM (OpenAI, DeepSeek, Gemini,...) và nhiều chế độ chạy (Interactive, YOLO, Plan).
-- 🎨 **Giao diện Minimalist Sang Trọng:** Giao diện TUI được thiết kế tối giản, tinh tế mang đậm chất nghệ thuật ASCII/Quadrant Blocks với dải màu `#D4704B` hiện đại, thanh lịch.
-- 🛠️ **Hỗ trợ Model Context Protocol (MCP):** Mở rộng tính năng vô hạn. Kết nối trực tiếp hệ thống với Database, Git, AWS, Slack, v.v. thông qua các plugin MCP.
-- 🧠 **Suy luận Đa Chiều (Reasoning Control):** Tích hợp menu SelectList cho phép trực tiếp chuyển đổi Model và tùy chỉnh Mức độ suy luận (Reasoning Effort) ngay trên Terminal một cách trực quan.
+| Tính năng | Mô tả |
+|---|---|
+| **TUI tương tác** | Bubble Tea — chat, settings, session list, MCP status, skills, team |
+| **Headless mode** | `--json` cho CI/CD, `--yolo` auto-approve, `--plan` block mutations |
+| **Đa provider** | OpenAI, DeepSeek, Anthropic, Google Gemini |
+| **MCP** | Stdio transport, JSON-RPC 2.0, auto-reconnect, tool discovery |
+| **Skills system** | 6 search paths, YAML frontmatter, override priority |
+| **File state safety** | Read-before-write, external modification detection |
+| **Session persistence** | JSONL, checkpoint/restore, git integration |
+| **Task manager** | Background task lifecycle management |
+| **Team orchestration** | Team view, divide-and-conquer, workflow pipeline |
+| **Autocomplete** | `@file` mentions, tab completion, slash commands |
 
 ---
 
-## 🚀 Cài đặt & Khởi chạy
+## Yêu cầu
 
-Cài đặt ANNG CLI thông qua `npm` rất đơn giản:
+- **Go 1.24+**
+- API key cho provider bạn dùng
+
+## Cài đặt & Build
 
 ```bash
-# Cài đặt global từ NPM registry
-npm install -g anng-cli
+# Build binary
+go build -o anng ./cmd/anng
 
-# Hoặc cài đặt bản pack local mới nhất (nếu bạn tự build)
-npm pack
-npm install -g ./anng-cli-*.tgz
+# Hoặc dùng Makefile
+make build
+
+# Chạy test
+make test
 ```
 
-Khởi chạy trong bất kỳ thư mục dự án nào của bạn:
+## Sử dụng
+
+### TUI tương tác (mặc định)
+
 ```bash
-anng
+./anng
 ```
+
+### Headless với prompt
+
+```bash
+./anng -p "Tóm tắt project này"
+```
+
+### JSON output cho CI/CD
+
+```bash
+./anng --json -p "Run tests và báo cáo"
+```
+
+### YOLO mode (auto-approve)
+
+```bash
+./anng --yolo -p "Chạy test và sửa lỗi"
+```
+
+### Plan mode (chỉ đọc)
+
+```bash
+./anng --plan -p "Phân tích kiến trúc"
+```
+
+### Giới hạn số turn
+
+```bash
+./anng --max-turns 10 -p "10 turns tối đa"
+```
+
+## CLI Flags
+
+| Flag | Alias | Mặc định | Mô tả |
+|---|---|---|---|
+| `--prompt` | `-p` | `""` | Prompt đầu vào (headless mode) |
+| `--yolo` | `-y` | `false` | Auto-approve mutations |
+| `--plan` | — | `false` | Block mutations, chỉ cho phép đọc |
+| `--json` | — | `false` | JSON output cho CI/CD pipelines |
+| `--verbose` | `-v` | `false` | Diagnostic logging (stderr) |
+| `--max-turns` | — | `50` | Số turn tối đa |
+| `--help` | `-h` | — | Hiển thị help |
+| `--version` | — | — | Hiển thị phiên bản |
 
 ---
 
-## 🎮 Hướng dẫn sử dụng
+## Cấu hình
 
-### 1. Phím tắt Terminal UI (TUI)
-- `Enter`: Gửi prompt.
-- `Shift+Enter`: Xuống dòng.
-- `Ctrl+V`: Dán ảnh từ clipboard.
-- `/`: Mở menu kỹ năng (Skills) và tính năng nhanh (Commands).
-- `Esc`: Huỷ tiến trình sinh văn bản/suy luận hiện tại của AI.
+ANNG đọc settings theo thứ tự ưu tiên:
+1. `./.anng/settings.json` (project-level)
+2. `~/.anng/settings.json` (user-level)
 
-### 2. Các Mode Vận Hành
-```bash
-# Mở giao diện TUI mặc định
-anng
-
-# Chạy một lệnh trực tiếp và thoát (không qua giao diện)
-anng -p "viết hàm tính tổng"
-
-# Mode YOLO (Auto-Accept mọi quyền đọc/ghi mà không cần hỏi lại)
-anng --yolo -p "dọn dẹp thư mục dist và dọn dẹp log"
-
-```
-
-### 3. Cấu hình (`~/.anng/settings.json`)
-Sử dụng thư mục `.anng` để tinh chỉnh cấu hình của riêng bạn:
 ```json
 {
-  "env": {
-    "BASE_URL": "https://api.openai.com/v1",
-    "API_KEY": "sk-...",
-    "ANNG_MODEL": "gpt-4o",
-    "ANNG_REASONING_EFFORT": "high"
-  }
+  "provider": "deepseek",
+  "model": "deepseek-v4-pro",
+  "apiKey": "sk-...",
+  "baseUrl": "https://api.deepseek.com",
+  "autoAccept": false,
+  "planMode": false,
+  "thinkingEnabled": true,
+  "reasoningEffort": "max"
 }
 ```
 
+| Field | Mô tả |
+|---|---|
+| `provider` | `openai`, `deepseek`, `anthropic`, `google` |
+| `model` | Model identifier |
+| `apiKey` | API key cho OpenAI-compatible providers |
+| `baseUrl` | Override API base URL |
+| `geminiApiKey` | Gemini API key riêng |
+| `geminiBaseUrl` | Gemini endpoint override |
+| `autoAccept` | Auto-accept tool permissions |
+| `planMode` | Block mutating tools |
+| `thinkingEnabled` | Enable thinking/reasoning mode |
+| `reasoningEffort` | `-`, `none`, `low`, `medium`, `high`, `max` |
+| `models` | Custom model list cho TUI dropdown |
+| `activeSkills` | Danh sách skills được bật |
+| `mcpServers` | MCP server definitions |
+
+### Environment Variables
+
+| Variable | Ghi đè field |
+|---|---|
+| `ANNG_PROVIDER` | `provider` |
+| `ANNG_MODEL` | `model` |
+| `ANNG_API_KEY` | `apiKey` |
+| `ANNG_BASE_URL` | `baseUrl` |
+| `ANNG_THINKING_ENABLED` | `thinkingEnabled` |
+| `ANNG_REASONING_EFFORT` | `reasoningEffort` |
+| `GEMINI_API_KEY` | `geminiApiKey` |
+| `GEMINI_BASE_URL` | `geminiBaseUrl` |
+
 ---
 
-## 🤝 Tham gia đóng góp
-Dự án được bảo trì và phát triển bởi [sanng1112](https://github.com/sanng1112). Mọi ý tưởng đóng góp, Issue hay Pull Request đều được chào đón nồng nhiệt! Hãy thả sao 🌟 cho project nếu công cụ này hữu ích cho công việc của bạn.
+## Slash Commands
+
+### Lệnh hệ thống
+
+| Command | Mô tả |
+|---|---|
+| `/exit` | Thoát session |
+| `/new` | New conversation |
+| `/resume` | Resume session từ file |
+| `/continue` | Tiếp tục generation |
+| `/undo` | Undo last turn |
+| `/mcp` | MCP server status |
+| `/settings` | Settings UI |
+| `/model` | Chọn model |
+| `/skills` | List/enable skills |
+| `/raw` | Raw prompt mode |
+| `/init` | Tạo AGENTS.md |
+
+### Lệnh skills
+
+| Command | Mô tả |
+|---|---|
+| `/team` | Team orchestration view |
+| `/team-dp` | Divide-and-conquer agents |
+| `/team-wf` | Workflow pipeline |
+| `/custom-agents` | Custom agent config |
+
+---
+
+## TUI Controls
+
+| Key | Action |
+|---|---|
+| `Enter` | Gửi prompt |
+| `Tab` | Autocomplete slash command |
+| `Ctrl+J` | Xuống dòng |
+| `Esc` | Clear input / quay lại |
+| `/` | Mở slash-commands menu |
+| `Ctrl+C` / `Ctrl+D` | Thoát |
+
+---
+
+## Providers
+
+| Provider | Model gợi ý | Thinking support |
+|---|---|---|
+| **OpenAI** | `gpt-4o`, `o3-mini` | ✅ |
+| **DeepSeek** | `deepseek-v4-pro`, `deepseek-chat` | ✅ (V4 models) |
+| **Anthropic** | `claude-3-opus`, `claude-3-sonnet` | ❌ |
+| **Google** | `gemini-2.5-pro` | ✅ |
+
+---
+
+## Tools (11+)
+
+ANNG CLI cung cấp 11 tools built-in + dynamic MCP tools:
+
+| Tool | File | Mutating |
+|---|---|---|
+| `bash` | `bash.go` | ✅ |
+| `read_file` | `read.go` | ❌ |
+| `write_to_file` | `write.go` | ✅ |
+| `replace_file_content` | `edit.go` | ✅ |
+| `multi_replace_file_content` | `file.go` | ✅ |
+| `ask_question` | `ask_user_question.go` | ❌ |
+| `UpdatePlan` | `update_plan.go` | ❌ |
+| `search_web` | `search.go` / `web_search.go` | ❌ |
+| `HttpRequest` | `http_request.go` | ❌ |
+| `AnalyzeProject` | `analyze_project.go` | ❌ |
+| `mcp__*` | MCP dynamic | varies |
+
+---
+
+## Kiến trúc
+
+```
+cmd/anng/main.go          # Entry point — CLI flags, config, run
+├── internal/
+│   ├── agent/             # Orchestrator, headless, policy, prompt engine, provider
+│   ├── config/            # Settings loading (JSON + env overrides)
+│   ├── contextkeys/       # Context key definitions
+│   ├── domain/            # Domain models (session)
+│   ├── mcp/               # MCP client, transport, manager, tools
+│   ├── session/           # Session persistence (JSONL)
+│   ├── skills/            # Skill discovery (6 search paths)
+│   ├── tokenizer/         # Context compaction (character-based heuristic)
+│   ├── tools/             # Tool handlers + executor + file state + task manager
+│   └── tui/               # Bubble Tea views (chat, settings, team, MCP, ...)
+```
+
+---
+
+## Tài liệu liên quan
+
+- [Quickstart](./docs/quickstart.md)
+- [Configuration](./docs/configuration.md)
+- [MCP Integration](./docs/mcp.md)
+- [Agent Skills](./docs/agent-skills.md)
+- [AGENTS.md](./.anng/AGENTS.md)
+
+---
+
+## License
+
+MIT

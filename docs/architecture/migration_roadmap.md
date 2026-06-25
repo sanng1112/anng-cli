@@ -1,5 +1,7 @@
 # Architecture Migration Roadmap
 
+> Historical migration plan: this document was written during the TypeScript-to-Go transition. It may reference legacy files such as `src/...` or intermediate stages that no longer match the current Go runtime exactly.
+
 ## Overview
 This roadmap details the systematic transition from the legacy "Prompt-Centric" architecture to the target "Runtime-Enforced" architecture. The migration is designed to be phased, with verifiable checkpoints, eliminating the risk of a "big-bang" rewrite.
 
