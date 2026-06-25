@@ -116,6 +116,7 @@ Inside the TUI:
   /mcp             MCP server status
   /settings        Settings view
   /model           Choose AI model
+  /models          Choose AI model (alias)
   /skills          List available skills
   /raw             Toggle display mode
   /init            Create AGENTS.md file

@@ -11,9 +11,64 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// ChatLogEntry represents a single entry in the chat scrollback log.
+// It supports collapsible sections for tool results (like Cline).
+type ChatLogEntry struct {
+	Type        string // "user", "assistant", "tool", "system", "error"
+	Content     string
+	ToolName    string // "read_file", "bash", etc.
+	ToolArg     string // filename or command preview
+	Icon        string // emoji: "📄", "✏️", "⚡"
+	HeaderColor string // color hex
+	Collapsed   bool   // true = show only header, false = show full content
+}
+
+func UserChatEntry(content string) ChatLogEntry {
+	return ChatLogEntry{Type: "user", Content: content, Collapsed: false}
+}
+
+func AssistantChatEntry(content string) ChatLogEntry {
+	return ChatLogEntry{Type: "assistant", Content: content, Collapsed: false}
+}
+
+func ToolChatEntry(toolName, toolArg, content string) ChatLogEntry {
+	icon, color := "🔧", "#888888"
+	switch toolName {
+	case "read_file", "read":
+		icon, color = "📄", "#22c55e"
+	case "write_to_file", "write":
+		icon, color = "📝", "#f59e0b"
+	case "replace_file_content", "edit", "multi_replace_file_content":
+		icon, color = "✏️", "#f59e0b"
+	case "bash":
+		icon, color = "⚡", "#D4704B"
+	case "search_web":
+		icon, color = "🌐", "#888888"
+	case "ask_question":
+		icon, color = "❓", "#22c55e"
+	case "HttpRequest":
+		icon, color = "🔗", "#888888"
+	}
+	return ChatLogEntry{
+		Type: "tool", ToolName: toolName, ToolArg: toolArg,
+		Content: content, Icon: icon, HeaderColor: color,
+		Collapsed: len(content) > 200,
+	}
+}
+
+func SystemChatEntry(content string) ChatLogEntry {
+	return ChatLogEntry{Type: "system", Content: content,
+		Icon: "ℹ️", HeaderColor: "#888888"}
+}
+
+func ErrorChatEntry(content string) ChatLogEntry {
+	return ChatLogEntry{Type: "error", Content: content,
+		Icon: "❌", HeaderColor: "#ef4444"}
+}
+
 type ChatViewModel struct {
 	Buffer      *InputBuffer
-	LogBuffer   []string
+	LogBuffer   []ChatLogEntry
 	SlashItems  []string
 	ShowMenu    bool
 	MenuIdx     int
@@ -30,9 +85,10 @@ type ChatViewModel struct {
 	Width   int
 	Height  int
 
-	ScrollOffset int
-	SpinnerFrame int
-	DisplayMode  string // "normal", "lite", "raw"
+	ScrollOffset   int
+	HoveredLogIdx  int // -1 = none; index of entry to toggle collapse
+	SpinnerFrame   int
+	DisplayMode    string // "normal", "lite", "raw"
 }
 
 type TriggerViewMsg struct {
@@ -61,7 +117,7 @@ func NewChatViewModel(cfg AppConfig, slashItems []string) ChatViewModel {
 	}
 	return ChatViewModel{
 		Buffer:      buf,
-		LogBuffer:   []string{},
+		LogBuffer:   []ChatLogEntry{},
 		SlashItems:  slashItems,
 		Config:      cfg,
 		DisplayMode: "normal",
@@ -103,6 +159,11 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 			if m.ScrollOffset < 0 {
 				m.ScrollOffset = 0
 			}
+		case tea.KeyCtrlO:
+			if m.HoveredLogIdx >= 0 && m.HoveredLogIdx < len(m.LogBuffer) {
+				entry := &m.LogBuffer[m.HoveredLogIdx]
+				entry.Collapsed = !entry.Collapsed
+			}
 		case tea.KeyEnter:
 			if m.ShowMenu && len(m.MenuMatches) > 0 {
 				selected := strings.SplitN(m.MenuMatches[m.MenuIdx], " ", 2)[0]
@@ -139,7 +200,7 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 					case "/exit":
 						return m, tea.Quit
 					case "/new":
-						m.LogBuffer = []string{}
+						m.LogBuffer = []ChatLogEntry{}
 						m.ErrLine = ""
 						return m, func() tea.Msg { return NewSessionMsg{} }
 					case "/resume":
@@ -150,7 +211,7 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewMcpStatus} }
 					case "/settings":
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewSettings} }
-					case "/model":
+					case "/model", "/models":  // model selection
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewModelSelect} }
 					case "/skills":
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewSkillsList} }
@@ -161,35 +222,35 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 					case "/team-wf":
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewTeam, Mode: "team-wf"} }
 					case "/custom-agents":
-						m.LogBuffer = append(m.LogBuffer, "System: Custom agents feature is coming soon.")
+						m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: Custom agents feature is coming soon."))
 					case "/init":
 						agentsPath := filepath.Join(m.Config.ProjectRoot, "AGENTS.md")
 						template := "# AGENTS.md\n\nThis file defines custom agent configurations for ANNG CLI.\n\n## Available Agents\n\n- Default: Standard coding agent\n- Reviewer: Code review specialist\n"
 						if err := os.WriteFile(agentsPath, []byte(template), 0644); err != nil {
-							m.LogBuffer = append(m.LogBuffer, "System: Error creating AGENTS.md: "+err.Error())
+							m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: Error creating AGENTS.md: "+err.Error()))
 						} else {
-							m.LogBuffer = append(m.LogBuffer, "System: AGENTS.md created at "+agentsPath)
+							m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: AGENTS.md created at "+agentsPath))
 						}
 					case "/continue":
-						m.LogBuffer = append(m.LogBuffer, "System: Continue current session...")
+						m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: Continue current session..."))
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewSessionList} }
 					case "/raw":
 						switch m.DisplayMode {
 						case "normal":
 							m.DisplayMode = "lite"
-							m.LogBuffer = append(m.LogBuffer, "System: Display mode set to lite.")
+							m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: Display mode set to lite."))
 						case "lite":
 							m.DisplayMode = "raw"
-							m.LogBuffer = append(m.LogBuffer, "System: Display mode set to raw.")
+							m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: Display mode set to raw."))
 						default:
 							m.DisplayMode = "normal"
-							m.LogBuffer = append(m.LogBuffer, "System: Display mode set to normal.")
+							m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: Display mode set to normal."))
 						}
 					default:
-						m.LogBuffer = append(m.LogBuffer, "System: Unrecognized command "+text)
+						m.LogBuffer = append(m.LogBuffer, SystemChatEntry("System: Unrecognized command "+text))
 					}
 				} else {
-					m.LogBuffer = append(m.LogBuffer, lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Render("> ")+text)
+					m.LogBuffer = append(m.LogBuffer, UserChatEntry(text))
 					
 					m.Busy = true
 					m.ScrollOffset = 0 // Auto-scroll to bottom on submit
@@ -312,6 +373,63 @@ func (m *ChatViewModel) updateMenu() {
 	}
 }
 
+func renderChatLogEntry(entry ChatLogEntry, width int) string {
+	switch entry.Type {
+	case "user":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#22c55e")).Bold(true).Render("> " + entry.Content)
+	case "assistant":
+		return entry.Content
+	case "tool":
+		return renderToolSection(entry, width)
+	case "error":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#ef4444")).Render("❌ " + entry.Content)
+	case "system":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Italic(true).Render(entry.Content)
+	default:
+		return entry.Content
+	}
+}
+
+func renderToolSection(entry ChatLogEntry, width int) string {
+	var sb strings.Builder
+	toggleIcon := "▶"
+	if !entry.Collapsed {
+		toggleIcon = "▼"
+	}
+	headerColor := entry.HeaderColor
+	if headerColor == "" {
+		headerColor = "#888888"
+	}
+	toolLabel := entry.ToolName
+	if entry.ToolArg != "" {
+		toolLabel = entry.ToolName + ": " + entry.ToolArg
+	}
+	headerText := fmt.Sprintf("%s %s %s", toggleIcon, entry.Icon, toolLabel)
+	maxHeaderW := width - 6
+	if maxHeaderW < 10 {
+		maxHeaderW = 10
+	}
+	runes := []rune(headerText)
+	if len(runes) > maxHeaderW {
+		headerText = string(runes[:maxHeaderW-1]) + "…"
+	}
+	headerRendered := lipgloss.NewStyle().
+		Background(lipgloss.Color(headerColor)).
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Padding(0, 1).Render(headerText)
+	sb.WriteString(headerRendered)
+	sb.WriteString("\n")
+	if !entry.Collapsed && entry.Content != "" {
+		contentLines := strings.Split(entry.Content, "\n")
+		bodyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#CCCCCC")).PaddingLeft(2)
+		for _, line := range contentLines {
+			sb.WriteString(bodyStyle.Render(line))
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
 func (m ChatViewModel) View() string {
 	w := m.Width
 	if w <= 0 {
@@ -358,9 +476,10 @@ func (m ChatViewModel) View() string {
 		if startIdx < 0 {
 			startIdx = 0
 		}
-		logs := m.LogBuffer[startIdx:endIdx]
-		for _, line := range logs {
-			sb.WriteString(line)
+		logEntries := m.LogBuffer[startIdx:endIdx]
+		for _, entry := range logEntries {
+			rendered := renderChatLogEntry(entry, w)
+			sb.WriteString(rendered)
 			sb.WriteString("\n")
 		}
 	}

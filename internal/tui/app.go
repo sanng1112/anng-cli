@@ -136,6 +136,7 @@ func InitialModelWithConfig(cfg AppConfig) AppModel {
 		"/mcp     — Trạng thái MCP servers",
 		"/settings — Cài đặt API, Model",
 		"/model   — Chọn model AI",
+		"/models  — Chọn model AI (alias)",
 		"/skills  — Danh sách các kỹ năng hiện có",
 		"/init    — Khởi tạo file AGENTS.md",
 		"/raw     — Chuyển đổi hiển thị (lite/normal/raw)",
@@ -220,7 +221,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Type == tea.KeyEsc {
 				if m.ActiveCancel != nil {
 					m.ActiveCancel()
-					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, "System: User interrupted execution.")
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, SystemChatEntry("User interrupted execution."))
 				}
 			}
 			return m, nil
@@ -283,7 +284,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if msg.Result != nil {
 			if runRes, ok := msg.Result.(*agent.RunResult); ok {
 				if runRes.Response != "" {
-					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, runRes.Response)
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, AssistantChatEntry(runRes.Response))
 					_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "assistant", runRes.Response)
 				}
 
@@ -293,7 +294,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					statusLine = runRes.FinishReason
 				}
-				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, statusLine)
+				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, SystemChatEntry(statusLine))
 				_ = SaveSessionMessage(m.Config.ProjectRoot, m.SessionID, "system", statusLine)
 			}
 		}
@@ -402,7 +403,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if logs, err := LoadSessionContent(m.Config.ProjectRoot, res.SessionName); err == nil {
 				m.ChatView.LogBuffer = logs
 			} else {
-				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, "System: Loaded session "+res.SessionName)
+				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, SystemChatEntry("Loaded session "+res.SessionName))
 			}
 		}
 		return m, cmd
@@ -558,7 +559,7 @@ func LoadSessions(projectRoot string) []string {
 	return sessions
 }
 
-func LoadSessionContent(projectRoot string, sessionName string) ([]string, error) {
+func LoadSessionContent(projectRoot string, sessionName string) ([]ChatLogEntry, error) {
 	home, _ := os.UserHomeDir()
 	projectCode := projectCodeHash(projectRoot)
 
@@ -591,7 +592,7 @@ func LoadSessionContent(projectRoot string, sessionName string) ([]string, error
 	jsonlPath := filepath.Join(dir, sessionName+".jsonl")
 	data, err = os.ReadFile(jsonlPath)
 	if err == nil {
-		var logs []string
+		var logs []ChatLogEntry
 		lines := strings.Split(string(data), "\n")
 		for _, line := range lines {
 			if strings.TrimSpace(line) == "" {
@@ -603,9 +604,9 @@ func LoadSessionContent(projectRoot string, sessionName string) ([]string, error
 			}
 			if err := json.Unmarshal([]byte(line), &m); err == nil {
 				if m.Role == "user" {
-					logs = append(logs, "> "+m.Content)
+					logs = append(logs, UserChatEntry(m.Content))
 				} else {
-					logs = append(logs, m.Content)
+					logs = append(logs, AssistantChatEntry(m.Content))
 				}
 			}
 		}

@@ -11,4 +11,6 @@ dist/
 /anng
 *.test
 ainovel-cli/
+.codegraph/
+cline/
 
