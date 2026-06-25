@@ -761,6 +761,20 @@ function App({
     setQueueVisible((v) => !v);
   }, []);
 
+  const handleQueueWhenBusy = useCallback(
+    (text: string) => {
+      // Add to queue when AI is busy processing
+      import("../../common/task-queue").then(({ addTask, listQueues }) => {
+        const qList = listQueues(projectRoot);
+        const qName = qList.length > 0 ? qList[0].name : "main";
+        addTask(projectRoot, qName, text);
+        setQueueRefreshTick((t) => t + 1);
+      }).catch(() => {});
+      setStatusLine(`Queued: "${text.slice(0, 60)}" (AI busy)`);
+    },
+    [projectRoot]
+  );
+
   const handleQueueProcessTask = useCallback(
     (taskText: string) => {
       setView("chat");
@@ -1322,6 +1336,7 @@ function App({
           onRawModeChange={handleRawModeChange}
           onInterrupt={handleInterrupt}
           onToggleProcessStdout={handleToggleProcessStdout}
+          onQueueWhenBusy={handleQueueWhenBusy}
           executionMode={executionMode}
           onTogglePlanMode={handleTogglePlanMode}
           onToggleAutoMode={handleToggleAutoMode}

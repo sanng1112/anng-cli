@@ -98,6 +98,7 @@ type Props = {
   onRawModeChange?: (mode: string) => void;
   onInterrupt: () => void;
   onToggleProcessStdout?: () => void;
+  onQueueWhenBusy?: (text: string) => void;
   executionMode?: "default" | "plan" | "autoAccept";
   onTogglePlanMode?: () => void;
   onToggleAutoMode?: () => void;
@@ -130,6 +131,7 @@ export const PromptInput = React.memo(function PromptInput({
   onModelConfigChange,
   onInterrupt,
   onToggleProcessStdout,
+  onQueueWhenBusy,
   onRawModeChange,
   executionMode = "default",
   onTogglePlanMode,
@@ -465,7 +467,15 @@ export const PromptInput = React.memo(function PromptInput({
       }
 
       if (busy && isPlainReturn) {
-        setStatusMessage("wait for the current response or press esc to interrupt");
+        const trimmed = buffer.text.trim();
+        if (trimmed && onQueueWhenBusy) {
+          onQueueWhenBusy(trimmed);
+          updateBuffer(() => EMPTY_BUFFER);
+          resetPastes();
+          setStatusMessage("Queued (AI is busy)");
+        } else if (trimmed) {
+          setStatusMessage("wait for the current response or press esc to interrupt");
+        }
         return;
       }
 

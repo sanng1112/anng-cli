@@ -50,3 +50,18 @@ export const AgentConfigSchema = z.object({
   maxTurns: z.number().int().positive().optional(),
   taskTimeoutMs: z.number().int().positive().optional(),
 });
+
+// Additional types for team orchestration
+export type TeamExecutionMode = "internal" | "tmux" | "dmux";
+
+export type TeamUIEvent = {
+  type: string;
+  data?: unknown;
+};
+
+export type TeamResult = {
+  executiveSummary: string;
+  details?: Record<string, unknown>;
+};
+
+// Keep existing AgentRole, AgentContract, AgentConfig, AgentConfigSchema below
