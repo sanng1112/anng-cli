@@ -2,98 +2,172 @@ import * as fs from "fs";
 import * as path from "path";
 
 export type QueueTask = {
-  index: number;
+  id: string;
   text: string;
   done: boolean;
+  createdAt: string;
 };
 
-export type QueueData = {
-  tasks: QueueTask[];
-  filePath: string;
+export type QueueInfo = {
+  name: string;
+  label: string;
+  taskCount: number;
+  pendingCount: number;
 };
 
-const QUEUE_FILE = path.join(".anng", "memory", "task-queue.md");
+const QUEUES_DIR = path.join(".anng", "memory", "queues");
+const DEFAULT_QUEUES = ["main", "refactor", "bugs", "ideas"];
 
-export function getQueuePath(projectRoot: string): string {
-  return path.join(projectRoot, QUEUE_FILE);
+function getQueueFilePath(projectRoot: string, queueName: string): string {
+  return path.join(projectRoot, QUEUES_DIR, `${queueName}.md`);
 }
 
-export function loadQueue(projectRoot: string): QueueData {
-  const filePath = getQueuePath(projectRoot);
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+export function listQueues(projectRoot: string): QueueInfo[] {
+  const dir = path.join(projectRoot, QUEUES_DIR);
   try {
-    if (!fs.existsSync(filePath)) {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, "", "utf8");
-      return { tasks: [], filePath };
-    }
-    const content = fs.readFileSync(filePath, "utf8");
-    const tasks: QueueTask[] = [];
-    let index = 0;
-    for (const line of content.split("\n")) {
-      const match = line.match(/^- \[([ x])\]\s*(.+)$/);
-      if (match) {
-        tasks.push({
-          index: index++,
-          text: match[2].trim(),
-          done: match[1] === "x",
-        });
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      for (const name of DEFAULT_QUEUES) {
+        const fp = path.join(dir, `${name}.md`);
+        if (!fs.existsSync(fp)) fs.writeFileSync(fp, "", "utf8");
       }
     }
-    return { tasks, filePath };
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
+    const queues: QueueInfo[] = [];
+    for (const file of files) {
+      const name = file.replace(/\.md$/, "");
+      const tasks = loadQueue(projectRoot, name);
+      queues.push({
+        name,
+        label: name.charAt(0).toUpperCase() + name.slice(1),
+        taskCount: tasks.length,
+        pendingCount: tasks.filter((t) => !t.done).length,
+      });
+    }
+    return queues.length > 0
+      ? queues
+      : DEFAULT_QUEUES.map((n) => ({ name: n, label: n.charAt(0).toUpperCase() + n.slice(1), taskCount: 0, pendingCount: 0 }));
   } catch {
-    return { tasks: [], filePath };
+    return DEFAULT_QUEUES.map((n) => ({ name: n, label: n.charAt(0).toUpperCase() + n.slice(1), taskCount: 0, pendingCount: 0 }));
   }
 }
 
-export function saveQueue(projectRoot: string, tasks: QueueTask[]): boolean {
-  const filePath = getQueuePath(projectRoot);
+export function loadQueue(projectRoot: string, queueName: string): QueueTask[] {
+  const filePath = getQueueFilePath(projectRoot, queueName);
   try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    if (!fs.existsSync(filePath)) {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(filePath, "", "utf8");
+      return [];
+    }
+    const content = fs.readFileSync(filePath, "utf8");
+    const tasks: QueueTask[] = [];
+    for (const line of content.split("\n")) {
+      const match = line.match(/^- \[([ x])\]\s*`([^`]+)`\s*(.+)$/);
+      if (match) {
+        tasks.push({
+          id: match[2],
+          text: match[3].trim(),
+          done: match[1] === "x",
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+    return tasks;
+  } catch {
+    return [];
+  }
+}
+
+export function saveQueue(projectRoot: string, queueName: string, tasks: QueueTask[]): boolean {
+  const filePath = getQueueFilePath(projectRoot, queueName);
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const content = tasks
-      .map((t) => `- [${t.done ? "x" : " "}] ${t.text}`)
+      .map((t) => `- [${t.done ? "x" : " "}] \`${t.id}\` ${t.text}`)
       .join("\n") + "\n";
     fs.writeFileSync(filePath, content, "utf8");
     return true;
-  } catch {
+  } catch { /* ignore */
     return false;
   }
 }
 
-export function addTask(projectRoot: string, text: string): QueueTask | null {
-  const data = loadQueue(projectRoot);
+export function addTask(projectRoot: string, queueName: string, text: string): QueueTask | null {
+  const tasks = loadQueue(projectRoot, queueName);
   const task: QueueTask = {
-    index: data.tasks.length,
+    id: generateId(),
     text: text.trim(),
     done: false,
+    createdAt: new Date().toISOString(),
   };
-  data.tasks.push(task);
-  if (saveQueue(projectRoot, data.tasks)) {
-    return task;
+  tasks.push(task);
+  return saveQueue(projectRoot, queueName, tasks) ? task : null;
+}
+
+export function updateTask(projectRoot: string, queueName: string, index: number, newText: string): boolean {
+  const tasks = loadQueue(projectRoot, queueName);
+  if (index < 0 || index >= tasks.length) return false;
+  tasks[index].text = newText.trim();
+  return saveQueue(projectRoot, queueName, tasks);
+}
+
+export function removeTask(projectRoot: string, queueName: string, index: number): boolean {
+  const tasks = loadQueue(projectRoot, queueName);
+  if (index < 0 || index >= tasks.length) return false;
+  tasks.splice(index, 1);
+  return saveQueue(projectRoot, queueName, tasks);
+}
+
+export function toggleTask(projectRoot: string, queueName: string, index: number): boolean {
+  const tasks = loadQueue(projectRoot, queueName);
+  if (index < 0 || index >= tasks.length) return false;
+  tasks[index].done = !tasks[index].done;
+  return saveQueue(projectRoot, queueName, tasks);
+}
+
+export function moveTask(projectRoot: string, queueName: string, fromIndex: number, toIndex: number): boolean {
+  const tasks = loadQueue(projectRoot, queueName);
+  if (fromIndex < 0 || fromIndex >= tasks.length || toIndex < 0 || toIndex >= tasks.length) return false;
+  const [moved] = tasks.splice(fromIndex, 1);
+  tasks.splice(toIndex, 0, moved);
+  return saveQueue(projectRoot, queueName, tasks);
+}
+
+export function clearQueue(projectRoot: string, queueName: string): boolean {
+  return saveQueue(projectRoot, queueName, []);
+}
+
+export function getNextPendingTask(projectRoot: string, queueName: string): QueueTask | null {
+  const tasks = loadQueue(projectRoot, queueName);
+  return tasks.find((t) => !t.done) ?? null;
+}
+
+export function addNamedQueue(projectRoot: string, queueName: string): boolean {
+  const dir = path.join(projectRoot, QUEUES_DIR);
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const fp = path.join(dir, `${queueName}.md`);
+    if (fs.existsSync(fp)) return false;
+    fs.writeFileSync(fp, "", "utf8");
+    return true;
+  } catch { /* ignore */
+    return false;
   }
-  return null;
 }
 
-export function removeTask(projectRoot: string, index: number): boolean {
-  const data = loadQueue(projectRoot);
-  if (index < 0 || index >= data.tasks.length) return false;
-  data.tasks.splice(index, 1);
-  // Re-index
-  data.tasks.forEach((t, i) => (t.index = i));
-  return saveQueue(projectRoot, data.tasks);
-}
-
-export function toggleTask(projectRoot: string, index: number): boolean {
-  const data = loadQueue(projectRoot);
-  if (index < 0 || index >= data.tasks.length) return false;
-  data.tasks[index].done = !data.tasks[index].done;
-  return saveQueue(projectRoot, data.tasks);
-}
-
-export function clearQueue(projectRoot: string): boolean {
-  return saveQueue(projectRoot, []);
-}
-
-export function getNextPendingTask(projectRoot: string): QueueTask | null {
-  const data = loadQueue(projectRoot);
-  return data.tasks.find((t) => !t.done) ?? null;
+export function deleteNamedQueue(projectRoot: string, queueName: string): boolean {
+  const fp = getQueueFilePath(projectRoot, queueName);
+  try {
+    if (fs.existsSync(fp)) { fs.unlinkSync(fp); return true; }
+    return false;
+  } catch { /* ignore */
+    return false;
+  }
 }

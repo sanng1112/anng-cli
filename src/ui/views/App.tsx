@@ -152,8 +152,9 @@ function App({
   const [nowTick, setNowTick] = useState(0);
   const [mcpStatuses, setMcpStatuses] = useState<ReturnType<typeof sessionManager.getMcpStatus>>([]);
   const [showProcessStdout, setShowProcessStdout] = useState(false);
-  const [queryTopic, setQueryTopic] = useState<string>("");
+  const [_queryTopic, setQueryTopic] = useState<string>("");
   const [sessionProcessCount, setSessionProcessCount] = useState(0);
+  const [queueVisible, setQueueVisible] = useState(true);
   const [currentAutoAccept, setCurrentAutoAccept] = useState(autoAccept);
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
   const [teamResult, setTeamResult] = useState<TeamResult | null>(null);
@@ -735,13 +736,17 @@ function App({
       teamBusy,
       teamResult,
       processStdoutRef,
-      buildSyntheticUserMessage,
+      projectRoot,
     ]
   );
 
   const handleInterrupt = useCallback(() => {
     sessionManager.interruptActiveSession();
   }, [sessionManager]);
+
+  const handleToggleQueueVisibility = useCallback(() => {
+    setQueueVisible((v) => !v);
+  }, []);
 
   const handleQueueProcessTask = useCallback(
     (taskText: string) => {
@@ -1266,6 +1271,9 @@ function App({
           onExit={() => navigateToSubView("chat")}
           onProcessTask={handleQueueProcessTask}
           screenWidth={screenWidth}
+          promptHistory={promptHistory}
+          queueVisible={queueVisible}
+          onToggleVisibility={handleToggleQueueVisibility}
         />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
         <AskUserQuestionPrompt

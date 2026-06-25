@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import { useTerminalInput } from "../hooks/useTerminalInput";
 import type { SessionEntry } from "../../session";
@@ -31,7 +31,7 @@ export const BackgroundProcessesView = React.memo(function BackgroundProcessesVi
   sessionProcessCount,
   onDismiss,
   screenWidth,
-  screenHeight,
+  screenHeight: _screenHeight,
 }: BackgroundProcessesViewProps): React.ReactElement {
   const [processList, setProcessList] = useState<ProcessInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);

@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Box, Text } from "ink";
 import { useTerminalInput } from "../hooks/useTerminalInput";
-import { resolveCurrentSettings } from "../../settings";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
@@ -64,9 +63,9 @@ function getProjectStats(projectRoot: string) {
           fileCount++;
           totalSize += stat.size;
         }
-      } catch {}
+      } catch { /* ignore */ }
     }
-  } catch {}
+  } catch { /* ignore */ }
   const sizeMB = (totalSize / 1024 / 1024).toFixed(1);
   return { fileCount, totalSizeMB: `${sizeMB} MB` };
 }
