@@ -45,11 +45,18 @@ import type {
   UserPromptContent,
 } from "../../session";
 import { SessionManager } from "../../session";
+import { TeamOrchestrator } from "../../team/team-orchestrator";
+import type { TeamUIEvent, TeamResult, AgentConfig, TeamExecutionMode } from "../../team/types";
+import { AgentsConfigView } from "./AgentsConfigView";
+import { TeamCreateView, type TeamAgentRule } from "./TeamCreateView";
 import { SettingsView } from "./SettingsView";
-import { TeamDpConfigView } from "./TeamDpConfigView";
-import { TeamWfConfigView } from "./TeamWfConfigView";
+import { QueryView } from "./QueryView";
+import { BackgroundProcessesView } from "./BackgroundProcessesView";
+import { QueueView } from "./QueueView";
+import * as fs from "fs";
+import * as path from "path";
 
-type View = "chat" | "session-list" | "undo" | "mcp-status" | "settings" | "team-dp" | "team-wf";
+type View = "chat" | "session-list" | "undo" | "mcp-status" | "agents-config" | "settings" | "team-create" | "query" | "bg" | "queue";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -61,6 +68,8 @@ type AppProps = {
   maxTurns?: number;
   headless?: boolean;
   onRestart?: () => void;
+  teamMode?: boolean;
+  teamConfig?: { mode?: string; maxParallelWorkers?: number };
 };
 
 const StatusLine = React.memo(function StatusLine({
@@ -104,6 +113,8 @@ function App({
   maxTurns = 25,
   headless: _headless = false,
   onRestart,
+  teamMode = false,
+  teamConfig,
 }: AppProps): React.ReactElement {
   const { exit } = useApp();
   const { stdout, write } = useStdout();
@@ -141,12 +152,18 @@ function App({
   const [nowTick, setNowTick] = useState(0);
   const [mcpStatuses, setMcpStatuses] = useState<ReturnType<typeof sessionManager.getMcpStatus>>([]);
   const [showProcessStdout, setShowProcessStdout] = useState(false);
+  const [queryTopic, setQueryTopic] = useState<string>("");
+  const [sessionProcessCount, setSessionProcessCount] = useState(0);
   const [currentAutoAccept, setCurrentAutoAccept] = useState(autoAccept);
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
-  const [teamDpPrompt, setTeamDpPrompt] = useState("");
+  const [teamResult, setTeamResult] = useState<TeamResult | null>(null);
+  const [teamBusy, setTeamBusy] = useState(false);
+  const [teamModeEnabled, setTeamModeEnabled] = useState(false);
+  const teamOrchestratorRef = useRef<TeamOrchestrator | null>(null);
 
   const initialAutoAccept = useRef(autoAccept).current;
   const initialPlanMode = useRef(planMode).current;
+  const initialTeamMode = useRef(teamMode).current;
 
   rawModeRef.current = mode;
   messagesRef.current = messages;
@@ -181,7 +198,7 @@ function App({
             return;
           }
           const now = Date.now();
-          if (now - lastUpdate > 150) {
+          if (now - lastUpdate > 66) {
             lastUpdate = now;
             setStreamProgress(progress);
           }
@@ -336,6 +353,113 @@ function App({
 
   writeRef.current = write;
 
+  const runTeamTask = useCallback(
+    async (taskText: string): Promise<void> => {
+      setTeamBusy(true);
+      setBusy(true);
+      try {
+        const orchestrator = new TeamOrchestrator({
+          projectRoot,
+          autoAccept: currentAutoAccept,
+          planMode: currentPlanMode,
+          createOpenAIClient: () => createOpenAIClient(projectRoot),
+          renderMarkdown: (text) => text,
+          onUIEvent: (event: TeamUIEvent) => {
+            if (event.type === "team_complete") {
+              // Don't setTeamResult here — it's set after executeTask returns below.
+              setMessages((prev) => [
+                ...prev,
+                buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
+              ]);
+            }
+          },
+        });
+        teamOrchestratorRef.current = orchestrator;
+        let workers: AgentConfig[] | undefined;
+        try {
+          const configPath = path.join(projectRoot, ".anng", "team-agents.json");
+          if (fs.existsSync(configPath)) {
+            const raw = fs.readFileSync(configPath, "utf-8");
+            const data = JSON.parse(raw);
+            if (Array.isArray(data) && data.length > 0) {
+              workers = data.map((a: Record<string, unknown>) => ({
+                name: String(a.name),
+                role: "worker" as const,
+                description: String(a.name),
+                systemPrompt: String(a.prompt),
+                model: a.model ? String(a.model) : undefined,
+              }));
+            }
+          }
+        } catch (_e) {
+          // Ignore config loading errors
+        }
+        const result = await orchestrator.executeTask(taskText, {
+          workers,
+          maxParallelWorkers: teamConfig?.maxParallelWorkers,
+          mode: (teamConfig?.mode ?? "internal") as TeamExecutionMode,
+        });
+        setTeamResult(result);
+      } catch (error) {
+        setErrorLine(error instanceof Error ? error.message : String(error));
+      } finally {
+        setTeamBusy(false);
+        setBusy(false);
+        teamOrchestratorRef.current = null;
+      }
+    },
+    [projectRoot, currentAutoAccept, currentPlanMode, teamConfig]
+  );
+
+  const startTeamWithTmux = useCallback(
+    async (agents: TeamAgentRule[]) => {
+      setTeamBusy(true);
+      setBusy(true);
+      try {
+        const orchestrator = new TeamOrchestrator({
+          projectRoot,
+          autoAccept: currentAutoAccept,
+          planMode: currentPlanMode,
+          createOpenAIClient: () => createOpenAIClient(projectRoot),
+          renderMarkdown: (text) => text,
+          onUIEvent: (event: TeamUIEvent) => {
+            if (event.type === "team_complete") {
+              setMessages((prev) => [
+                ...prev,
+                buildSyntheticUserMessage(`Team completed: ${(event.data as TeamResult).executiveSummary}`, 0),
+              ]);
+            }
+          },
+        });
+        teamOrchestratorRef.current = orchestrator;
+
+        const workers: AgentConfig[] = agents.map((a) => ({
+          name: a.name,
+          role: "worker" as const,
+          description: a.name,
+          systemPrompt: a.prompt,
+          model: a.model || undefined,
+          apiKey: a.apiKey || undefined,
+          baseURL: a.baseURL || undefined,
+        }));
+
+        const result = await orchestrator.executeTask("Team task", {
+          workers,
+          maxParallelWorkers: agents.length,
+          mode: "tmux",
+        });
+        setTeamResult(result);
+      } catch (error) {
+        setErrorLine(error instanceof Error ? error.message : String(error));
+      } finally {
+        setTeamBusy(false);
+        setBusy(false);
+        teamOrchestratorRef.current = null;
+      }
+    },
+    [projectRoot, currentAutoAccept, currentPlanMode]
+  );
+
   const handlePrompt = useCallback(
     async (submission: PromptSubmission) => {
       if (submission.command === "exit") {
@@ -388,17 +512,149 @@ function App({
         navigateToSubView("mcp-status");
         return;
       }
+      if (submission.command === "team") {
+        const parts = submission.text.trim().split(/\s+/);
+        const subCmd = parts[1]?.toLowerCase();
+        const taskText = parts.slice(2).join(" ");
+
+        if (subCmd === "create") {
+          if (taskText) {
+            await runTeamTask(taskText);
+          } else {
+            navigateToSubView("team-create");
+          }
+          return;
+        }
+
+        if (subCmd === "status") {
+          if (teamBusy) {
+            setStatusLine("Team is currently running a task. Please wait.");
+          } else if (teamResult) {
+            setMessages((prev) => [
+              ...prev,
+              buildSyntheticUserMessage("Team result: " + teamResult.executiveSummary, 0),
+            ]);
+            setTeamResult(null);
+          } else {
+            setStatusLine("Team mode is " + (initialTeamMode || teamModeEnabled ? "active" : "inactive") + ".");
+          }
+          return;
+        }
+
+        if (subCmd === "kill" || subCmd === "stop") {
+          // Interrupt the orchestrator first so it can clean up tmux session
+          if (teamOrchestratorRef.current) {
+            teamOrchestratorRef.current.interrupt();
+            teamOrchestratorRef.current = null;
+          }
+          setTeamModeEnabled(false);
+          setTeamBusy(false);
+          setBusy(false);
+          setStatusLine("Team mode disabled. Tmux session cleaned up.");
+          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team stopped. Tmux session terminated.", 0)]);
+          return;
+        }
+
+        if (teamBusy) {
+          setErrorLine("Team is currently running. Wait for completion or interrupt.");
+          return;
+        }
+        if (teamResult) {
+          setMessages((prev) => [...prev, buildSyntheticUserMessage("Team result: " + teamResult.executiveSummary, 0)]);
+          setTeamResult(null);
+          return;
+        }
+        if (initialTeamMode || teamModeEnabled) {
+          setStatusLine("Team mode is active. Type your task directly.");
+          return;
+        }
+        setErrorLine("No active team. Use --team flag, /team create, or /team create <task>.");
+        return;
+      }
+      if (submission.command === "custom-agents") {
+        navigateToSubView("agents-config");
+        return;
+      }
       if (submission.command === "settings") {
         navigateToSubView("settings");
         return;
       }
-      if (submission.command === "team-dp") {
-        setTeamDpPrompt(submission.text?.replace(/^\/team-dp\s*/, "").trim() || "");
-        navigateToSubView("team-dp");
+      if (submission.command === "query") {
+        const topic = submission.text === "/query" ? "" : submission.text;
+        setQueryTopic(topic);
+        navigateToSubView("query");
         return;
       }
-      if (submission.command === "team-wf") {
-        navigateToSubView("team-wf");
+      if (submission.command === "btw") {
+        // Insert as a user message with BTW context note
+        const btwText = submission.text || "No note provided";
+        const activeSessionId = sessionManager.getActiveSessionId();
+        if (activeSessionId) {
+          const meta: MessageMeta = {
+            userPrompt: { text: `💡 BTW Note: ${btwText}` },
+          };
+          sessionManager.addSessionSystemMessage(activeSessionId, `🗒️ *BTW Note:* ${btwText}`, true, meta);
+          setMessages((prev) => [
+            ...prev,
+            buildSyntheticUserMessage(`📝 /btw: ${btwText}`, 0),
+          ]);
+          setStatusLine(`BTW note added: "${btwText.slice(0, 60)}${btwText.length > 60 ? "..." : ""}"`);
+        } else {
+          setStatusLine("No active session. Create one first with /new or type a message.");
+        }
+        return;
+      }
+      if (submission.command === "bg") {
+        const activeSessionId = sessionManager.getActiveSessionId();
+        if (activeSessionId) {
+          const session = sessionManager.getSession(activeSessionId);
+          const processes = session?.processes ?? null;
+          setRunningProcesses(processes);
+          setSessionProcessCount(processes?.size ?? 0);
+        } else {
+          setRunningProcesses(null);
+          setSessionProcessCount(0);
+        }
+        navigateToSubView("bg");
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+      if ((submission.command as string) === "queue") {
+        const text = submission.text.trim();
+        const parts = text.startsWith("/queue") ? text.slice(6).trim().split(/\s+/) : text.split(/\s+/);
+        const subCmd = parts[0]?.toLowerCase();
+        const taskText = parts.slice(1).join(" ");
+
+        if ((subCmd === "add" || !subCmd) && taskText) {
+          const { addTask } = await import("../../common/task-queue");
+          const task = addTask(projectRoot, taskText);
+          if (task) {
+            setMessages((prev) => [...prev, buildSyntheticUserMessage(`📋 Queued: "${taskText.slice(0, 80)}"`, 0)]);
+            setStatusLine(`Task queued: "${taskText.slice(0, 60)}"`);
+          } else {
+            setErrorLine("Failed to queue task");
+          }
+          return;
+        }
+        if (subCmd === "clear") {
+          const { clearQueue: clearQ } = await import("../../common/task-queue");
+          if (clearQ(projectRoot)) setStatusLine("Queue cleared");
+          else setErrorLine("Failed to clear queue");
+          return;
+        }
+        if (subCmd === "process" || subCmd === "run") {
+          // Open QueueView which has P key for processing
+          navigateToSubView("queue");
+          return;
+        }
+        // Default: open QueueView
+        navigateToSubView("queue");
+        return;
+      }
+
+      // Nếu team mode được bật và không phải command đặc biệt
+      if ((initialTeamMode || teamModeEnabled) && submission.text.trim() && !submission.command) {
+        await runTeamTask(submission.text);
         return;
       }
 
@@ -473,12 +729,28 @@ function App({
       refreshSessionsList,
       navigateToSubView,
       resetToWelcome,
+      initialTeamMode,
+      teamModeEnabled,
+      runTeamTask,
+      teamBusy,
+      teamResult,
+      processStdoutRef,
+      buildSyntheticUserMessage,
     ]
   );
 
   const handleInterrupt = useCallback(() => {
     sessionManager.interruptActiveSession();
   }, [sessionManager]);
+
+  const handleQueueProcessTask = useCallback(
+    (taskText: string) => {
+      setView("chat");
+      setPromptDraft({ nonce: Date.now(), text: taskText, imageUrls: [] });
+      setStatusLine(`Queue task ready to send. Press Enter to process: "${taskText.slice(0, 80)}"`);
+    },
+    []
+  );
 
   const handleToggleProcessStdout = useCallback(() => {
     setShowProcessStdout(true);
@@ -550,6 +822,15 @@ function App({
     },
     [resetStaticView, sessionManager]
   );
+
+  // When --team is used without -p, show the Team Builder so the user can
+  // see/configure agents before typing a task.
+  useEffect(() => {
+    if (initialPrompt) return;
+    if (!initialTeamMode) return;
+    navigateToSubView("team-create");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (initialPromptSubmittedRef.current || !initialPrompt || !initialPrompt.trim()) {
@@ -871,28 +1152,9 @@ function App({
             id: `stream-${streamProgress.requestId}`,
             sessionId: streamProgress.sessionId ?? "",
             role: "assistant",
-            content: streamProgress.text
-              ? streamProgress.text.split(/\r?\n/).length > Math.max(10, screenHeight - 15)
-                ? "...\n" +
-                  streamProgress.text
-                    .split(/\r?\n/)
-                    .slice(-Math.max(10, screenHeight - 15))
-                    .join("\n")
-                : streamProgress.text
-              : "",
+            content: streamProgress.text ?? "",
             contentParams: null,
-            messageParams: streamProgress.reasoningText
-              ? {
-                  reasoning_content:
-                    streamProgress.reasoningText.split(/\r?\n/).length > Math.max(10, screenHeight - 15)
-                      ? "...\n" +
-                        streamProgress.reasoningText
-                          .split(/\r?\n/)
-                          .slice(-Math.max(10, screenHeight - 15))
-                          .join("\n")
-                      : streamProgress.reasoningText,
-                }
-              : null,
+            messageParams: streamProgress.reasoningText ? { reasoning_content: streamProgress.reasoningText } : null,
             compacted: false,
             visible: true,
             createTime: streamProgress.startedAt,
@@ -952,6 +1214,19 @@ function App({
             void sessionManager.reconnectMcpServer(name, latest.mcpServers?.[name]);
           }}
         />
+      ) : view === "agents-config" ? (
+        <AgentsConfigView projectRoot={projectRoot} onExit={() => navigateToSubView("chat")} />
+      ) : view === "team-create" ? (
+        <TeamCreateView
+          projectRoot={projectRoot}
+          screenWidth={screenWidth}
+          onRunTask={(taskText: string) => {
+            navigateToSubView("chat");
+            void runTeamTask(taskText);
+          }}
+          onStartTeam={startTeamWithTmux}
+          onExit={() => navigateToSubView("chat")}
+        />
       ) : view === "settings" ? (
         <SettingsView
           projectRoot={projectRoot}
@@ -960,14 +1235,38 @@ function App({
             navigateToSubView("chat");
           }}
         />
-      ) : view === "team-dp" ? (
-        <TeamDpConfigView
-          initialPrompt={teamDpPrompt}
+      ) : view === "query" ? (
+        <QueryView
           projectRoot={projectRoot}
-          onCancel={() => navigateToSubView("chat")}
+          sessionInfo={{
+            activeSessionId: sessionManager.getActiveSessionId(),
+            messageCount: messages.length,
+            sessionCount: sessions.length,
+          }}
+          modelInfo={{
+            model: resolvedSettings.model,
+            baseURL: resolvedSettings.baseURL,
+            thinkingEnabled: resolvedSettings.thinkingEnabled,
+            reasoningEffort: resolvedSettings.reasoningEffort,
+          }}
+          onExit={() => navigateToSubView("chat")}
         />
-      ) : view === "team-wf" ? (
-        <TeamWfConfigView onCancel={() => navigateToSubView("chat")} />
+      ) : view === "bg" ? (
+        <BackgroundProcessesView
+          processStdoutRef={processStdoutRef}
+          runningProcesses={runningProcesses}
+          sessionProcessCount={sessionProcessCount}
+          onDismiss={() => navigateToSubView("chat")}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
+        />
+      ) : view === "queue" ? (
+        <QueueView
+          projectRoot={projectRoot}
+          onExit={() => navigateToSubView("chat")}
+          onProcessTask={handleQueueProcessTask}
+          screenWidth={screenWidth}
+        />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
         <AskUserQuestionPrompt
           questions={pendingQuestion.questions}

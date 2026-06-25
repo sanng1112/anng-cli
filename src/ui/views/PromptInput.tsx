@@ -71,18 +71,7 @@ export type PromptSubmission = {
   selectedSkills?: SkillInfo[];
   permissions?: UserToolPermission[];
   alwaysAllows?: PermissionScope[];
-  command?:
-    | "new"
-    | "resume"
-    | "continue"
-    | "undo"
-    | "mcp"
-    | "exit"
-    | "team"
-    | "team-dp"
-    | "team-wf"
-    | "custom-agents"
-    | "settings";
+  command?: "new" | "resume" | "continue" | "undo" | "mcp" | "exit" | "team" | "custom-agents" | "settings" | "query" | "btw" | "bg";
 };
 
 export type PromptDraft = {
@@ -741,15 +730,9 @@ export const PromptInput = React.memo(function PromptInput({
       clearUndoRedoStacks();
       return;
     }
-    if (item.kind === "team-dp") {
-      const rawText = expandPasteMarkers(buffer.text, pastesRef.current).trim() || "/team-dp";
-      onSubmit({ text: rawText, imageUrls: [], command: "team-dp" });
-      resetPromptInput();
-      return;
-    }
-    if (item.kind === "team-wf") {
-      const rawText = expandPasteMarkers(buffer.text, pastesRef.current).trim() || "/team-wf";
-      onSubmit({ text: rawText, imageUrls: [], command: "team-wf" });
+    if (item.kind === "team") {
+      const rawText = buffer.text.trim() || "/team";
+      onSubmit({ text: rawText, imageUrls: [], command: "team" });
       resetPromptInput();
       return;
     }
@@ -760,6 +743,29 @@ export const PromptInput = React.memo(function PromptInput({
     }
     if (item.kind === "settings") {
       onSubmit({ text: "/settings", imageUrls: [], command: "settings" });
+      resetPromptInput();
+      return;
+    }
+    if (item.kind === "query") {
+      const rawText = buffer.text.trim();
+      const queryText = rawText.startsWith("/query") ? rawText.slice(6).trim() : "";
+      onSubmit({ text: queryText || "/query", imageUrls: [], command: "query" });
+      resetPromptInput();
+      return;
+    }
+    if (item.kind === "btw") {
+      const rawText = buffer.text.trim();
+      const btwMessage = rawText.startsWith("/btw") ? rawText.slice(4).trim() : "";
+      if (btwMessage) {
+        onSubmit({ text: btwMessage, imageUrls: [], command: "btw" });
+        resetPromptInput();
+      } else {
+        setStatusMessage("Usage: /btw <your note here> - e.g., /btw remember to refactor auth module");
+      }
+      return;
+    }
+    if (item.kind === "bg") {
+      onSubmit({ text: "/bg", imageUrls: [], command: "bg" });
       resetPromptInput();
       return;
     }
@@ -882,7 +888,6 @@ export const PromptInput = React.memo(function PromptInput({
         onClose={() => setShowModelDropdown(false)}
         onModelConfigChange={onModelConfigChange}
         onStatusMessage={setStatusMessage}
-        projectRoot={projectRoot}
       />
       <FileMentionMenu
         open={showFileMentionMenu}
