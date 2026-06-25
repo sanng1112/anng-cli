@@ -53,6 +53,7 @@ import { SettingsView } from "./SettingsView";
 import { QueryView } from "./QueryView";
 import { BackgroundProcessesView } from "./BackgroundProcessesView";
 import { QueueView } from "./QueueView";
+import { addTask as queueAddTask, listQueues as queueListQueues } from "../../common/task-queue";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -628,10 +629,9 @@ function App({
         const taskText = parts.slice(1).join(" ");
 
         if ((subCmd === "add" || !subCmd) && taskText) {
-          const { addTask } = await import("../../common/task-queue");
-          const queues = (await import("../../common/task-queue")).listQueues(projectRoot);
-          const qName = queues.length > 0 ? queues[0].name : "main";
-          const task = addTask(projectRoot, qName, taskText);
+          const qList = queueListQueues(projectRoot);
+          const qName = qList.length > 0 ? qList[0].name : "main";
+          const task = queueAddTask(projectRoot, qName, taskText);
           if (task) {
             setMessages((prev) => [...prev, buildSyntheticUserMessage(`📋 Queued: "${taskText.slice(0, 80)}"`, 0)]);
             setStatusLine(`Task queued: "${taskText.slice(0, 60)}"`);
@@ -641,8 +641,8 @@ function App({
           return;
         }
         if (subCmd === "clear") {
-          const { clearQueue: clearQ, listQueues } = await import("../../common/task-queue");
-          const qList = listQueues(projectRoot);
+          const { clearQueue: clearQ } = await import("../../common/task-queue");
+          const qList = queueListQueues(projectRoot);
           if (qList.length > 0 && clearQ(projectRoot, qList[0].name)) setStatusLine("Queue cleared");
           else setErrorLine("Failed to clear queue");
           return;
@@ -673,10 +673,9 @@ function App({
       // ── Auto-push regular prompts to the active queue ──
       if (trimmedOriginalText && !submission.command && queueVisible) {
         try {
-          const { addTask, listQueues } = await import("../../common/task-queue");
-          const qList = listQueues(projectRoot);
+          const qList = queueListQueues(projectRoot);
           const qName = qList.length > 0 ? qList[0].name : "main";
-          addTask(projectRoot, qName, trimmedOriginalText);
+          queueAddTask(projectRoot, qName, trimmedOriginalText);
           setQueueRefreshTick((t) => t + 1);
         } catch { /* silent - queue is best-effort */ }
       }
@@ -763,13 +762,13 @@ function App({
 
   const handleQueueWhenBusy = useCallback(
     (text: string) => {
-      // Add to queue when AI is busy processing
-      import("../../common/task-queue").then(({ addTask, listQueues }) => {
-        const qList = listQueues(projectRoot);
+      // Add to queue when AI is busy processing — synchronous via static import
+      try {
+        const qList = queueListQueues(projectRoot);
         const qName = qList.length > 0 ? qList[0].name : "main";
-        addTask(projectRoot, qName, text);
+        queueAddTask(projectRoot, qName, text);
         setQueueRefreshTick((t) => t + 1);
-      }).catch(() => {});
+      } catch { /* silent */ }
       setStatusLine(`Queued: "${text.slice(0, 60)}" (AI busy)`);
     },
     [projectRoot]

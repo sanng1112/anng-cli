@@ -254,6 +254,7 @@ export const PromptInput = React.memo(function PromptInput({
   useEffect(() => {
     if (wasBusyRef.current && !busy) {
       refreshFileMentionItems();
+      setStatusMessage(null); // Clear stale status when AI finishes
     }
     wasBusyRef.current = busy;
   }, [busy, refreshFileMentionItems]);
