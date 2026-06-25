@@ -53,11 +53,26 @@ import { SettingsView } from "./SettingsView";
 import { QueryView } from "./QueryView";
 import { BackgroundProcessesView } from "./BackgroundProcessesView";
 import { QueueView } from "./QueueView";
-import { addTask as queueAddTask, listQueues as queueListQueues } from "../../common/task-queue";
+import {
+  addTask as queueAddTask,
+  listQueues as queueListQueues,
+  loadQueue as queueLoadQueue,
+  markTaskDoneById,
+} from "../../common/task-queue";
 import * as fs from "fs";
 import * as path from "path";
 
-type View = "chat" | "session-list" | "undo" | "mcp-status" | "agents-config" | "settings" | "team-create" | "query" | "bg" | "queue";
+type View =
+  | "chat"
+  | "session-list"
+  | "undo"
+  | "mcp-status"
+  | "agents-config"
+  | "settings"
+  | "team-create"
+  | "query"
+  | "bg"
+  | "queue";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -157,6 +172,8 @@ function App({
   const [sessionProcessCount, setSessionProcessCount] = useState(0);
   const [queueVisible, setQueueVisible] = useState(true);
   const [queueRefreshTick, setQueueRefreshTick] = useState(0);
+  // Track queue task currently being processed: { queueName, taskId }
+  const processingQueueTaskRef = useRef<{ queueName: string; taskId: string } | null>(null);
   const [currentAutoAccept, setCurrentAutoAccept] = useState(autoAccept);
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
   const [teamResult, setTeamResult] = useState<TeamResult | null>(null);
@@ -366,7 +383,7 @@ function App({
           autoAccept: currentAutoAccept,
           planMode: currentPlanMode,
           createOpenAIClient: () => createOpenAIClient(projectRoot),
-          renderMarkdown: (text) => text,
+          renderMarkdown: (text: string) => text,
           onUIEvent: (event: TeamUIEvent) => {
             if (event.type === "team_complete") {
               // Don't setTeamResult here — it's set after executeTask returns below.
@@ -424,7 +441,7 @@ function App({
           autoAccept: currentAutoAccept,
           planMode: currentPlanMode,
           createOpenAIClient: () => createOpenAIClient(projectRoot),
-          renderMarkdown: (text) => text,
+          renderMarkdown: (text: string) => text,
           onUIEvent: (event: TeamUIEvent) => {
             if (event.type === "team_complete") {
               setMessages((prev) => [
@@ -597,10 +614,7 @@ function App({
             userPrompt: { text: `💡 BTW Note: ${btwText}` },
           };
           sessionManager.addSessionSystemMessage(activeSessionId, `🗒️ *BTW Note:* ${btwText}`, true, meta);
-          setMessages((prev) => [
-            ...prev,
-            buildSyntheticUserMessage(`📝 /btw: ${btwText}`, 0),
-          ]);
+          setMessages((prev) => [...prev, buildSyntheticUserMessage(`📝 /btw: ${btwText}`, 0)]);
           setStatusLine(`BTW note added: "${btwText.slice(0, 60)}${btwText.length > 60 ? "..." : ""}"`);
         } else {
           setStatusLine("No active session. Create one first with /new or type a message.");
@@ -621,14 +635,21 @@ function App({
         navigateToSubView("bg");
         return;
       }
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       if ((submission.command as string) === "queue") {
         const text = submission.text.trim();
         const parts = text.startsWith("/queue") ? text.slice(6).trim().split(/\s+/) : text.split(/\s+/);
         const subCmd = parts[0]?.toLowerCase();
-        const taskText = parts.slice(1).join(" ");
 
-        if ((subCmd === "add" || !subCmd) && taskText) {
+        const knownSubcmds = ["add", "clear", "process", "run"];
+        let isAdd = subCmd === "add" || !subCmd;
+        let taskText = parts.slice(1).join(" ");
+
+        if (subCmd && !knownSubcmds.includes(subCmd)) {
+          isAdd = true;
+          taskText = parts.join(" ");
+        }
+
+        if (isAdd && taskText) {
           const qList = queueListQueues(projectRoot);
           const qName = qList.length > 0 ? qList[0].name : "main";
           const task = queueAddTask(projectRoot, qName, taskText);
@@ -668,16 +689,6 @@ function App({
         if (cmd) {
           processedText = `Execute the following bash command immediately and exactly as provided, and report back the output:\n\n\`\`\`bash\n${cmd}\n\`\`\``;
         }
-      }
-
-      // ── Auto-push regular prompts to the active queue ──
-      if (trimmedOriginalText && !submission.command && queueVisible) {
-        try {
-          const qList = queueListQueues(projectRoot);
-          const qName = qList.length > 0 ? qList[0].name : "main";
-          queueAddTask(projectRoot, qName, trimmedOriginalText);
-          setQueueRefreshTick((t) => t + 1);
-        } catch { /* silent - queue is best-effort */ }
       }
 
       const prompt: UserPromptContent = {
@@ -721,7 +732,37 @@ function App({
         }
         await refreshSkills();
         refreshSessionsList();
+
+        // ── After AI finishes: mark queue task done and auto-load next ──
+        const processingTask = processingQueueTaskRef.current;
+        if (processingTask) {
+          markTaskDoneById(projectRoot, processingTask.queueName, processingTask.taskId);
+          processingQueueTaskRef.current = null;
+          setQueueRefreshTick((t) => t + 1);
+          // Auto-load next pending task into promptDraft so user can press Enter
+          try {
+            const qList = queueListQueues(projectRoot);
+            const nextQueue = qList.find((q) => q.name === processingTask.queueName) ?? qList[0];
+            if (nextQueue) {
+              const { getNextPendingTask } = await import("../../common/task-queue");
+              const nextTask = getNextPendingTask(projectRoot, nextQueue.name);
+              if (nextTask) {
+                processingQueueTaskRef.current = { queueName: nextQueue.name, taskId: nextTask.id };
+                setView("chat");
+                setPromptDraft({ nonce: Date.now(), text: nextTask.text, imageUrls: [] });
+                setStatusLine(
+                  `Next queue task ready (${nextQueue.name}). Press Enter to process: "${nextTask.text.slice(0, 60)}"`
+                );
+              } else {
+                setStatusLine("Queue complete — all tasks processed ✓");
+              }
+            }
+          } catch {
+            /* silent */
+          }
+        }
       } catch (error) {
+        processingQueueTaskRef.current = null;
         const message = error instanceof Error ? error.message : String(error);
         setErrorLine(message);
       } finally {
@@ -768,19 +809,39 @@ function App({
         const qName = qList.length > 0 ? qList[0].name : "main";
         queueAddTask(projectRoot, qName, text);
         setQueueRefreshTick((t) => t + 1);
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
       setStatusLine(`Queued: "${text.slice(0, 60)}" (AI busy)`);
+      navigateToSubView("queue");
     },
-    [projectRoot]
+    [projectRoot, navigateToSubView]
   );
 
   const handleQueueProcessTask = useCallback(
-    (taskText: string) => {
+    (taskText: string, taskId?: string, queueName?: string) => {
+      // Track which queue task is being processed so we can mark it done after AI finishes
+      if (taskId && queueName) {
+        processingQueueTaskRef.current = { queueName, taskId };
+      } else {
+        // Fallback: find task by text when ID not provided
+        try {
+          const qList = queueListQueues(projectRoot);
+          const qName = queueName ?? (qList.length > 0 ? qList[0].name : "main");
+          const tasks = queueLoadQueue(projectRoot, qName);
+          const match = tasks.find((t) => !t.done && t.text === taskText);
+          if (match) {
+            processingQueueTaskRef.current = { queueName: qName, taskId: match.id };
+          }
+        } catch {
+          /* silent */
+        }
+      }
       setView("chat");
       setPromptDraft({ nonce: Date.now(), text: taskText, imageUrls: [] });
-      setStatusLine(`Queue task ready to send. Press Enter to process: "${taskText.slice(0, 80)}"`);
+      setStatusLine(`Queue task ready. Press Enter to process: "${taskText.slice(0, 80)}"`);
     },
-    []
+    [projectRoot]
   );
 
   const handleToggleProcessStdout = useCallback(() => {
