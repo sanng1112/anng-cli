@@ -48,11 +48,27 @@ export function listQueues(projectRoot: string): QueueInfo[] {
         pendingCount: tasks.filter((t) => !t.done).length,
       });
     }
-    return queues.length > 0
-      ? queues
-      : DEFAULT_QUEUES.map((n) => ({ name: n, label: n.charAt(0).toUpperCase() + n.slice(1), taskCount: 0, pendingCount: 0 }));
+    if (queues.length > 0) {
+      queues.sort((a, b) => {
+        if (a.name === "main") return -1;
+        if (b.name === "main") return 1;
+        return a.name.localeCompare(b.name);
+      });
+      return queues;
+    }
+    return DEFAULT_QUEUES.map((n) => ({
+      name: n,
+      label: n.charAt(0).toUpperCase() + n.slice(1),
+      taskCount: 0,
+      pendingCount: 0,
+    }));
   } catch {
-    return DEFAULT_QUEUES.map((n) => ({ name: n, label: n.charAt(0).toUpperCase() + n.slice(1), taskCount: 0, pendingCount: 0 }));
+    return DEFAULT_QUEUES.map((n) => ({
+      name: n,
+      label: n.charAt(0).toUpperCase() + n.slice(1),
+      taskCount: 0,
+      pendingCount: 0,
+    }));
   }
 }
 
@@ -89,12 +105,11 @@ export function saveQueue(projectRoot: string, queueName: string, tasks: QueueTa
   try {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const content = tasks
-      .map((t) => `- [${t.done ? "x" : " "}] \`${t.id}\` ${t.text}`)
-      .join("\n") + "\n";
+    const content = tasks.map((t) => `- [${t.done ? "x" : " "}] \`${t.id}\` ${t.text}`).join("\n") + "\n";
     fs.writeFileSync(filePath, content, "utf8");
     return true;
-  } catch { /* ignore */
+  } catch {
+    /* ignore */
     return false;
   }
 }
@@ -149,6 +164,22 @@ export function getNextPendingTask(projectRoot: string, queueName: string): Queu
   return tasks.find((t) => !t.done) ?? null;
 }
 
+export function markTaskDoneById(projectRoot: string, queueName: string, taskId: string): boolean {
+  const tasks = loadQueue(projectRoot, queueName);
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task) return false;
+  task.done = true;
+  return saveQueue(projectRoot, queueName, tasks);
+}
+
+export function removeTaskById(projectRoot: string, queueName: string, taskId: string): boolean {
+  const tasks = loadQueue(projectRoot, queueName);
+  const index = tasks.findIndex((t) => t.id === taskId);
+  if (index < 0) return false;
+  tasks.splice(index, 1);
+  return saveQueue(projectRoot, queueName, tasks);
+}
+
 export function addNamedQueue(projectRoot: string, queueName: string): boolean {
   const dir = path.join(projectRoot, QUEUES_DIR);
   try {
@@ -157,7 +188,8 @@ export function addNamedQueue(projectRoot: string, queueName: string): boolean {
     if (fs.existsSync(fp)) return false;
     fs.writeFileSync(fp, "", "utf8");
     return true;
-  } catch { /* ignore */
+  } catch {
+    /* ignore */
     return false;
   }
 }
@@ -165,9 +197,13 @@ export function addNamedQueue(projectRoot: string, queueName: string): boolean {
 export function deleteNamedQueue(projectRoot: string, queueName: string): boolean {
   const fp = getQueueFilePath(projectRoot, queueName);
   try {
-    if (fs.existsSync(fp)) { fs.unlinkSync(fp); return true; }
+    if (fs.existsSync(fp)) {
+      fs.unlinkSync(fp);
+      return true;
+    }
     return false;
-  } catch { /* ignore */
+  } catch {
+    /* ignore */
     return false;
   }
 }
