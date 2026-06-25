@@ -16,13 +16,14 @@ type QueueViewProps = {
   promptHistory?: string[];
   queueVisible: boolean;
   onToggleVisibility: () => void;
+  refreshTick?: number;
 };
 
 type Screen = "list" | "add" | "edit" | "confirm-clear" | "queue-menu";
 
 export const QueueView = React.memo(function QueueView({
   projectRoot, onExit, onProcessTask, screenWidth,
-  promptHistory = [], queueVisible, onToggleVisibility,
+  promptHistory = [], queueVisible, onToggleVisibility, refreshTick,
 }: QueueViewProps): React.ReactElement {
   const [queues, setQueues] = useState<QueueInfo[]>(() => listQueues(projectRoot));
   const [activeQueueIdx, setActiveQueueIdx] = useState(0);
@@ -64,6 +65,13 @@ export const QueueView = React.memo(function QueueView({
 
   const pendingCount = useMemo(() => tasks.filter((t) => !t.done).length, [tasks]);
   const filteredHistory = useMemo(() => promptHistory.filter((h) => h.length > 0 && !h.startsWith("/")), [promptHistory]);
+
+  // Auto-refresh when refreshTick changes (new items auto-pushed from App)
+  const _refreshTick = refreshTick ?? 0;
+  useEffect(() => {
+    refreshQueues();
+    refreshTasks();
+  }, [_refreshTick, refreshQueues, refreshTasks]);
   useTerminalInput(
     (input, key) => {
       if (screen === "add") {

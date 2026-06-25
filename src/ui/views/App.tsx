@@ -155,6 +155,7 @@ function App({
   const [_queryTopic, setQueryTopic] = useState<string>("");
   const [sessionProcessCount, setSessionProcessCount] = useState(0);
   const [queueVisible, setQueueVisible] = useState(true);
+  const [queueRefreshTick, setQueueRefreshTick] = useState(0);
   const [currentAutoAccept, setCurrentAutoAccept] = useState(autoAccept);
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
   const [teamResult, setTeamResult] = useState<TeamResult | null>(null);
@@ -628,7 +629,9 @@ function App({
 
         if ((subCmd === "add" || !subCmd) && taskText) {
           const { addTask } = await import("../../common/task-queue");
-          const task = addTask(projectRoot, taskText);
+          const queues = (await import("../../common/task-queue")).listQueues(projectRoot);
+          const qName = queues.length > 0 ? queues[0].name : "main";
+          const task = addTask(projectRoot, qName, taskText);
           if (task) {
             setMessages((prev) => [...prev, buildSyntheticUserMessage(`📋 Queued: "${taskText.slice(0, 80)}"`, 0)]);
             setStatusLine(`Task queued: "${taskText.slice(0, 60)}"`);
@@ -638,17 +641,16 @@ function App({
           return;
         }
         if (subCmd === "clear") {
-          const { clearQueue: clearQ } = await import("../../common/task-queue");
-          if (clearQ(projectRoot)) setStatusLine("Queue cleared");
+          const { clearQueue: clearQ, listQueues } = await import("../../common/task-queue");
+          const qList = listQueues(projectRoot);
+          if (qList.length > 0 && clearQ(projectRoot, qList[0].name)) setStatusLine("Queue cleared");
           else setErrorLine("Failed to clear queue");
           return;
         }
         if (subCmd === "process" || subCmd === "run") {
-          // Open QueueView which has P key for processing
           navigateToSubView("queue");
           return;
         }
-        // Default: open QueueView
         navigateToSubView("queue");
         return;
       }
@@ -666,6 +668,17 @@ function App({
         if (cmd) {
           processedText = `Execute the following bash command immediately and exactly as provided, and report back the output:\n\n\`\`\`bash\n${cmd}\n\`\`\``;
         }
+      }
+
+      // ── Auto-push regular prompts to the active queue ──
+      if (trimmedOriginalText && !submission.command && queueVisible) {
+        try {
+          const { addTask, listQueues } = await import("../../common/task-queue");
+          const qList = listQueues(projectRoot);
+          const qName = qList.length > 0 ? qList[0].name : "main";
+          addTask(projectRoot, qName, trimmedOriginalText);
+          setQueueRefreshTick((t) => t + 1);
+        } catch { /* silent - queue is best-effort */ }
       }
 
       const prompt: UserPromptContent = {
@@ -1274,6 +1287,7 @@ function App({
           promptHistory={promptHistory}
           queueVisible={queueVisible}
           onToggleVisibility={handleToggleQueueVisibility}
+          refreshTick={queueRefreshTick}
         />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
         <AskUserQuestionPrompt
