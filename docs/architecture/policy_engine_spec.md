@@ -1,5 +1,7 @@
 # Policy Engine Specification
 
+> Historical architecture spec: this file describes the intended policy-engine design during migration. Some references still point to abstractions from the removed TypeScript codebase rather than the current Go runtime.
+
 ## 1. Overview
 The `PolicyEngine` is the strict runtime guard of the application. It sits completely independently from the LLM prompt. Even if the LLM ignores instructions or hallucinations occur, the Policy Engine prevents unauthorized actions before they reach the `ToolExecutor`.
 

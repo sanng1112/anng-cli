@@ -1,17 +1,18 @@
 ## Makefile for ANNG CLI
 
-# Build the Go binary
 .PHONY: build
 build:
-	@echo "Building anng binary..."
-	conda run -n go_env env CGO_ENABLED=0 go build -o anng ./cmd/anng/main.go
+	go build -o anng ./cmd/anng
 
-# Run tests
 .PHONY: test
 test:
 	go test ./...
 
-# Clean generated binary
+.PHONY: verify
+verify:
+	go test ./...
+	go build ./cmd/anng
+
 .PHONY: clean
 clean:
 	rm -f anng

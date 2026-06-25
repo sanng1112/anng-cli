@@ -1,5 +1,7 @@
 # Verification Harness Specification
 
+> Historical verification plan: this document predates the Go runtime becoming the primary implementation. Examples may reference legacy TypeScript files, classes, or test harnesses that no longer exist.
+
 ## 1. Overview
 The Verification Harness is the cornerstone of the Runtime-Enforced Architecture. It proves that architectural invariants hold true at runtime. Any invariant discovered during an audit MUST be mapped to an automated test.
 

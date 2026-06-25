@@ -1,5 +1,7 @@
 # Definition of Verified Runtime-Enforced Architecture
 
+> Historical target-state note: this file defines an aspirational verification bar from the migration period. It should not be read as a claim that the current Go runtime already implements every mechanism named below.
+
 The system transitions from a **Runtime-Enforced Architecture** to a **Verified Runtime-Enforced Architecture** ONLY when the following criteria are absolutely proven by code and automated tests:
 
 1. **Absolute State Formalism**

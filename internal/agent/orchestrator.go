@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"anng-cli/internal/contextkeys"
 	"anng-cli/internal/mcp"
+	"anng-cli/internal/section"
 	"anng-cli/internal/tokenizer"
 	"anng-cli/internal/tools"
 	"github.com/sashabaranov/go-openai"
@@ -26,7 +28,9 @@ type Orchestrator struct {
 	Model           string
 	ApiKey          string
 	BaseURL         string
+	Provider        string
 	Mode            string
+	MaxTurns        int
 	ProjectRoot     string
 	ThinkingEnabled bool
 	ReasoningEffort string
@@ -101,14 +105,28 @@ func (o *Orchestrator) RegisterMCPTools(ctx context.Context) {
 }
 
 func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, error) {
-	// If ApiKey is empty or mock, bypass API calling to keep tests running or support mock mode
-	if o.ApiKey == "" || o.ApiKey == "mock-api-key" || o.ApiKey == "mock-key" {
+	// Keep the tool registry synchronized with any connected MCP servers before each turn.
+	o.RegisterMCPTools(ctx)
+
+	// If ApiKey is mock, bypass API calling to support test mode
+	if o.ApiKey == "mock-api-key" || o.ApiKey == "mock-key" {
 		return &RunResult{FinishReason: "completed", Turns: 1}, nil
 	}
 
+	// If ApiKey is empty (user forgot to configure), return a clear error
+	if o.ApiKey == "" {
+		return nil, fmt.Errorf("API key is empty. Please configure it in settings.json or set the ANNG_API_KEY environment variable")
+	}
+
+	resolvedProvider := ResolveProvider(o.Provider, o.Model, o.BaseURL)
+	resolvedBaseURL := o.BaseURL
+	if resolvedBaseURL == "" {
+		resolvedBaseURL = DefaultBaseURL(resolvedProvider)
+	}
+
 	config := openai.DefaultConfig(o.ApiKey)
-	if o.BaseURL != "" {
-		config.BaseURL = o.BaseURL
+	if resolvedBaseURL != "" {
+		config.BaseURL = resolvedBaseURL
 	}
 	client := openai.NewClientWithConfig(config)
 
@@ -119,8 +137,7 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 			root = pr
 		}
 	}
-	engine := NewPromptEngine()
-	systemPrompt := engine.BuildSystemPrompt(o.Model, root, o.Mode)
+	promptParts := NewPromptEngine().BuildPromptParts(o.Model, root, o.Mode)
 	execCtx := NewExecutionContext(ExecutionContextOptions{
 		SessionID:     sessionIDFromContext(ctx),
 		WorkspaceRoot: root,
@@ -130,23 +147,110 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 	messages := []openai.ChatCompletionMessage{
 		{
 			Role:    openai.ChatMessageRoleSystem,
-			Content: systemPrompt,
-		},
-		{
-			Role:    openai.ChatMessageRoleUser,
-			Content: prompt,
+			Content: promptParts.StaticPrefix,
 		},
 	}
+	if promptParts.RuntimeOverlay != "" {
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:    openai.ChatMessageRoleSystem,
+			Content: promptParts.RuntimeOverlay,
+		},
+		)
+	}
+	messages = append(messages, openai.ChatCompletionMessage{
+		Role:    openai.ChatMessageRoleUser,
+		Content: prompt,
+	})
 
 	turns := 0
-	maxTurns := 10
+	maxTurns := o.effectiveMaxTurns()
 	var responseParts []string
 	var promptTokens, completionTokens, totalTokens int
+	reasoningEffort := NormalizeReasoningEffort(resolvedProvider, o.Model, o.ThinkingEnabled, o.ReasoningEffort)
+	contextThreshold := CompactThreshold(o.Model, resolvedProvider)
+	systemBoundary := 1
+	if promptParts.RuntimeOverlay != "" {
+		systemBoundary = 2
+	}
+
+	// Section caching setup
+	secStore, _ := section.NewSectionStore()
+	readLog, _ := section.NewReadLogStore()
+	sessionID := sessionIDFromContext(ctx)
+	lastSectionTurn := 0
 
 	for turns < maxTurns {
 		turns++
 
-		// Perform Context Compaction check
+		// ── Section Caching: save conversation sections periodically ──
+		if secStore != nil && readLog != nil && turns-lastSectionTurn >= 3 {
+			// Build section content from recent messages
+			var secBuilder strings.Builder
+			for i := max(0, len(messages)-6); i < len(messages); i++ {
+				m := messages[i]
+				if m.Role == openai.ChatMessageRoleSystem {
+					continue
+				}
+				role := m.Role
+				if role == "" { role = "assistant" }
+				secBuilder.WriteString(fmt.Sprintf("[%s]: %s\n", role, m.Content))
+			}
+			content := secBuilder.String()
+			if len(content) > 200 {
+				sec := section.Section{
+					SessionID: sessionID,
+					CreatedAt: time.Now(),
+					Content:   content,
+					Role:      "context",
+					TokenCost: tokenizer.EstimateTokens(content),
+					Tags:      []string{"auto", fmt.Sprintf("turn_%d", turns)},
+				}
+				_ = secStore.Save(sec)
+				_ = readLog.Append(sessionID, sec.ID, "main", sec.Role, sec.TokenCost)
+				lastSectionTurn = turns
+			}
+		}
+
+		// ── Inject cached sections with <prompt_caching> markers ──
+		if readLog != nil && secStore != nil && turns > 1 {
+			cachedKeys, err := readLog.CachedSectionKeys(sessionID, 5*time.Minute)
+			if err == nil && len(cachedKeys) > 0 {
+				sections, err := secStore.List(sessionID)
+				if err == nil && len(sections) > 0 {
+					// Build prompt caching header for system message
+					var cacheHeader strings.Builder
+					cacheHeader.WriteString("<prompt_caching>\n")
+					for _, sec := range sections {
+						// Only include sections with active cache keys
+						cacheKey := fmt.Sprintf("sec_%s_%s",
+							sessionID[:min(8, len(sessionID))],
+							sec.ID[:min(8, len(sec.ID))])
+						for _, ck := range cachedKeys {
+							if ck == cacheKey {
+								cacheHeader.WriteString(fmt.Sprintf("<cache key=\"%s\">\n", cacheKey))
+								cacheHeader.WriteString(sec.Content)
+								cacheHeader.WriteString("\n</cache>\n")
+								break
+							}
+						}
+					}
+					cacheHeader.WriteString("</prompt_caching>")
+					if cacheHeader.Len() > 50 {
+						// Inject as system message prefix
+						cachedMsg := openai.ChatCompletionMessage{
+							Role:    openai.ChatMessageRoleSystem,
+							Content: cacheHeader.String(),
+						}
+						// Insert right after the first system message
+						if len(messages) > 0 && messages[0].Role == openai.ChatMessageRoleSystem {
+							messages = append([]openai.ChatCompletionMessage{messages[0], cachedMsg}, messages[1:]...)
+						}
+					}
+				}
+			}
+		}
+
+		// Perform Context Compaction check (pushed to 325K threshold)
 		var tokMsgs []tokenizer.Message
 		for _, m := range messages {
 			tokMsgs = append(tokMsgs, tokenizer.Message{
@@ -154,18 +258,18 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 				Content: m.Content,
 			})
 		}
-		decision := tokenizer.ShouldCompactContext(tokMsgs, 4000) // threshold of 4000 tokens
+		decision := tokenizer.ShouldCompactContext(tokMsgs, contextThreshold)
 		if decision.ShouldCompact {
-			messages = messages[decision.KeepFromIndex:]
-			messages = append([]openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleSystem,
-					Content: "System: Historical messages were compacted to fit the context window limit.",
-				},
-			}, messages...)
+			if decision.KeepFromIndex < systemBoundary {
+				decision.KeepFromIndex = systemBoundary
+			}
+			trimmed := make([]openai.ChatCompletionMessage, 0, systemBoundary+len(messages)-decision.KeepFromIndex)
+			trimmed = append(trimmed, messages[:systemBoundary]...)
+			trimmed = append(trimmed, messages[decision.KeepFromIndex:]...)
+			messages = trimmed
 		}
 
-	tools := toolSpecs()
+		tools := toolSpecs()
 		// Append MCP tools if available
 		if o.MCPManager != nil {
 			for serverName, toolDescs := range o.MCPManager.AllTools() {
@@ -178,8 +282,8 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 			Messages: messages,
 			Tools:    tools,
 		}
-		if o.ReasoningEffort != "" && o.ReasoningEffort != "-" {
-			req.ReasoningEffort = o.ReasoningEffort
+		if reasoningEffort != "" {
+			req.ReasoningEffort = reasoningEffort
 		}
 
 		resp, err := client.CreateChatCompletion(ctx, req)
@@ -254,6 +358,13 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 		CompletionTokens: completionTokens,
 		TotalTokens:      totalTokens,
 	}, nil
+}
+
+func (o *Orchestrator) effectiveMaxTurns() int {
+	if o.MaxTurns > 0 {
+		return o.MaxTurns
+	}
+	return 10
 }
 
 func sessionIDFromContext(ctx context.Context) string {

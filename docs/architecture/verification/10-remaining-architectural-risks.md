@@ -1,5 +1,7 @@
 # Remaining Architectural Risks
 
+> Historical verification artifact: this risk list was generated during migration and should be interpreted as design-history context rather than a guaranteed current runtime gap list.
+
 Based on the H1-H9 audit, the system faces several severe architectural risks preventing it from being classified as a Verified architecture.
 
 ## 1. Concurrency Data Corruption (Critical Risk)

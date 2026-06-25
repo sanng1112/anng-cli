@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 )
@@ -25,4 +26,18 @@ func LoadMCPConfig(path string) (*MCPConfig, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func LoadManagerFromSettingsPath(ctx context.Context, path string) (*MCPManager, []error, error) {
+	cfg, err := LoadMCPConfig(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(cfg.Servers) == 0 {
+		return nil, nil, nil
+	}
+
+	manager := NewMCPManager(cfg)
+	errs := manager.ConnectAll(ctx)
+	return manager, errs, nil
 }

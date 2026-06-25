@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -46,11 +47,10 @@ func NewStdioTransport(ctx context.Context, command string, args []string, env m
 		return nil, fmt.Errorf("stdout pipe: %w", err)
 	}
 
-	// Set environment variables
-	if len(env) > 0 {
-		for k, v := range env {
-			cmd.Env = append(cmd.Environ(), k+"="+v)
-		}
+	// Set environment variables - start with a copy of the current env, then overlay
+	cmd.Env = os.Environ()
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -83,25 +83,30 @@ func (t *StdioTransport) Send(ctx context.Context, request string) (string, erro
 		return "", fmt.Errorf("write request: %w", err)
 	}
 
-	lineChan := make(chan string, 1)
-	errChan := make(chan error, 1)
+	// Use a buffered channel so the goroutine can always send without blocking
+	type readResult struct {
+		line string
+		err  error
+	}
+	resultChan := make(chan readResult, 1)
 
 	go func() {
 		line, err := t.reader.ReadString('\n')
 		if err != nil {
-			errChan <- err
+			resultChan <- readResult{err: err}
 		} else {
-			lineChan <- strings.TrimRight(line, "\r\n")
+			resultChan <- readResult{line: strings.TrimRight(line, "\r\n")}
 		}
 	}()
 
 	select {
 	case <-ctx.Done():
 		return "", ctx.Err()
-	case err := <-errChan:
-		return "", fmt.Errorf("read response: %w", err)
-	case line := <-lineChan:
-		return line, nil
+	case r := <-resultChan:
+		if r.err != nil {
+			return "", fmt.Errorf("read response: %w", r.err)
+		}
+		return r.line, nil
 	}
 }
 

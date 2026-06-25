@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,6 +32,7 @@ type ChatViewModel struct {
 
 	ScrollOffset int
 	SpinnerFrame int
+	DisplayMode  string // "normal", "lite", "raw"
 }
 
 type TriggerViewMsg struct {
@@ -57,10 +60,11 @@ func NewChatViewModel(cfg AppConfig, slashItems []string) ChatViewModel {
 		buf.Insert(cfg.InitialPrompt)
 	}
 	return ChatViewModel{
-		Buffer:     buf,
-		LogBuffer:  []string{},
-		SlashItems: slashItems,
-		Config:     cfg,
+		Buffer:      buf,
+		LogBuffer:   []string{},
+		SlashItems:  slashItems,
+		Config:      cfg,
+		DisplayMode: "normal",
 	}
 }
 
@@ -156,18 +160,36 @@ func (m ChatViewModel) Update(msg tea.Msg) (ChatViewModel, tea.Cmd) {
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewTeam, Mode: "team-dp"} }
 					case "/team-wf":
 						return m, func() tea.Msg { return TriggerViewMsg{View: ViewTeam, Mode: "team-wf"} }
+					case "/custom-agents":
+						m.LogBuffer = append(m.LogBuffer, "System: Custom agents feature is coming soon.")
+					case "/init":
+						agentsPath := filepath.Join(m.Config.ProjectRoot, "AGENTS.md")
+						template := "# AGENTS.md\n\nThis file defines custom agent configurations for ANNG CLI.\n\n## Available Agents\n\n- Default: Standard coding agent\n- Reviewer: Code review specialist\n"
+						if err := os.WriteFile(agentsPath, []byte(template), 0644); err != nil {
+							m.LogBuffer = append(m.LogBuffer, "System: Error creating AGENTS.md: "+err.Error())
+						} else {
+							m.LogBuffer = append(m.LogBuffer, "System: AGENTS.md created at "+agentsPath)
+						}
+					case "/continue":
+						m.LogBuffer = append(m.LogBuffer, "System: Continue current session...")
+						return m, func() tea.Msg { return TriggerViewMsg{View: ViewSessionList} }
+					case "/raw":
+						switch m.DisplayMode {
+						case "normal":
+							m.DisplayMode = "lite"
+							m.LogBuffer = append(m.LogBuffer, "System: Display mode set to lite.")
+						case "lite":
+							m.DisplayMode = "raw"
+							m.LogBuffer = append(m.LogBuffer, "System: Display mode set to raw.")
+						default:
+							m.DisplayMode = "normal"
+							m.LogBuffer = append(m.LogBuffer, "System: Display mode set to normal.")
+						}
 					default:
 						m.LogBuffer = append(m.LogBuffer, "System: Unrecognized command "+text)
 					}
 				} else {
 					m.LogBuffer = append(m.LogBuffer, lipgloss.NewStyle().Foreground(lipgloss.Color(BrandOrangeColor)).Render("> ")+text)
-					
-					// Print request summary to TUI log for user diagnostics
-					targetURL := m.Config.BaseURL
-					if targetURL == "" {
-						targetURL = "https://api.openai.com/v1"
-					}
-					m.LogBuffer = append(m.LogBuffer, fmt.Sprintf("System [Request]: Model=%s, Endpoint=%s", m.Config.Model, targetURL))
 					
 					m.Busy = true
 					m.ScrollOffset = 0 // Auto-scroll to bottom on submit
@@ -395,8 +417,12 @@ func (m ChatViewModel) View() string {
 	} else if m.Config.AutoAccept {
 		modeTag = lipgloss.NewStyle().Foreground(lipgloss.Color("#22c55e")).Render(" [auto]")
 	}
+		modeDisplay := ""
+		if m.DisplayMode != "normal" {
+			modeDisplay = lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("  [" + m.DisplayMode + "]")
+		}
 	helpLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).MarginTop(1).Render("enter: send  •  tab: complete  •  esc: clear  •  /: commands  •  ctrl+c: quit")
-	sb.WriteString(fmt.Sprintf("%s%s\n", helpLine, modeTag))
+	sb.WriteString(fmt.Sprintf("%s%s%s\n", helpLine, modeTag, modeDisplay))
 
 	// Active skills
 	if len(m.Config.ActiveSkills) > 0 {

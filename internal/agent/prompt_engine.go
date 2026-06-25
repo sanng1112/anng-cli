@@ -38,11 +38,33 @@ You are in planning mode. You cannot run mutating commands (bash, write, edit). 
 
 type PromptEngine struct{}
 
+type PromptParts struct {
+	StaticPrefix   string
+	RuntimeOverlay string
+}
+
 func NewPromptEngine() *PromptEngine {
 	return &PromptEngine{}
 }
 
+func (pe *PromptEngine) BuildPromptParts(model string, projectRoot string, mode string) PromptParts {
+	staticPrefix := buildStaticPromptPrefix(mode)
+	runtimeOverlay := buildRuntimePromptOverlay(model, projectRoot)
+	return PromptParts{
+		StaticPrefix:   staticPrefix,
+		RuntimeOverlay: runtimeOverlay,
+	}
+}
+
 func (pe *PromptEngine) BuildSystemPrompt(model string, projectRoot string, mode string) string {
+	parts := pe.BuildPromptParts(model, projectRoot, mode)
+	if parts.RuntimeOverlay == "" {
+		return parts.StaticPrefix
+	}
+	return parts.StaticPrefix + "\n\n" + parts.RuntimeOverlay
+}
+
+func buildStaticPromptPrefix(mode string) string {
 	var sb strings.Builder
 
 	// 1. Select template based on mode
@@ -57,17 +79,27 @@ func (pe *PromptEngine) BuildSystemPrompt(model string, projectRoot string, mode
 		sb.WriteString("\n\n" + PlanModeInstructions)
 	}
 
+	return sb.String()
+}
+
+func buildRuntimePromptOverlay(model string, projectRoot string) string {
+	var sb strings.Builder
+
 	// 3. Runtime Context
 	sb.WriteString("\n\n# Local Workspace Environment\n\n<env>\n")
 	sb.WriteString(fmt.Sprintf("1. Platform: %s %s\n", runtime.GOOS, runtime.GOARCH))
+	// Use a date-based version identifier for prompt caching stability.
+	// Full date changes every day, but within a day the prefix remains cacheable.
 	sb.WriteString(fmt.Sprintf("2. Date: %s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString(fmt.Sprintf("3. Working Directory: %s\n", projectRoot))
-	
+	sb.WriteString(fmt.Sprintf("4. Model: %s\n", model))
+	sb.WriteString(fmt.Sprintf("5. Model Family: %s\n", ModelFamilyLabel(model)))
+
 	// Detect tools
 	rgPath, _ := exec.LookPath("rg")
-	sb.WriteString(fmt.Sprintf("4. Ripgrep Installed: %v\n", rgPath != ""))
+	sb.WriteString(fmt.Sprintf("6. Ripgrep Installed: %v\n", rgPath != ""))
 	jqPath, _ := exec.LookPath("jq")
-	sb.WriteString(fmt.Sprintf("5. JQ Installed: %v\n", jqPath != ""))
+	sb.WriteString(fmt.Sprintf("7. JQ Installed: %v\n", jqPath != ""))
 	sb.WriteString("</env>")
 
 	// 4. Load Workspace Rules

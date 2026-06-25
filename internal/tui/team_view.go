@@ -7,21 +7,37 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// TeamAgentTask represents a task dispatched to a team agent.
+type TeamAgentTask struct {
+	AgentName string
+	Task      string
+	Status    string // "pending", "running", "completed", "failed"
+	Output    string
+}
+
 type TeamViewModel struct {
 	Width     int
 	Height    int
 	TickState int
 	LogLines  []string
 	Mode      string // "team", "team-dp", "team-wf"
+	Tasks     []TeamAgentTask
+	Prompt    string
 }
 
 func NewTeamViewModel(mode string) TeamViewModel {
+	tasks := []TeamAgentTask{
+		{AgentName: "Coder", Task: "Implement workspace tools", Status: "pending"},
+		{AgentName: "Reviewer", Task: "Inspect code structure", Status: "pending"},
+		{AgentName: "Tester", Task: "Verify codebase health", Status: "pending"},
+	}
 	return TeamViewModel{
 		TickState: 0,
 		Mode:      mode,
+		Tasks:     tasks,
 		LogLines: []string{
 			"System: Initializing team session...",
-			"System: Registered agents: [Coder], [Reviewer], [Tester], [Deployer]",
+			"System: Registered agents: [Coder], [Reviewer], [Tester]",
 			"System: Workflow starts. Dispatching task to Coder...",
 		},
 	}
@@ -35,17 +51,27 @@ func (m TeamViewModel) Update(msg tea.Msg) (TeamViewModel, tea.Cmd) {
 			return m, func() tea.Msg { return BackToChatMsg{} }
 		case tea.KeySpace:
 			m.TickState = (m.TickState + 1) % 4
+			// Update task statuses based on tick state
+			for i := range m.Tasks {
+				if i < m.TickState {
+					m.Tasks[i].Status = "completed"
+				} else if i == m.TickState {
+					m.Tasks[i].Status = "running"
+				} else {
+					m.Tasks[i].Status = "pending"
+				}
+			}
 			switch m.TickState {
 			case 0:
-				m.LogLines = append(m.LogLines, "System: Resetting simulation. Coder restarts...")
+				m.LogLines = append(m.LogLines, "System: Resetting pipeline. Coder restarts...")
 			case 1:
-				m.LogLines = append(m.LogLines, "Coder: Finished code changes. Submitting PR for review.")
-				m.LogLines = append(m.LogLines, "System: Reviewer notified.")
+				m.LogLines = append(m.LogLines, fmt.Sprintf("Coder: Task '%s' completed.", m.Tasks[0].Task))
+				m.LogLines = append(m.LogLines, "System: Dispatched to Reviewer.")
 			case 2:
-				m.LogLines = append(m.LogLines, "Reviewer: Code looks good! Approved. Merging to develop.")
-				m.LogLines = append(m.LogLines, "System: Tester triggered.")
+				m.LogLines = append(m.LogLines, fmt.Sprintf("Reviewer: Task '%s' completed.", m.Tasks[1].Task))
+				m.LogLines = append(m.LogLines, "System: Dispatched to Tester.")
 			case 3:
-				m.LogLines = append(m.LogLines, "Tester: All tests passed 100%. Deploying build...")
+				m.LogLines = append(m.LogLines, fmt.Sprintf("Tester: Task '%s' completed.", m.Tasks[2].Task))
 				m.LogLines = append(m.LogLines, "System: Team workflow successfully completed!")
 			}
 			if len(m.LogLines) > 6 {
@@ -104,42 +130,32 @@ func (m TeamViewModel) View() string {
 		Height(paneH).
 		Padding(0, 1)
 
-	getStatus := func(idx int) (string, string) {
-		if m.TickState == idx {
-			return "🟢 Running", BrandOrangeColor
+	agentStatusColor := func(task TeamAgentTask) (string, string) {
+		switch task.Status {
+		case "running":
+			return "🟢 " + task.Status, BrandOrangeColor
+		case "completed":
+			return "✅ " + task.Status, ColorGreen
+		default:
+			return "⚪ " + task.Status, ColorMutedGray
 		}
-		if m.TickState > idx {
-			return "✅ Finished", ColorGreen
+	}
+
+	renderAgentPane := func(task TeamAgentTask, isActive bool) string {
+		status, color := agentStatusColor(task)
+		content := fmt.Sprintf("Agent: %s\nStatus: %s\n\nTask: %s",
+			task.AgentName,
+			lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(status),
+			task.Task)
+		if isActive {
+			return activePaneStyle.Render(content)
 		}
-		return "⚪ Idle", ColorMutedGray
+		return paneStyle.Render(content)
 	}
 
-	sCoder, cCoder := getStatus(0)
-	coderContent := fmt.Sprintf("Agent: Coder\nStatus: %s\n\nTask: Implement workspace tools\nActivity: Coding bash & files...", lipgloss.NewStyle().Foreground(lipgloss.Color(cCoder)).Render(sCoder))
-	var pCoder string
-	if m.TickState == 0 {
-		pCoder = activePaneStyle.Render(coderContent)
-	} else {
-		pCoder = paneStyle.Render(coderContent)
-	}
-
-	sReviewer, cReviewer := getStatus(1)
-	reviewerContent := fmt.Sprintf("Agent: Reviewer\nStatus: %s\n\nTask: Inspect code structure\nActivity: Checking imports...", lipgloss.NewStyle().Foreground(lipgloss.Color(cReviewer)).Render(sReviewer))
-	var pReviewer string
-	if m.TickState == 1 {
-		pReviewer = activePaneStyle.Render(reviewerContent)
-	} else {
-		pReviewer = paneStyle.Render(reviewerContent)
-	}
-
-	sTester, cTester := getStatus(2)
-	testerContent := fmt.Sprintf("Agent: Tester\nStatus: %s\n\nTask: Verify codebase health\nActivity: Running go test...", lipgloss.NewStyle().Foreground(lipgloss.Color(cTester)).Render(sTester))
-	var pTester string
-	if m.TickState == 2 {
-		pTester = activePaneStyle.Render(testerContent)
-	} else {
-		pTester = paneStyle.Render(testerContent)
-	}
+	pCoder := renderAgentPane(m.Tasks[0], m.TickState == 0)
+	pReviewer := renderAgentPane(m.Tasks[1], m.TickState == 1)
+	pTester := renderAgentPane(m.Tasks[2], m.TickState == 2)
 
 	logContent := "System Orchestrator Log:\n"
 	for _, line := range m.LogLines {

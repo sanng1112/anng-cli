@@ -210,9 +210,14 @@ func (m *MCPManager) AutoReconnectLoop(ctx context.Context, interval time.Durati
 }
 
 func (m *MCPManager) reconnectFailed(ctx context.Context) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Collect servers that need reconnection under a short lock, then reconnect outside the lock
+	type reconnectJob struct {
+		Name       string
+		RetryCount int
+	}
+	var toReconnect []reconnectJob
 
+	m.mu.Lock()
 	for name, server := range m.servers {
 		if !server.Reconnect {
 			continue
@@ -225,7 +230,18 @@ func (m *MCPManager) reconnectFailed(ctx context.Context) {
 			server.RetryCount++
 			backoff := time.Duration(min(server.RetryCount, 5)) * 2 * time.Second
 			log.Printf("MCP %s: reconnecting (attempt %d) after %v", name, server.RetryCount, backoff)
-			_ = m.connectServer(ctx, name)
+			toReconnect = append(toReconnect, reconnectJob{Name: name, RetryCount: server.RetryCount})
 		}
+	}
+	m.mu.Unlock()
+
+	// Reconnect outside the lock so other operations are not blocked
+	for _, job := range toReconnect {
+		m.mu.Lock()
+		server := m.servers[job.Name]
+		server.RetryCount = job.RetryCount
+		m.mu.Unlock()
+
+		_ = m.connectServer(ctx, job.Name)
 	}
 }

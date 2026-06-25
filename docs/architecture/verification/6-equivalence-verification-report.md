@@ -1,5 +1,7 @@
 # Phase H6: Single-Agent vs Multi-Agent Equivalence Verification
 
+> Historical verification artifact: this report compares legacy architectural paths and should not be read as a current-state map of the Go runtime without checking code first.
+
 The architecture dictates that Single-Agent and Multi-Agent paths must be semantically equivalent, specifically regarding:
 - Execution contexts
 - Policy enforcement

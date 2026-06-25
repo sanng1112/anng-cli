@@ -1,5 +1,7 @@
 # Phase H9: Architecture Reliability Scorecard
 
+> Historical verification artifact: this scorecard was authored against the migration architecture and may cite removed TypeScript systems such as `SessionManager` or `ToolExecutor`.
+
 ## Overall Score: 62 / 100
 
 ### 1. Enforcement (18/20)

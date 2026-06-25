@@ -1,5 +1,7 @@
 # Fix Prompt Engineering Module Issues ✅
 
+> Historical implementation plan: this dated note reflects the TypeScript-era prompt-engine structure and is preserved as migration history rather than current Go runtime documentation.
+
 ## Vấn đề đã xác định
 
 1. ✅ **Module name collision**: `src/prompt/` (dir) vs `src/prompt.ts` (file)

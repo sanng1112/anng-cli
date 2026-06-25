@@ -1,5 +1,7 @@
 # Phase H7: Telemetry & Audit Trail Design
 
+> Historical verification artifact: this design note was written during migration and may mention telemetry hooks or runtime boundaries that are not fully implemented in the current Go code.
+
 To verify the Runtime-Enforced Architecture in production, observability must be ubiquitous. We must capture high-resolution events at every critical junction of the execution path.
 
 ## Event Schema (`SystemAuditEvent`)

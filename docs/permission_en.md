@@ -1,100 +1,76 @@
-# ANNG CLI Permission Mechanism
+# ANNG CLI Permission Behavior
 
-ANNG CLI includes a fine-grained permission control mechanism. Before the AI assistant executes a tool call (such as running a shell command, reading/writing files, accessing the network, etc.), the system determines whether to auto-allow, auto-deny, or prompt for interactive confirmation based on your configured policy.
+This document describes the permission behavior that is actually implemented in the current Go runtime.
 
-## Overview
+## Current Modes
 
-Each time the AI assistant invokes a tool, the system automatically analyzes the **permission scopes** involved and makes a decision based on the permission configuration in `settings.json`. For operations requiring user confirmation, an interactive prompt appears in the terminal with the following choices:
+ANNG CLI currently supports three practical modes:
 
-- **Yes** — Allow this one time only
-- **Yes, and always allow** — Allow this time and persistently save the scope to the project configuration so future calls skip the prompt
-- **No** — Deny this operation
+1. Default interactive mode
+2. `autoAccept`
+3. `planMode`
 
-## Permission Scopes
+You can configure `autoAccept` and `planMode` in `settings.json`, or use `--yolo` on the CLI to force automatic approval for the current run.
 
-ANNG CLI defines the following 10 permission scopes, covering various risk scenarios for tool calls:
+## Default Interactive Mode
 
-| Permission Scope | Description |
-| ---------------- | ----------- |
-| `read-in-cwd` | Read files inside the current workspace |
-| `read-out-cwd` | Read files outside the current workspace |
-| `write-in-cwd` | Create or overwrite files inside the current workspace |
-| `write-out-cwd` | Create or overwrite files outside the current workspace |
-| `delete-in-cwd` | Delete files inside the current workspace |
-| `delete-out-cwd` | Delete files outside the current workspace |
-| `query-git-log` | Query Git history (e.g., `git log`, `git show`, `git blame`) |
-| `mutate-git-log` | Mutate Git history (e.g., `git commit`, `git rebase`, `git tag`) |
-| `network` | Access the network (e.g., `curl`, `npm install`) |
-| `mcp` | Invoke MCP external tools |
+When both `autoAccept` and `planMode` are `false`, the TUI shows an approval prompt before executing shell commands triggered through the `bash` tool.
 
-There is also a special `unknown` scope used when the LLM cannot classify a command's side effects — **`unknown` always triggers a prompt**.
+Current behavior:
 
-## Permission Configuration
+- Shell commands can prompt for approval in the TUI
+- The approval is per command execution
+- There is no persisted allow/deny ruleset in `settings.json`
 
-Configure permissions in `~/.anng/settings.json` (user-level) or `.anng/settings.json` (project-level) via the `permissions` field:
+## `autoAccept`
+
+When `autoAccept` is `true`, shell command approvals are skipped.
+
+Example:
 
 ```json
 {
-  "permissions": {
-    "allow": [],
-    "deny": [],
-    "ask": [],
-    "defaultMode": "allowAll"
-  }
+  "autoAccept": true
 }
 ```
 
-### Configuration Fields
+Or from the CLI:
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `allow` | `string[]` | Permission scopes that are always auto-allowed |
-| `deny` | `string[]` | Permission scopes that are always auto-denied |
-| `ask` | `string[]` | Permission scopes that always trigger a confirmation prompt |
-| `defaultMode` | `"allowAll"` \| `"askAll"` | Default behavior for scopes not explicitly listed in `allow`/`deny`/`ask`. Defaults to `"allowAll"` |
+```bash
+./anng --yolo -p "run the tests and fix failures"
+```
 
-### Priority Rules
+## `planMode`
 
-When a tool call involves multiple permission scopes, the decision follows this priority:
+When `planMode` is `true`, ANNG CLI keeps the agent in a planning-oriented mode and blocks mutating tools at runtime.
 
-1. If any scope matches `deny` → **Deny**
-2. If any scope matches `ask` → **Prompt**
-3. If all scopes are in `allow` → **Auto-allow**
-4. Otherwise → use `defaultMode`
+The current Go runtime blocks these tools in plan mode:
 
-### Example: Relaxed Mode (default)
+- `bash`
+- `write_to_file`
+- `replace_file_content`
+- `multi_replace_file_content`
+
+Read-only tools such as file reads remain allowed.
+
+Example:
 
 ```json
 {
-  "permissions": {
-    "defaultMode": "allowAll"
-  }
+  "planMode": true
 }
 ```
 
-Default behavior: all operations are auto-allowed with no confirmation required.
+## Important Limitation
 
-### Example: Strict Mode
+The current Go runtime does **not** implement the old scope-based `permissions` configuration model documented by earlier versions.
 
-```json
-{
-  "permissions": {
-    "allow": ["read-in-cwd", "write-in-cwd", "query-git-log"],
-    "defaultMode": "askAll"
-  }
-}
-```
+This means the following are **not** currently supported:
 
-With this configuration:
-- Reading/writing inside the workspace and querying Git history → auto-allowed
-- All other operations → require user confirmation
+- `permissions.allow`
+- `permissions.deny`
+- `permissions.ask`
+- `permissions.defaultMode`
+- persisted per-scope decisions
 
-## Persistence
-
-When you select "Yes, and always allow" in a permission prompt, the corresponding scope is written to the project's `.anng/settings.json`:
-
-- The scope is appended to the `permissions.allow` list
-- If the scope was previously in `deny` or `ask`, it is automatically removed
-- Duplicate scopes are not written again
-
-This means subsequent calls involving the same scope will no longer prompt for confirmation.
+If you add those fields to `settings.json`, the current Go runtime will ignore them.

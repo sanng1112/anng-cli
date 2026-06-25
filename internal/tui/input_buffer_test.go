@@ -42,3 +42,25 @@ func TestWordMovementAndDeletion(t *testing.T) {
 		t.Errorf("Expected cursor at 11, got %d", ib.GetCursor())
 	}
 }
+
+func TestAdvancedInputBuffer(t *testing.T) {
+	ib := NewInputBuffer()
+	ib.Insert("hello")
+	ib.PushUndo()
+	ib.Insert(" world")
+	
+	if ib.GetText() != "hello world" {
+		t.Fatalf("Insert failed: got %s", ib.GetText())
+	}
+	
+	ib.Undo()
+	if ib.GetText() != "hello" {
+		t.Errorf("Undo failed: got %s", ib.GetText())
+	}
+	
+	ib.Redo()
+	if ib.GetText() != "hello world" {
+		t.Errorf("Redo failed: got %s", ib.GetText())
+	}
+}
+

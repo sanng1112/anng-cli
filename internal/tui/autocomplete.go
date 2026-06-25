@@ -8,8 +8,17 @@ import (
 
 func FilterAutocomplete(items []string, prefix string) []string {
 	var matches []string
+	cleanPrefix := strings.ToLower(prefix)
 	for _, item := range items {
-		if strings.HasPrefix(item, prefix) {
+		// Strip category bracket if filtering matching string
+		parts := strings.SplitN(item, " /", 2)
+		cmdAndDesc := ""
+		if len(parts) == 2 {
+			cmdAndDesc = "/" + parts[1]
+		} else {
+			cmdAndDesc = item
+		}
+		if strings.HasPrefix(strings.ToLower(cmdAndDesc), cleanPrefix) {
 			matches = append(matches, item)
 		}
 	}

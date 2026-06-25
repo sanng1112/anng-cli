@@ -3,6 +3,7 @@ package tools
 import (
 	"errors"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -43,10 +44,15 @@ type ReplacementChunk struct {
 }
 
 func MultiReplaceFileContent(filePath string, chunks []ReplacementChunk) error {
-	// Simple sequential replace implementation
-	// Note: line numbers might shift if lines are added/removed!
-	// A more robust implementation would apply changes from bottom to top or maintain offsets.
-	for _, chunk := range chunks {
+	// Sort chunks from bottom to top so line numbers don't shift
+	// when earlier chunks add/remove lines
+	sorted := make([]ReplacementChunk, len(chunks))
+	copy(sorted, chunks)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].StartLine > sorted[j].StartLine
+	})
+
+	for _, chunk := range sorted {
 		err := ReplaceFileContent(filePath, chunk.TargetContent, chunk.ReplacementContent, chunk.StartLine, chunk.EndLine)
 		if err != nil {
 			return err
@@ -54,3 +60,5 @@ func MultiReplaceFileContent(filePath string, chunks []ReplacementChunk) error {
 	}
 	return nil
 }
+
+func init() { _ = sort.Slice } // ensure sort is imported

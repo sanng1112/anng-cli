@@ -10,4 +10,5 @@ dist/
 .anng/
 /anng
 *.test
+ainovel-cli/
 

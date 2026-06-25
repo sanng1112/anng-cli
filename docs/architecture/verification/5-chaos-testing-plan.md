@@ -1,5 +1,7 @@
 # Phase H5: Chaos Engineering & Fault Injection Matrix
 
+> Historical verification artifact: this document captures migration-era chaos-testing goals and may refer to abstractions from the removed TypeScript codebase.
+
 To guarantee that the Verified Runtime-Enforced Architecture is reliable, the system must survive random, catastrophic failures at various runtime execution layers. This requires a Chaos Test Matrix that validates recovery mechanisms.
 
 ## Chaos Test Matrix

@@ -1,5 +1,7 @@
 # Phase H2: Formal State Machine Audit
 
+> Historical verification artifact: this audit reflects migration-period architecture and may reference legacy TypeScript files or abstractions not present in the current Go runtime.
+
 ## Current Assessment
 The system defines state types (`TeamStatus`, `TeamTaskStatus`, `WorkerStatus`) in `src/team/types.ts`. However, transitions are currently managed via direct property mutation in `src/team/team-manager.ts` (`updateTeamStatus`) without verifying the previous state.
 

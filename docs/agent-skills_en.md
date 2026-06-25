@@ -274,7 +274,7 @@ Use this skill to prepare a safe release for this repository.
 
 ## Workflow
 
-1. Read `package.json` and the existing changelog.
+1. Read the current project manifest or build entrypoints (for example `go.mod`, `Makefile`, or the release config) and the existing changelog.
 2. Inspect commits or diffs since the previous release tag.
 3. Update version and changelog only when the user explicitly asks.
 4. Run the project test and build commands.

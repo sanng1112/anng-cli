@@ -8,7 +8,6 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -27,26 +26,44 @@ func AnalyzeProjectTool(ctx context.Context, args map[string]interface{}) (strin
 		depth = int(d)
 	}
 
-	// Build directory tree using find
+	// Build directory tree using Go filepath.Walk (cross-platform, no shell dependency)
 	var treeOutput string
-	cmd := exec.CommandContext(ctx, "find", projectRoot,
-		"-maxdepth", fmt.Sprintf("%d", depth),
-		"-not", "-path", "*/node_modules/*",
-		"-not", "-path", "*/.git/*",
-		"-not", "-path", "*/dist/*",
-	)
-	out, err := cmd.CombinedOutput()
-	if err == nil {
-		treeOutput = string(out)
-	} else {
-		treeOutput = fmt.Sprintf("Failed to run find: %v", err)
+	{
+		var sb strings.Builder
+		skipDirs := map[string]bool{"node_modules": true, ".git": true, "dist": true, "build": true, ".cache": true}
+		depthCount := 0
+		filepath.WalkDir(projectRoot, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			rel, relErr := filepath.Rel(projectRoot, path)
+			if relErr != nil {
+				return nil
+			}
+			if rel == "." {
+				sb.WriteString(".\n")
+				return nil
+			}
+			if d.IsDir() && skipDirs[d.Name()] {
+				return filepath.SkipDir
+			}
+			if d.IsDir() {
+				depthCount = strings.Count(rel, string(filepath.Separator)) + 1
+				if depthCount > depth {
+					return filepath.SkipDir
+				}
+			}
+			sb.WriteString("./" + rel + "\n")
+			return nil
+		})
+		treeOutput = sb.String()
 	}
 
 	// Read go.mod if present
 	goModBytes, _ := os.ReadFile(filepath.Join(projectRoot, "go.mod"))
 	goModContent := string(goModBytes)
 
-	// Read package.json if present (for TS/JS projects)
+	// Read package.json if present for mixed-language workspaces.
 	pkgJsonBytes, _ := os.ReadFile(filepath.Join(projectRoot, "package.json"))
 	pkgJsonContent := string(pkgJsonBytes)
 	if len(pkgJsonContent) > 3000 {
@@ -125,9 +142,20 @@ func AnalyzeProjectTool(ctx context.Context, args map[string]interface{}) (strin
 		return nil
 	})
 
+	var manifests []string
+	if strings.TrimSpace(goModContent) != "" {
+		manifests = append(manifests, "go.mod:\n"+goModContent)
+	}
+	if strings.TrimSpace(pkgJsonContent) != "" {
+		manifests = append(manifests, "package.json:\n"+pkgJsonContent)
+	}
+	if len(manifests) == 0 {
+		manifests = append(manifests, "No root manifest files detected.")
+	}
+
 	output := fmt.Sprintf(
-		"Directory Tree:\n%s\n\ngo.mod:\n%s\n\npackage.json:\n%s\n\n%s",
-		treeOutput, goModContent, pkgJsonContent, semanticMap.String(),
+		"Directory Tree:\n%s\n\n%s\n\n%s",
+		treeOutput, strings.Join(manifests, "\n\n"), semanticMap.String(),
 	)
 	return output, nil
 }

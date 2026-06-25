@@ -1,5 +1,7 @@
 # Execution Context Specification
 
+> Historical architecture spec: this document captures target-state terminology from the migration period. Some names and code examples still reflect legacy TypeScript-era architecture rather than the exact current Go implementation.
+
 ## 1. Overview
 The `ExecutionContext` is the canonical, immutable data structure representing the global state of an agent's run at any given moment. It replaces isolated state variables, CLI flags, and prompt-embedded policies to guarantee that rules (Modes, Permissions) propagate perfectly across boundaries (Single-agent vs Multi-agent).
 

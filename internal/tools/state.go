@@ -20,6 +20,8 @@ var (
 	fileStates = make(map[string]map[string]FileState)
 )
 
+const maxSessionStates = 100 // Maximum number of sessions to track simultaneously
+
 func getSessionID(ctx context.Context) string {
 	if val, ok := ctx.Value(contextkeys.SessionIDKey).(string); ok {
 		return val
@@ -33,6 +35,25 @@ func RecordFileState(ctx context.Context, filePath string, content string) {
 	defer stateMutex.Unlock()
 	sessID := getSessionID(ctx)
 	if _, ok := fileStates[sessID]; !ok {
+		// Enforce capacity limit to prevent memory leak
+		if len(fileStates) >= maxSessionStates {
+			// Remove oldest session
+			var oldestKey string
+			var oldestTime time.Time
+			for k, v := range fileStates {
+				var sessionOldest time.Time
+				for _, fs := range v {
+					if sessionOldest.IsZero() || fs.Timestamp.Before(sessionOldest) {
+						sessionOldest = fs.Timestamp
+					}
+				}
+				if oldestKey == "" || sessionOldest.Before(oldestTime) {
+					oldestKey = k
+					oldestTime = sessionOldest
+				}
+			}
+			delete(fileStates, oldestKey)
+		}
 		fileStates[sessID] = make(map[string]FileState)
 	}
 	fileStates[sessID][filePath] = FileState{
@@ -53,4 +74,12 @@ func GetFileState(ctx context.Context, filePath string) (FileState, bool) {
 	}
 	fs, ok := sess[filePath]
 	return fs, ok
+}
+
+// ClearSessionStates removes all tracked file states for the given session.
+// Call this when a session ends to free memory.
+func ClearSessionStates(sessionID string) {
+	stateMutex.Lock()
+	defer stateMutex.Unlock()
+	delete(fileStates, sessionID)
 }

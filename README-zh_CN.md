@@ -6,194 +6,165 @@
     <img src='https://avatars.githubusercontent.com/u/118287711?s=200&v=4' width='100' alt="anng-cli"/>
   </a>
 </p>
-<h1>ANNG CLI CLI</h1>
+<h1>ANNG CLI</h1>
 
-[![][npm-release-shield]][npm-release-link] [![][npm-downloads-shield]][npm-downloads-link] [![][github-contributors-shield]][github-contributors-link] [![][github-forks-shield]][github-forks-link] [![][github-stars-shield]][github-stars-link]
+[![][github-contributors-shield]][github-contributors-link] [![][github-forks-shield]][github-forks-link] [![][github-stars-shield]][github-stars-link]
 [![][github-issues-shield]][github-issues-link] [![][github-issues-pr-shield]][github-issues-pr-link] [![][github-license-shield]][github-license-link]
 
-[English](README-en.md) · 中文
+[English](./README-en.md) · 中文 · [Tiếng Việt](./README.md)
 
 <br/>
 </div>
 
-[ANNG CLI](https://github.com/lessweb/anng-cli) 是专为 `deepseek-v4` 模型优化的终端 AI 编码助手，支持深度思考、推理强度控制、Agent Skills 以及 MCP 集成。
+[ANNG CLI](https://github.com/lessweb/anng-cli) 是一个基于 Go 的终端 AI 编码助手，提供 Bubble Tea TUI、无界面执行模式、skills 和 MCP 集成。
 
-## 安装
+## 环境要求
+
+- Go `1.24` 或更高版本
+- 你要使用的模型提供商 API Key
+
+## 构建
 
 ```bash
-npm install -g anng-cli
+go build -o anng ./cmd/anng
 ```
 
-在任意项目目录下运行 `anng` 即可启动。
+或使用 `Makefile`：
 
-![intro2](resources/intro2.png)
+```bash
+make build
+```
+
+运行测试：
+
+```bash
+make test
+```
+
+## 运行
+
+启动交互式 TUI：
+
+```bash
+./anng
+```
+
+启动时携带初始提示词：
+
+```bash
+./anng -p "总结这个项目"
+```
+
+自动批准的无界面任务：
+
+```bash
+./anng --yolo --max-turns 10 -p "运行测试并修复失败"
+```
 
 ## 配置
 
-创建 `~/.anng/settings.json` 文件，内容如下：
+ANNG CLI 会先读取 `./.anng/settings.json`，不存在时再回退到 `~/.anng/settings.json`。
+
+示例：
 
 ```json
 {
-  "env": {
-    "MODEL": "deepseek-v4-pro",
-    "BASE_URL": "https://api.deepseek.com",
-    "API_KEY": "sk-..."
-  },
+  "provider": "deepseek",
+  "model": "deepseek-v4-pro",
+  "apiKey": "sk-...",
+  "baseUrl": "https://api.deepseek.com",
+  "autoAccept": false,
+  "planMode": false,
   "thinkingEnabled": true,
   "reasoningEffort": "max"
 }
 ```
 
-配置文件与 [ANNG CLI VSCode 插件](https://github.com/lessweb/anng) 共享，无需重复配置。
+当前 Go 运行时支持的顶层字段：
 
-完整配置说明（多层级优先级、环境变量等）请参阅 [docs/configuration.md](docs/configuration.md)。
+| 字段 | 说明 |
+| --- | --- |
+| `provider` | `openai`、`deepseek`、`anthropic` 或 `google` |
+| `model` | 模型标识 |
+| `apiKey` | OpenAI-compatible 提供商 API Key |
+| `baseUrl` | 可选 API 地址覆盖 |
+| `geminiApiKey` | 使用 Google 提供商时的 Gemini API Key |
+| `geminiBaseUrl` | 可选 Gemini OpenAI-compatible 地址 |
+| `autoAccept` | 自动批准工具权限提示 |
+| `planMode` | 规划模式，阻止会修改状态的工具 |
+| `thinkingEnabled` | 在支持的模型上启用 thinking mode |
+| `reasoningEffort` | 可选 `-`、`none`、`low`、`medium`、`high`、`max` |
+| `models` | TUI 中显示的自定义模型列表 |
+| `env` | 与 settings 一起保存的额外环境变量 |
 
-## 主要功能
+环境变量：
 
-### **Skills**
-ANNG CLI CLI 支持 agent skills，允许您扩展助手的能力：
+- `ANNG_PROVIDER`
+- `ANNG_MODEL`
+- `ANNG_API_KEY`
+- `ANNG_BASE_URL`
+- `ANNG_THINKING_ENABLED`
+- `ANNG_REASONING_EFFORT`
+- `GEMINI_API_KEY`
+- `GEMINI_BASE_URL`
 
-Skills 会按以下优先级扫描：
+## 命令
 
-| Scope   | Path                  | Purpose                       |
-| :------ | :-------------------- | :---------------------------- |
-| Project | `./.anng/skills/` | ANNG CLI 原生位置            |
-| Project | `./.agents/skills/`   | 跨客户端互操作                |
-| User    | `~/.anng/skills/` | ANNG CLI 原生位置            |
-| User    | `~/.agents/skills/`   | 跨客户端互操作                |
+在 TUI 中输入 `/` 打开命令菜单。
 
-### **为 DeepSeek 优化**
-- 专门为 DeepSeek 模型性能调优。
-- 通过使用[上下文缓存](https://api-docs.deepseek.com/guides/kv_cache)来降低成本。
-- 原生支持[思考模式](https://api-docs.deepseek.com/guides/thinking_mode)和思考强度控制。
+| 命令 | 作用 |
+| --- | --- |
+| `/new` | 新建会话 |
+| `/resume` | 恢复历史会话 |
+| `/continue` | 继续最近的活动会话 |
+| `/model` | 切换模型与 reasoning 设置 |
+| `/settings` | 编辑运行时设置 |
+| `/skills` | 查看可用 skills |
+| `/mcp` | 查看 MCP 服务状态 |
+| `/undo` | 恢复之前的 checkpoint |
+| `/init` | 创建 `AGENTS.md` |
+| `/raw` | 切换显示模式 |
+| `/team`、`/team-dp`、`/team-wf` | 打开 team orchestration 视图 |
+| `/exit` | 退出程序 |
 
-## 斜杠命令与按键功能
+## 基本按键
 
-| 斜杠命令        | 操作                               |
-|-------------|----------------------------------|
-| `/`         | 打开 skills / 命令菜单                 |
-| `/new`      | 开始新对话                            |
-| `/resume`   | 选择历史对话继续                         |
-| `/continue` | 继续当前对话，或选择历史对话恢复                 |
-| `/model`    | 切换模型、思考模式和推理强度                   |
-| `/raw`      | 切换显示模式（Normal / Lite / Raw 滚动回溯） |
-| `/init`     | 初始化 AGENTS.md 文件                 |
-| `/skills`   | 列出可用 skills                      |
-| `/mcp`      | 查看 MCP 服务器状态和可用工具                |
-| `/undo`     | 将代码和/或对话恢复到之前的状态                 |
-| `/exit`     | 退出（也可用连续 `Ctrl+D`）               |
+| 按键 | 作用 |
+| --- | --- |
+| `Enter` | 发送提示词 |
+| `Ctrl+J` | 插入换行 |
+| `Esc` | 中断或返回 |
+| `Ctrl+C` / `Ctrl+D` | 退出 |
 
-| 按键            | 操作                 |
-|---------------|--------------------|
-| `Enter`       | 发送消息               |
-| `Shift+Enter` | 插入换行（也可用 `Ctrl+J`） |
-| `Ctrl+V`      | 从剪贴板粘贴图片           |
-| `Esc`         | 中断当前模型回复           |
-| 连续 `Ctrl+D`   | 退出                 |
+## 支持的提供商
 
-## 支持的模型
+- `openai`
+- `deepseek`
+- `anthropic`
+- `google`
 
-- `deepseek-v4-pro`（推荐使用）
-- `deepseek-v4-flash`
-- 任何其他 OpenAI 兼容模型
+## 文档
 
+- [快速开始](./docs/quickstart.md)
+- [配置说明](./docs/configuration.md)
+- [MCP](./docs/mcp.md)
+- [Agent Skills](./docs/agent-skills.md)
 
-## 常见问题
-
-### ANNG CLI 是否有 VSCode 插件？
-
-有的。ANNG CLI 提供功能完整的 VSCode 插件，可在 [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=vegamo.anng-vscode) 安装。插件与 CLI 共享 `~/.anng/settings.json` 配置文件，可以在终端和编辑器之间无缝切换。
-
-### ANNG CLI 是否支持理解图片？
-
-ANNG CLI 支持多模态，可使用ctrl+v从剪贴板粘贴图片。但目前 deepseek-v4 不支持多模态。有些模型虽然有多模态能力，但对多轮对话请求的限制太严。目前多模态输入推荐使用火山方舟的 Doubao-Seed-2.0-pro 模型，适配效果最好。
-
-### 怎样在任务完成后自动给 Slack 发消息？
-
-编写一个调用 Slack webhook 的 Shell 通知脚本，然后在 `~/.anng/settings.json` 中将 `notify` 字段设为该脚本的完整路径即可。详细步骤请参考 [docs/notify.md](docs/notify.md)。
-
-### 怎样启用联网搜索功能？
-
-ANNG CLI自带免费的、且大部分情况够用的Web Search工具。如果你希望使用自定义脚本进行联网搜索，可以在 `~/.anng/settings.json` 中将 `webSearchTool` 设为脚本的完整路径即可。详细步骤可参考：https://github.com/qorzj/web_search_cli
-
-### 如何配置 MCP？
-
-ANNG CLI 支持 MCP（Model Context Protocol），可以连接 GitHub、浏览器、数据库等外部服务。在 `settings.json` 中配置 `mcpServers` 字段即可启用，启动后使用 `/mcp` 命令查看已配置的 MCP 服务器状态和可用工具。
-
-详细配置指南：[docs/mcp.md](docs/mcp.md)
-
-### 如何配置 ANNG CLI 任务完成后发送通知？
-
-当 AI 助手完成一轮任务后，ANNG CLI 可以自动执行一个通知脚本，将任务结果发送到你指定的渠道（如 Slack、系统通知等）。
-
-详细配置指南：[docs/notify.md](docs/notify.md)
-
-### ANNG CLI 只支持 YOLO 模式吗？
-
-不是。ANNG CLI 内置了细粒度的权限控制机制，支持在 AI 助手执行 Shell 命令、读写文件、访问网络等操作前进行确认。你可以通过 `settings.json` 中的 `permissions` 字段按需配置每种权限范围的策略：始终允许、始终询问、或直接拒绝。详见 [docs/permission.md](docs/permission.md)。
-
-### 是否支持 Coding Plan？
-
-支持。只要把 `~/.anng/settings.json` 的 `env.BASE_URL` 配置为 OpenAI 兼容的接口地址就行。以火山方舟的 Coding Plan 为例：
-
-```json
-{
-  "env": {
-    "MODEL": "ark-code-latest",
-    "BASE_URL": "https://ark.cn-beijing.volces.com/api/coding/v3",
-    "API_KEY": "**************"
-  },
-  "thinkingEnabled": true
-}
-```
-
-## 贡献
-
-欢迎贡献代码！以下是参与方式：
+## 参与贡献
 
 ```bash
-# 克隆仓库
 git clone https://github.com/lessweb/anng-cli.git
 cd anng-cli
-
-# 安装依赖
-npm install
-
-# 本地开发（类型检查 + lint + 格式检查 + 构建）
-npm run build
-
-# 运行测试
-npm test
-
-# 链接到全局（即本地全局安装）
-npm link
+make test
+make build
 ```
 
-- 提交 PR 前请确保 `npm run check` 通过（类型检查 + lint + 格式检查）
-- 建议在执行构建前，先执行 `npm run format` 自动格式化代码，避免构建报错
+## 许可证
 
-## 获取帮助
-
-- 在 GitHub Issues 上报告错误或请求功能 (https://github.com/lessweb/anng-cli/issues)
-
-## 协议
-
-- MIT
-
-## 支持我们
-
-如果你觉得这个工具对你有帮助，请考虑通过以下方式支持我们：
-
-- 在 GitHub 上给我们一个 Star (https://github.com/lessweb/anng-cli)
-- 向我们提交反馈和建议
-- 分享给你的朋友和同事
+MIT
 
 <!-- LINK GROUP -->
 
-[npm-release-link]: https://www.npmjs.com/package/anng-cli
-[npm-release-shield]: https://img.shields.io/npm/v/anng-cli?color=4d6BFE&labelColor=black&logo=npm&logoColor=white&style=flat-square&cacheSeconds=1800
-[npm-downloads-link]: https://www.npmjs.com/package/anng-cli
-[npm-downloads-shield]: https://img.shields.io/npm/dt/anng-cli?labelColor=black&style=flat-square&color=4d6BFE&cacheSeconds=1800
 [github-contributors-link]: https://github.com/lessweb/anng-cli/graphs/contributors
 [github-contributors-shield]: https://img.shields.io/github/contributors/lessweb/anng-cli?color=4d6BFE&labelColor=black&style=flat-square&cacheSeconds=1800
 [github-forks-link]: https://github.com/lessweb/anng-cli/network/members

@@ -1,20 +1,32 @@
 package tui
 
 type InputBuffer struct {
-	runes  []rune
-	cursor int
+	runes      []rune
+	cursor     int
+	history    []string
+	historyIdx int
+	tempBuffer string
+	undoStack  [][]rune
+	redoStack  [][]rune
 }
 
 func NewInputBuffer() *InputBuffer {
 	return &InputBuffer{
-		runes:  []rune{},
-		cursor: 0,
+		runes:      []rune{},
+		cursor:     0,
+		history:    []string{},
+		historyIdx: -1,
+		undoStack:  [][]rune{},
+		redoStack:  [][]rune{},
 	}
 }
 
 func (ib *InputBuffer) Clear() {
 	ib.runes = []rune{}
 	ib.cursor = 0
+	ib.historyIdx = -1
+	ib.undoStack = [][]rune{}
+	ib.redoStack = [][]rune{}
 }
 
 func (ib *InputBuffer) GetText() string {
@@ -22,6 +34,7 @@ func (ib *InputBuffer) GetText() string {
 }
 
 func (ib *InputBuffer) Insert(text string) {
+	ib.PushUndo()
 	newRunes := []rune(text)
 	tail := append([]rune{}, ib.runes[ib.cursor:]...)
 	ib.runes = append(ib.runes[:ib.cursor], newRunes...)
@@ -43,6 +56,7 @@ func (ib *InputBuffer) MoveRight() {
 
 func (ib *InputBuffer) Backspace() {
 	if ib.cursor > 0 {
+		ib.PushUndo()
 		ib.runes = append(ib.runes[:ib.cursor-1], ib.runes[ib.cursor:]...)
 		ib.cursor--
 	}
@@ -50,6 +64,7 @@ func (ib *InputBuffer) Backspace() {
 
 func (ib *InputBuffer) Delete() {
 	if ib.cursor < len(ib.runes) {
+		ib.PushUndo()
 		ib.runes = append(ib.runes[:ib.cursor], ib.runes[ib.cursor+1:]...)
 	}
 }
@@ -89,9 +104,48 @@ func (ib *InputBuffer) DeleteWordBefore() {
 	if ib.cursor == 0 {
 		return
 	}
+	ib.PushUndo()
 	start := ib.cursor
 	ib.MoveWordLeft()
 	ib.runes = append(ib.runes[:ib.cursor], ib.runes[start:]...)
+}
+
+func (ib *InputBuffer) PushUndo() {
+	bufCopy := make([]rune, len(ib.runes))
+	copy(bufCopy, ib.runes)
+	ib.undoStack = append(ib.undoStack, bufCopy)
+	if len(ib.undoStack) > 50 {
+		ib.undoStack = ib.undoStack[1:]
+	}
+	ib.redoStack = [][]rune{}
+}
+
+func (ib *InputBuffer) Undo() {
+	if len(ib.undoStack) == 0 {
+		return
+	}
+	current := make([]rune, len(ib.runes))
+	copy(current, ib.runes)
+	ib.redoStack = append(ib.redoStack, current)
+
+	lastIdx := len(ib.undoStack) - 1
+	ib.runes = ib.undoStack[lastIdx]
+	ib.undoStack = ib.undoStack[:lastIdx]
+	ib.cursor = len(ib.runes)
+}
+
+func (ib *InputBuffer) Redo() {
+	if len(ib.redoStack) == 0 {
+		return
+	}
+	current := make([]rune, len(ib.runes))
+	copy(current, ib.runes)
+	ib.undoStack = append(ib.undoStack, current)
+
+	lastIdx := len(ib.redoStack) - 1
+	ib.runes = ib.redoStack[lastIdx]
+	ib.redoStack = ib.redoStack[:lastIdx]
+	ib.cursor = len(ib.runes)
 }
 
 func (ib *InputBuffer) SetCursor(pos int) {

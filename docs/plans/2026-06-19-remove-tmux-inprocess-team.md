@@ -1,5 +1,7 @@
 # Refactor: Remove tmux, Simplify Team System to In-Process Only
 
+> Historical implementation plan: this dated plan was written against the pre-Go-migration codebase and intentionally references legacy `src/...` files. Treat it as archived planning context, not current file guidance.
+
 ## Lý do
 
 Hiện tại code team orchestration có **2 execution path**:

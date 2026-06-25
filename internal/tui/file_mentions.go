@@ -3,31 +3,40 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func GetFileMentions(cwd string, query string) []string {
 	var matches []string
-	searchPath := filepath.Join(cwd, query+"*")
+	cleanQuery := strings.ReplaceAll(query, "@", "")
 	
-	files, err := filepath.Glob(searchPath)
-	if err != nil || len(files) == 0 {
-		return matches
-	}
+	// Fast background-friendly directory traversal up to depth 3
+	filepath.WalkDir(cwd, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		
+		rel, err := filepath.Rel(cwd, path)
+		if err != nil || rel == "." || strings.HasPrefix(rel, ".") {
+			if d.IsDir() && rel != "." && strings.HasPrefix(rel, ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 
-	for _, f := range files {
-		rel, err := filepath.Rel(cwd, f)
-		if err == nil {
-			stat, err := os.Stat(f)
-			if err == nil && stat.IsDir() {
+		if strings.HasPrefix(strings.ToLower(rel), strings.ToLower(cleanQuery)) {
+			if d.IsDir() {
 				matches = append(matches, "@"+rel+"/")
 			} else {
 				matches = append(matches, "@"+rel)
 			}
 		}
-	}
-	
-	if len(matches) > 10 {
-		matches = matches[:10]
-	}
+
+		if len(matches) >= 10 {
+			return filepath.SkipAll
+		}
+		return nil
+	})
+
 	return matches
 }

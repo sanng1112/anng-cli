@@ -1,5 +1,7 @@
 # Phase H3: Runtime Assertion Plan
 
+> Historical verification artifact: this plan describes a target hardening approach from the migration period and may mention removed TypeScript modules.
+
 To verify the Runtime-Enforced Architecture, the system must utilize explicit runtime assertions that fail loudly and prevent illegal states. Silent failures are prohibited.
 
 ## Proposed Assertions

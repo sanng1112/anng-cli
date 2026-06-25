@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +42,88 @@ func TestMCPConfigParsing(t *testing.T) {
 
 	if server.Command != "node" {
 		t.Fatalf("expected command 'node', got %q", server.Command)
+	}
+}
+
+func TestLoadManagerFromSettingsPathWithoutServers(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "settings.json")
+	if err := os.WriteFile(configPath, []byte(`{"model":"gpt-4o"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	manager, errs, err := LoadManagerFromSettingsPath(context.Background(), configPath)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if manager != nil {
+		t.Fatal("expected nil manager when no mcpServers are configured")
+	}
+	if len(errs) != 0 {
+		t.Fatalf("expected no connection errors, got %v", errs)
+	}
+}
+
+func TestLoadManagerFromSettingsPathConnectsServers(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "settings.json")
+	script := `
+		const readline = require('readline');
+		const rl = readline.createInterface({input: process.stdin, output: process.stdout});
+		rl.on('line', (line) => {
+			try {
+				const req = JSON.parse(line);
+				if (req.method === "initialize") {
+					const resp = JSON.stringify({jsonrpc: "2.0", id: req.id, result: {protocolVersion: "2024-11-05", serverInfo: {name: "test-mcp", version: "1.0.0"}, capabilities: {tools: {}}}});
+					console.log(resp);
+				} else if (req.method === "tools/list") {
+					const resp = JSON.stringify({jsonrpc: "2.0", id: req.id, result: {tools: [{name: "greet", description: "Say hello", inputSchema: {type: "object"}}]}});
+					console.log(resp);
+				} else if (req.method === "resources/list") {
+					const resp = JSON.stringify({jsonrpc: "2.0", id: req.id, result: {resources: []}});
+					console.log(resp);
+				}
+			} catch (e) {
+				console.error("Error:", e.message);
+			}
+		});
+	`
+	configData := `{
+		"mcpServers": {
+			"test-mcp": {
+				"command": "node",
+				"args": ["-e", ` + strconv.Quote(script) + `]
+			}
+		}
+	}`
+	if err := os.WriteFile(configPath, []byte(configData), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	manager, errs, err := LoadManagerFromSettingsPath(ctx, configPath)
+	if err != nil {
+		t.Fatalf("expected config to load, got %v", err)
+	}
+	if manager == nil {
+		t.Fatal("expected non-nil manager")
+	}
+	defer manager.DisconnectAll()
+	if len(errs) != 0 {
+		t.Fatalf("expected no connection errors, got %v", errs)
+	}
+
+	server, ok := manager.GetServer("test-mcp")
+	if !ok {
+		t.Fatal("expected test-mcp server to be registered")
+	}
+	if server.Status != "connected" {
+		t.Fatalf("expected server status connected, got %q", server.Status)
+	}
+	if len(server.Tools) != 1 || server.Tools[0].Name != "greet" {
+		t.Fatalf("expected greet tool to be loaded, got %+v", server.Tools)
 	}
 }
 

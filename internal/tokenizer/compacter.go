@@ -17,15 +17,29 @@ type CompactionDecision struct {
 	KeepFromIndex    int
 }
 
-// EstimateTokens calculates tokens with adjustments for CJK characters (weight 1.5) and English characters (weight 0.45)
+// EstimateTokens calculates tokens with adjustments for different character types.
+// Uses empirical ratios: ~0.25 tokens/char for ASCII, ~0.35 for extended Latin,
+// ~0.5 for numbers/symbols, ~1.5 for CJK, ~0.1 for whitespace.
 func EstimateTokens(content string) int {
 	var total float64
 	for _, r := range content {
-		if unicode.Is(unicode.Han, r) || unicode.In(r, unicode.Hiragana, unicode.Katakana, unicode.Hangul) {
+		switch {
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			total += 0.1
+		case r >= '0' && r <= '9':
+			total += 0.5
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+			total += 0.25
+		case r >= 0xC0 && r <= 0x024F: // Extended Latin
+			total += 0.35
+		case unicode.Is(unicode.Han, r) || unicode.In(r, unicode.Hiragana, unicode.Katakana, unicode.Hangul):
 			total += 1.5
-		} else {
+		default:
 			total += 0.45
 		}
+	}
+	if total < 1 {
+		total = 1
 	}
 	return int(total)
 }

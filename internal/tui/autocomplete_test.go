@@ -58,7 +58,7 @@ description: Viết kế hoạch triển khai
 	})
 
 	found := false
-	for _, item := range m.SlashItems {
+	for _, item := range m.ChatView.SlashItems {
 		if strings.Contains(item, "/writing-plans") {
 			found = true
 			if !strings.Contains(item, "Viết kế hoạch triển khai") {
@@ -69,7 +69,7 @@ description: Viết kế hoạch triển khai
 	}
 
 	if !found {
-		t.Errorf("Expected '/writing-plans' in SlashItems, but not found. Items: %v", m.SlashItems)
+		t.Errorf("Expected '/writing-plans' in SlashItems, but not found. Items: %v", m.ChatView.SlashItems)
 	}
 }
 
@@ -80,7 +80,7 @@ func TestBuiltinCommandsExist(t *testing.T) {
 	expectedCmds := []string{"/skills", "/init", "/continue", "/raw", "/team", "/team-dp", "/team-wf", "/custom-agents"}
 	for _, expected := range expectedCmds {
 		found := false
-		for _, item := range m.SlashItems {
+		for _, item := range m.ChatView.SlashItems {
 			if len(item) >= len(expected) && item[:len(expected)] == expected {
 				found = true
 				break
@@ -91,3 +91,16 @@ func TestBuiltinCommandsExist(t *testing.T) {
 		}
 	}
 }
+
+func TestSlashCommandsCategories(t *testing.T) {
+	items := []string{
+		"[Built-in Commands] /new — Fresh conversation",
+		"[Built-in Commands] /exit — Quit ANNG CLI",
+		"[Custom & Loaded Skills] /writing-plans — Write implementation plans",
+	}
+	matches := FilterAutocomplete(items, "/w")
+	if len(matches) != 1 || !strings.Contains(matches[0], "/writing-plans") {
+		t.Errorf("failed filtering loaded skill command, got %v", matches)
+	}
+}
+

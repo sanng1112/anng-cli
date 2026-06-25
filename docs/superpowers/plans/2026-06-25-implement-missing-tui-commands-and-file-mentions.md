@@ -1,6 +1,8 @@
 # Implement Missing TUI Commands and File Mentions Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Historical implementation plan: this dated plan was written during Go/TypeScript parity work and may mention legacy UI artifacts that no longer exist.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Achieve feature parity with the TypeScript TUI by implementing missing built-in slash commands (`/skills`, `/init`, `/continue`, `/raw`, `/team` variations) and adding the `@` file-mention autocompletion menu.
 
@@ -16,7 +18,7 @@
 - Modify: `internal/tui/app.go`
 - Modify: `internal/tui/views.go`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Update `internal/tui/autocomplete_test.go` to ensure missing slash commands are present:
 ```go
@@ -44,12 +46,12 @@ func TestBuiltinCommandsExist(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `CGO_ENABLED=0 go test ./internal/tui/... -run TestBuiltinCommandsExist -v`
 Expected: FAIL (missing commands)
 
-- [ ] **Step 3: Add new slash commands to SlashItems**
+- [x] **Step 3: Add new slash commands to SlashItems**
 
 In `internal/tui/app.go`, inside `InitialModelWithConfig`, add the missing commands to `slashItems`:
 ```go
@@ -72,7 +74,7 @@ In `internal/tui/app.go`, inside `InitialModelWithConfig`, add the missing comma
 	}
 ```
 
-- [ ] **Step 4: Add TuiView for Skills List**
+- [x] **Step 4: Add TuiView for Skills List**
 
 In `internal/tui/views.go`, add `ViewSkillsList`:
 ```go
@@ -99,7 +101,7 @@ func RenderSkillsList(skills []string) string {
 }
 ```
 
-- [ ] **Step 5: Route commands in Update()**
+- [x] **Step 5: Route commands in Update()**
 
 In `internal/tui/app.go`, inside the `tea.KeyEnter` handler for `ViewChat`, add switch cases:
 ```go
@@ -140,7 +142,7 @@ And in `View()` add rendering:
 		return "\n" + RenderSkillsList(skills)
 ```
 
-- [ ] **Step 6: Run tests and Commit**
+- [x] **Step 6: Run tests and Commit**
 
 Run: `CGO_ENABLED=0 go test ./internal/tui/... -v`
 Command: `git add internal/tui/app.go internal/tui/views.go internal/tui/autocomplete_test.go && git commit -m "feat(tui): add missing basic TS slash commands and skills view"`
@@ -153,7 +155,7 @@ Command: `git add internal/tui/app.go internal/tui/views.go internal/tui/autocom
 - Create: `internal/tui/file_mentions.go`
 - Modify: `internal/tui/app.go`
 
-- [ ] **Step 1: Write file matching logic**
+- [x] **Step 1: Write file matching logic**
 
 Create `internal/tui/file_mentions.go`:
 ```go
@@ -193,7 +195,7 @@ func GetFileMentions(cwd string, query string) []string {
 }
 ```
 
-- [ ] **Step 2: Add state to AppModel**
+- [x] **Step 2: Add state to AppModel**
 
 In `internal/tui/app.go`, add to `AppModel`:
 ```go
@@ -203,7 +205,7 @@ In `internal/tui/app.go`, add to `AppModel`:
 	MentionWordStart int
 ```
 
-- [ ] **Step 3: Update Key Handlers for `@` Menu**
+- [x] **Step 3: Update Key Handlers for `@` Menu**
 
 In `app.go` `Update` function, modify navigation keys to also support `m.ShowFileMenu`:
 ```go

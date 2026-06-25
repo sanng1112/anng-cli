@@ -3,6 +3,7 @@ package skills
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +69,49 @@ Step 2: Code</user_command> test it`
 
 	if res3 != expectedContent {
 		t.Errorf("Expected expanded prompt:\n%q\nGot:\n%q", expectedContent, res3)
+	}
+}
+
+func TestExpandPromptWithActiveSkills(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "test_expand_active_skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	projectRoot := filepath.Join(tempDir, "project")
+	homeDir := filepath.Join(tempDir, "home")
+
+	skill1Dir := filepath.Join(projectRoot, ".agents", "skills", "writing-plans")
+	skill2Dir := filepath.Join(projectRoot, ".agents", "skills", "task-management")
+	
+	_ = os.MkdirAll(skill1Dir, 0755)
+	_ = os.MkdirAll(skill2Dir, 0755)
+
+	_ = os.WriteFile(filepath.Join(skill1Dir, "SKILL.md"), []byte("---\nname: writing-plans\n---\nPlan body"), 0644)
+	_ = os.WriteFile(filepath.Join(skill2Dir, "SKILL.md"), []byte("---\nname: task-management\n---\nTask body"), 0644)
+
+	// Test 1: Expand with active skills, no explicit command
+	res := ExpandPromptWithActiveSkills("hello", []string{"writing-plans", "task-management"}, projectRoot, homeDir)
+	if !strings.Contains(res, `<user_command slash="writing-plans">Plan body</user_command>`) {
+		t.Errorf("expected writing-plans block, got %q", res)
+	}
+	if !strings.Contains(res, `<user_command slash="task-management">Task body</user_command>`) {
+		t.Errorf("expected task-management block, got %q", res)
+	}
+	if !strings.HasSuffix(res, "\nhello") {
+		t.Errorf("expected prompt to end with new line hello, got %q", res)
+	}
+
+	// Test 2: Expand with active skills and one explicit command (should avoid duplication of the explicit command)
+	res2 := ExpandPromptWithActiveSkills("/writing-plans hello", []string{"writing-plans", "task-management"}, projectRoot, homeDir)
+	// writing-plans is explicit, so it should only appear once inside the prompt (from explicit expansion).
+	// task-management should be prepended.
+	countWritingPlans := strings.Count(res2, `slash="writing-plans"`)
+	if countWritingPlans != 1 {
+		t.Errorf("expected writing-plans tool to appear exactly once, got %d occurrences", countWritingPlans)
+	}
+	if !strings.Contains(res2, `<user_command slash="task-management">Task body</user_command>`) {
+		t.Errorf("expected task-management block, got %q", res2)
 	}
 }
