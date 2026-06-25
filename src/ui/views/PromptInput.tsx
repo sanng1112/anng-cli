@@ -3,6 +3,7 @@ import { Box, Text, useApp, useStdout } from "ink";
 import type { DOMElement } from "ink";
 import chalk from "chalk";
 import { ARGS_SEPARATOR } from "../constants";
+import { addTask as queueAdd, listQueues as queueList } from "../../common/task-queue";
 import {
   EMPTY_BUFFER,
   PASTE_MARKER_REGEX,
@@ -469,12 +470,20 @@ export const PromptInput = React.memo(function PromptInput({
 
       if (busy && isPlainReturn) {
         const trimmed = buffer.text.trim();
-        if (trimmed && onQueueWhenBusy) {
-          onQueueWhenBusy(trimmed);
+        if (trimmed) {
+          // Direct queue import - always works, bypasses prop threading
+          try {
+            const qList = queueList(projectRoot);
+            const qName = qList.length > 0 ? qList[0].name : "main";
+            queueAdd(projectRoot, qName, trimmed);
+          } catch { /* silent */ }
+          // Also notify parent if callback exists
+          if (onQueueWhenBusy) onQueueWhenBusy(trimmed);
+          // Clear input & show confirmation
           updateBuffer(() => EMPTY_BUFFER);
           resetPastes();
           setStatusMessage("Queued (AI is busy)");
-        } else if (trimmed) {
+        } else {
           setStatusMessage("wait for the current response or press esc to interrupt");
         }
         return;
