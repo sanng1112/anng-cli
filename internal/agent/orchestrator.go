@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"anng-cli/internal/contextkeys"
+	"anng-cli/internal/mcp"
 	"anng-cli/internal/tokenizer"
 	"anng-cli/internal/tools"
 	"github.com/sashabaranov/go-openai"
@@ -30,6 +31,7 @@ type Orchestrator struct {
 	ThinkingEnabled bool
 	ReasoningEffort string
 	ToolRegistry    map[string]func(ctx context.Context, args map[string]interface{}) (string, error)
+	MCPManager      *mcp.MCPManager
 }
 
 // NewOrchestrator creates an Orchestrator pre-registered with all standard tools.
@@ -67,6 +69,35 @@ func NewOrchestrator(model string, apiKey string, mode string) *Orchestrator {
 
 func (o *Orchestrator) RegisterTool(name string, handler func(ctx context.Context, args map[string]interface{}) (string, error)) {
 	o.ToolRegistry[name] = handler
+}
+
+// RegisterMCPTools discovers and registers all tools from connected MCP servers.
+func (o *Orchestrator) RegisterMCPTools(ctx context.Context) {
+	if o.MCPManager == nil {
+		return
+	}
+	allTools := o.MCPManager.AllTools()
+	for serverName, toolDescs := range allTools {
+		for _, td := range toolDescs {
+			toolName := "mcp__" + serverName + "__" + td.Name
+			serverNameCopy := serverName
+			toolNameCopy := td.Name
+			o.RegisterTool(toolName, func(ctx context.Context, args map[string]interface{}) (string, error) {
+				result, err := o.MCPManager.CallTool(ctx, serverNameCopy, toolNameCopy, args)
+				if err != nil {
+					return "", err
+				}
+				if result == nil {
+					return "(no result)", nil
+				}
+				var texts []string
+				for _, c := range result.Content {
+					texts = append(texts, c.Text)
+				}
+				return strings.Join(texts, "\n"), nil
+			})
+		}
+	}
 }
 
 func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, error) {
@@ -134,10 +165,18 @@ func (o *Orchestrator) Run(ctx context.Context, prompt string) (*RunResult, erro
 			}, messages...)
 		}
 
+	tools := toolSpecs()
+		// Append MCP tools if available
+		if o.MCPManager != nil {
+			for serverName, toolDescs := range o.MCPManager.AllTools() {
+				mcpTools := mcp.ToOpenAITools(serverName, toolDescs)
+				tools = append(tools, mcpTools...)
+			}
+		}
 		req := openai.ChatCompletionRequest{
 			Model:    o.Model,
 			Messages: messages,
-			Tools:    toolSpecs(),
+			Tools:    tools,
 		}
 		if o.ReasoningEffort != "" && o.ReasoningEffort != "-" {
 			req.ReasoningEffort = o.ReasoningEffort

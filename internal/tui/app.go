@@ -14,6 +14,7 @@ import (
 	"anng-cli/internal/agent"
 	"anng-cli/internal/config"
 	"anng-cli/internal/contextkeys"
+	"anng-cli/internal/mcp"
 	"anng-cli/internal/skills"
 	"anng-cli/internal/tools"
 	tea "github.com/charmbracelet/bubbletea"
@@ -70,6 +71,7 @@ type AppModel struct {
 	McpStatusView   McpStatusModel
 	PermissionView  PermissionPromptModel
 	TeamView        TeamViewModel
+	MCPManager *mcp.MCPManager
 	
 	Config            AppConfig
 	PendingPermission *PermissionRequest
@@ -215,6 +217,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				orch := agent.NewOrchestrator(m.Config.Model, m.Config.ApiKey, mode)
 				orch.BaseURL = m.Config.BaseURL
 				orch.ProjectRoot = m.Config.ProjectRoot
+				orch.MCPManager = m.MCPManager
 
 				ctx = context.WithValue(ctx, contextkeys.ProjectRootKey, m.Config.ProjectRoot)
 				ctx = context.WithValue(ctx, contextkeys.SessionIDKey, m.SessionID)
@@ -290,121 +293,137 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.SkillsListView = NewSkillsListModel(names, m.Config.ActiveSkills)
 			case ViewMcpStatus:
-				m.McpStatusView = NewMcpStatusModel(
-					[]string{"filesystem", "google-search"},
-					map[string]string{"filesystem": "connected", "google-search": "connected"},
-				)
-			case ViewTeam:
-				m.TeamView = NewTeamViewModel(trigger.Mode)
-				m.TeamView.Width = m.Width
-				m.TeamView.Height = m.Height
-			}
-		}
-		return m, cmd
-
-	case ViewSessionList:
-		var cmd tea.Cmd
-		m.SessionListView, cmd = m.SessionListView.Update(msg)
-		if _, ok := msg.(BackToChatMsg); ok {
-			m.CurrentView = ViewChat
-		} else if res, ok := msg.(ResumeSessionMsg); ok {
-			m.CurrentView = ViewChat
-			m.SessionID = res.SessionName
-			if logs, err := LoadSessionContent(m.Config.ProjectRoot, res.SessionName); err == nil {
-				m.ChatView.LogBuffer = logs
-			} else {
-				m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, "System: Loaded session "+res.SessionName)
-			}
-		}
-		return m, cmd
-
-	case ViewUndo:
-		var cmd tea.Cmd
-		m.UndoView, cmd = m.UndoView.Update(msg)
-		if _, ok := msg.(BackToChatMsg); ok {
-			m.CurrentView = ViewChat
-		} else if restore, ok := msg.(RestoreCheckpointMsg); ok {
-			m.CurrentView = ViewChat
-			parts := strings.Split(restore.Checkpoint, " ")
-			commitHash := parts[0]
-			if strings.HasPrefix(commitHash, "[Target]") && len(parts) > 1 {
-				commitHash = parts[1]
-			}
-			
-			m.Busy = true
-			m.ChatView.Busy = true
-			return m, tea.Batch(
-				func() tea.Msg {
-					cmd := exec.Command("git", "reset", "--hard", commitHash)
-					cmd.Dir = m.Config.ProjectRoot
-					output, err := cmd.CombinedOutput()
-					if err != nil {
-						return AgentFinishedMsg{Err: fmt.Errorf("failed to restore checkpoint: %s, error: %w", string(output), err)}
+				var serverInfos []ServerStatusInfo
+				if m.MCPManager != nil {
+					statuses := m.MCPManager.ServerStatuses()
+					allTools := m.MCPManager.AllTools()
+					for _, name := range m.MCPManager.ServerNames() {
+						toolCount := 0
+						if tools, ok := allTools[name]; ok {
+							toolCount = len(tools)
+						}
+						info := ServerStatusInfo{
+							Name:      name,
+							Status:    statuses[name],
+							ToolCount: toolCount,
+						}
+						if s, ok := m.MCPManager.GetServer(name); ok {
+							info.LastError = s.LastError
+						}
+						serverInfos = append(serverInfos, info)
 					}
-					return AgentFinishedMsg{Result: &agent.RunResult{FinishReason: "System: Restored git checkpoint " + commitHash, Turns: 0}}
-				},
-				spinnerTick(),
-			)
-		}
-		return m, cmd
+				}
+				if len(serverInfos) == 0 {
+					serverInfos = []ServerStatusInfo{{Name: "(no MCP servers configured)", Status: "disconnected"}}
+				}
+				m.McpStatusView = NewMcpStatusModel(serverInfos)
+				}
+			}
+			return m, cmd
 
-	case ViewSettings:
-		var cmd tea.Cmd
-		m.SettingsView, cmd = m.SettingsView.Update(msg)
-		if _, ok := msg.(BackToChatMsg); ok {
-			m.CurrentView = ViewChat
-			m.Config = m.SettingsView.Config
-			m.ChatView.Config = m.SettingsView.Config
-		}
-		return m, cmd
+		case ViewSessionList:
+			var cmd tea.Cmd
+			m.SessionListView, cmd = m.SessionListView.Update(msg)
+			if _, ok := msg.(BackToChatMsg); ok {
+				m.CurrentView = ViewChat
+			} else if res, ok := msg.(ResumeSessionMsg); ok {
+				m.CurrentView = ViewChat
+				m.SessionID = res.SessionName
+				if logs, err := LoadSessionContent(m.Config.ProjectRoot, res.SessionName); err == nil {
+					m.ChatView.LogBuffer = logs
+				} else {
+					m.ChatView.LogBuffer = append(m.ChatView.LogBuffer, "System: Loaded session "+res.SessionName)
+				}
+			}
+			return m, cmd
 
-	case ViewModelSelect:
-		var cmd tea.Cmd
-		m.ModelSelectView, cmd = m.ModelSelectView.Update(msg)
-		if _, ok := msg.(BackToChatMsg); ok {
-			m.CurrentView = ViewChat
-		} else if sw, ok := msg.(SwitchModelMsg); ok {
-			m.Config.Model = sw.Model
-			m.ChatView.Config.Model = sw.Model
-			m.CurrentView = ViewChat
-			saveConfig(m.Config)
-		} else if _, ok := msg.(AddCustomModelMsg); ok {
-			m.CurrentView = ViewInput
-			m.ChatView.Buffer.Clear()
-		}
-		return m, cmd
+		case ViewUndo:
+			var cmd tea.Cmd
+			m.UndoView, cmd = m.UndoView.Update(msg)
+			if _, ok := msg.(BackToChatMsg); ok {
+				m.CurrentView = ViewChat
+			} else if restore, ok := msg.(RestoreCheckpointMsg); ok {
+				m.CurrentView = ViewChat
+				parts := strings.Split(restore.Checkpoint, " ")
+				commitHash := parts[0]
+				if strings.HasPrefix(commitHash, "[Target]") && len(parts) > 1 {
+					commitHash = parts[1]
+				}
 
-	case ViewSkillsList:
-		var cmd tea.Cmd
-		m.SkillsListView, cmd = m.SkillsListView.Update(msg)
-		if _, ok := msg.(BackToChatMsg); ok {
-			m.CurrentView = ViewChat
-		} else if skMsg, ok := msg.(UpdateActiveSkillsMsg); ok {
-			m.Config.ActiveSkills = skMsg.ActiveSkills
-			m.ChatView.Config.ActiveSkills = skMsg.ActiveSkills
-			m.CurrentView = ViewChat
-		}
-		return m, cmd
+				m.Busy = true
+				m.ChatView.Busy = true
+				return m, tea.Batch(
+					func() tea.Msg {
+						cmd := exec.Command("git", "reset", "--hard", commitHash)
+						cmd.Dir = m.Config.ProjectRoot
+						output, err := cmd.CombinedOutput()
+						if err != nil {
+							return AgentFinishedMsg{Err: fmt.Errorf("failed to restore checkpoint: %s, error: %w", string(output), err)}
+						}
+						return AgentFinishedMsg{Result: &agent.RunResult{FinishReason: "System: Restored git checkpoint " + commitHash, Turns: 0}}
+					},
+					spinnerTick(),
+				)
+			}
+			return m, cmd
 
-	case ViewMcpStatus:
-		var cmd tea.Cmd
-		m.McpStatusView, cmd = m.McpStatusView.Update(msg)
-		if _, ok := msg.(BackToChatMsg); ok {
-			m.CurrentView = ViewChat
-		}
-		return m, cmd
+		case ViewSettings:
+			var cmd tea.Cmd
+			m.SettingsView, cmd = m.SettingsView.Update(msg)
+			if _, ok := msg.(BackToChatMsg); ok {
+				m.CurrentView = ViewChat
+				m.Config = m.SettingsView.Config
+				m.ChatView.Config = m.SettingsView.Config
+			}
+			return m, cmd
 
-	case ViewTeam:
-		var cmd tea.Cmd
-		m.TeamView, cmd = m.TeamView.Update(msg)
-		if _, ok := msg.(BackToChatMsg); ok {
-			m.CurrentView = ViewChat
+		case ViewModelSelect:
+			var cmd tea.Cmd
+			m.ModelSelectView, cmd = m.ModelSelectView.Update(msg)
+			if _, ok := msg.(BackToChatMsg); ok {
+				m.CurrentView = ViewChat
+			} else if sw, ok := msg.(SwitchModelMsg); ok {
+				m.Config.Model = sw.Model
+				m.ChatView.Config.Model = sw.Model
+				m.CurrentView = ViewChat
+				saveConfig(m.Config)
+			} else if _, ok := msg.(AddCustomModelMsg); ok {
+				m.CurrentView = ViewInput
+				m.ChatView.Buffer.Clear()
+			}
+			return m, cmd
+
+		case ViewSkillsList:
+			var cmd tea.Cmd
+			m.SkillsListView, cmd = m.SkillsListView.Update(msg)
+			if _, ok := msg.(BackToChatMsg); ok {
+				m.CurrentView = ViewChat
+			} else if skMsg, ok := msg.(UpdateActiveSkillsMsg); ok {
+				m.Config.ActiveSkills = skMsg.ActiveSkills
+				m.ChatView.Config.ActiveSkills = skMsg.ActiveSkills
+				m.CurrentView = ViewChat
+			}
+			return m, cmd
+
+		case ViewMcpStatus:
+			var cmd tea.Cmd
+			m.McpStatusView, cmd = m.McpStatusView.Update(msg)
+			if _, ok := msg.(BackToChatMsg); ok {
+				m.CurrentView = ViewChat
+			}
+			return m, cmd
+
+		case ViewTeam:
+			var cmd tea.Cmd
+			m.TeamView, cmd = m.TeamView.Update(msg)
+			if _, ok := msg.(BackToChatMsg); ok {
+				m.CurrentView = ViewChat
+			}
+			return m, cmd
 		}
-		return m, cmd
+
+		return m, nil
 	}
-
-	return m, nil
-}
 
 func (m AppModel) View() string {
 	if m.PendingPermission != nil {
@@ -433,102 +452,101 @@ func (m AppModel) View() string {
 	}
 }
 
-
 func LoadSessions(projectRoot string) []string {
-	var sessions []string
-	home, _ := os.UserHomeDir()
-	
-	projectCode := strings.ReplaceAll(projectRoot, "/", "-")
-	projectCode = strings.ReplaceAll(projectCode, "\\", "-")
-	projectCode = strings.ReplaceAll(projectCode, ":", "")
+var sessions []string
+home, _ := os.UserHomeDir()
 
-	dir := filepath.Join(home, ".anng", "projects", projectCode)
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return []string{"No sessions found"}
-	}
-	for _, f := range files {
-		if !f.IsDir() && (strings.HasSuffix(f.Name(), ".jsonl") || strings.HasSuffix(f.Name(), ".json")) {
-			if f.Name() != "sessions-index.json" {
-				sessions = append(sessions, strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())))
-			}
+projectCode := strings.ReplaceAll(projectRoot, "/", "-")
+projectCode = strings.ReplaceAll(projectCode, "\\", "-")
+projectCode = strings.ReplaceAll(projectCode, ":", "")
+
+dir := filepath.Join(home, ".anng", "projects", projectCode)
+files, err := os.ReadDir(dir)
+if err != nil {
+	return []string{"No sessions found"}
+}
+for _, f := range files {
+	if !f.IsDir() && (strings.HasSuffix(f.Name(), ".jsonl") || strings.HasSuffix(f.Name(), ".json")) {
+		if f.Name() != "sessions-index.json" {
+			sessions = append(sessions, strings.TrimSuffix(f.Name(), filepath.Ext(f.Name())))
 		}
 	}
-	if len(sessions) == 0 {
-		return []string{"No sessions found"}
-	}
-	return sessions
+}
+if len(sessions) == 0 {
+	return []string{"No sessions found"}
+}
+return sessions
 }
 
 func LoadSessionContent(projectRoot string, sessionName string) ([]string, error) {
-	home, _ := os.UserHomeDir()
-	projectCode := strings.ReplaceAll(projectRoot, "/", "-")
-	projectCode = strings.ReplaceAll(projectCode, "\\", "-")
-	projectCode = strings.ReplaceAll(projectCode, ":", "")
+home, _ := os.UserHomeDir()
+projectCode := strings.ReplaceAll(projectRoot, "/", "-")
+projectCode = strings.ReplaceAll(projectCode, "\\", "-")
+projectCode = strings.ReplaceAll(projectCode, ":", "")
 
-	dir := filepath.Join(home, ".anng", "projects", projectCode)
-	
-	// Try JSON first
-	jsonPath := filepath.Join(dir, sessionName+".json")
-	data, err := os.ReadFile(jsonPath)
-	if err == nil {
-		var sess struct {
-			Messages []struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"messages"`
-		}
-		if err := json.Unmarshal(data, &sess); err == nil {
-			var logs []string
-			for _, m := range sess.Messages {
-				if m.Role == "user" {
-					logs = append(logs, "> " + m.Content)
-				} else {
-					logs = append(logs, m.Content)
-				}
-			}
-			return logs, nil
-		}
+dir := filepath.Join(home, ".anng", "projects", projectCode)
+
+// Try JSON first
+jsonPath := filepath.Join(dir, sessionName+".json")
+data, err := os.ReadFile(jsonPath)
+if err == nil {
+	var sess struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
 	}
-
-	// Fallback to JSONL
-	jsonlPath := filepath.Join(dir, sessionName+".jsonl")
-	data, err = os.ReadFile(jsonlPath)
-	if err == nil {
+	if err := json.Unmarshal(data, &sess); err == nil {
 		var logs []string
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			var m struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			}
-			if err := json.Unmarshal([]byte(line), &m); err == nil {
-				if m.Role == "user" {
-					logs = append(logs, "> " + m.Content)
-				} else {
-					logs = append(logs, m.Content)
-				}
+		for _, m := range sess.Messages {
+			if m.Role == "user" {
+				logs = append(logs, "> " + m.Content)
+			} else {
+				logs = append(logs, m.Content)
 			}
 		}
 		return logs, nil
 	}
+}
 
-	return nil, fmt.Errorf("session not found")
+// Fallback to JSONL
+jsonlPath := filepath.Join(dir, sessionName+".jsonl")
+data, err = os.ReadFile(jsonlPath)
+if err == nil {
+	var logs []string
+	lines := strings.Split(string(data), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var m struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal([]byte(line), &m); err == nil {
+			if m.Role == "user" {
+				logs = append(logs, "> " + m.Content)
+			} else {
+				logs = append(logs, m.Content)
+			}
+		}
+	}
+	return logs, nil
+}
+
+return nil, fmt.Errorf("session not found")
 }
 
 func LoadGitCheckpoints(projectRoot string) []string {
-	cmd := exec.Command("git", "log", "-n", "10", "--oneline")
-	cmd.Dir = projectRoot
-	output, err := cmd.Output()
-	if err != nil {
-		return []string{"No git checkpoints found"}
-	}
-	lines := strings.Split(string(output), "\n")
-	var checkpoints []string
-	for _, line := range lines {
+cmd := exec.Command("git", "log", "-n", "10", "--oneline")
+cmd.Dir = projectRoot
+output, err := cmd.Output()
+if err != nil {
+	return []string{"No git checkpoints found"}
+}
+lines := strings.Split(string(output), "\n")
+var checkpoints []string
+for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed != "" {
 			checkpoints = append(checkpoints, trimmed)

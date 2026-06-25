@@ -1,100 +1,137 @@
 package mcp
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"os/exec"
 )
 
+// MCPClient wraps a Transport with MCP protocol methods.
 type MCPClient struct {
-	reader *bufio.Reader
-	writer io.Writer
-	Cmd    *exec.Cmd
+	Transport Transport
+	Name      string
 }
 
+// InitializeResult is the response shape from the MCP initialize handshake.
 type InitializeResult struct {
 	ProtocolVersion string `json:"protocolVersion"`
+	Capabilities    struct {
+		Tools     *struct{} `json:"tools,omitempty"`
+		Resources *struct{} `json:"resources,omitempty"`
+	} `json:"capabilities,omitempty"`
+	ServerInfo struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	} `json:"serverInfo,omitempty"`
 }
 
-type JSONRPCResponse struct {
-	JSONRPC string           `json:"jsonrpc"`
-	Result  InitializeResult `json:"result"`
-	Error   interface{}      `json:"error,omitempty"`
-	ID      int              `json:"id"`
+// ToolDescription is a single tool advertised by an MCP server.
+type ToolDescription struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema interface{} `json:"inputSchema"`
 }
 
-func NewMCPClient(r io.Reader, w io.Writer) *MCPClient {
+// ListToolsResult is the response from tools/list.
+type ListToolsResult struct {
+	Tools []ToolDescription `json:"tools"`
+}
+
+// CallToolResult is the response from tools/call.
+type CallToolResult struct {
+	Content []ToolContent `json:"content"`
+	IsError bool          `json:"isError,omitempty"`
+}
+
+// ToolContent is a content item in a tool call response.
+type ToolContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// ResourceDescription is a single resource advertised by an MCP server.
+type ResourceDescription struct {
+	URI         string `json:"uri"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+}
+
+// ListResourcesResult is the response from resources/list.
+type ListResourcesResult struct {
+	Resources []ResourceDescription `json:"resources"`
+}
+
+// NewMCPClient creates a new MCP client for the given server name and transport.
+func NewMCPClient(name string, transport Transport) *MCPClient {
 	return &MCPClient{
-		reader: bufio.NewReader(r),
-		writer: w,
+		Transport: transport,
+		Name:      name,
 	}
 }
 
-func StartMCPServer(ctx context.Context, command string, args []string) (*MCPClient, error) {
-	cmd := exec.CommandContext(ctx, command, args...)
-	
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	client := &MCPClient{
-		reader: bufio.NewReader(stdout),
-		writer: stdin,
-		Cmd:    cmd,
-	}
-
-	return client, nil
-}
-
+// Initialize performs the MCP initialize handshake.
 func (c *MCPClient) Initialize(ctx context.Context) (*InitializeResult, error) {
-	req := `{"jsonrpc":"2.0","method":"initialize","params":{},"id":1}` + "\n"
-	if _, err := io.WriteString(c.writer, req); err != nil {
-		return nil, err
+	result, err := SendRPC[InitializeResult](ctx, c.Transport, "initialize", map[string]interface{}{
+		"protocolVersion": "2024-11-05",
+		"capabilities":    map[string]interface{}{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("initialize %s: %w", c.Name, err)
 	}
 
-	lineChan := make(chan string, 1)
-	errChan := make(chan error, 1)
-
-	go func() {
-		line, err := c.reader.ReadString('\n')
-		if err != nil {
-			errChan <- err
-		} else {
-			lineChan <- line
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err := <-errChan:
-		return nil, err
-	case line := <-lineChan:
-		var resp JSONRPCResponse
-		if err := json.Unmarshal([]byte(line), &resp); err != nil {
-			return nil, err
-		}
-		if resp.Error != nil {
-			return nil, fmt.Errorf("JSON-RPC error returned: %v", resp.Error)
-		}
-		return &resp.Result, nil
+	// Send initialized notification (no response expected)
+	notif := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "notifications/initialized",
 	}
+	reqData, _ := JSONRPCRequestToBytes(notif)
+	_ = c.Transport.SendNotification(ctx, string(reqData))
+
+	return result, nil
 }
 
-func (c *MCPClient) Close() {
-	if c.Cmd != nil && c.Cmd.Process != nil {
-		_ = c.Cmd.Process.Kill()
+// Close shuts down the underlying transport.
+func (c *MCPClient) Close() error {
+	return c.Transport.Close()
+}
+
+// Healthy returns true if the transport is still operational.
+func (c *MCPClient) Healthy() bool {
+	return c.Transport.Healthy()
+}
+
+// ListTools calls the tools/list method on the MCP server.
+func (c *MCPClient) ListTools(ctx context.Context) ([]ToolDescription, error) {
+	result, err := SendRPC[ListToolsResult](ctx, c.Transport, "tools/list", nil)
+	if err != nil {
+		return nil, fmt.Errorf("tools/list %s: %w", c.Name, err)
 	}
+	if result == nil {
+		return nil, nil
+	}
+	return result.Tools, nil
+}
+
+// CallTool calls a tool on the MCP server.
+func (c *MCPClient) CallTool(ctx context.Context, name string, arguments map[string]interface{}) (*CallToolResult, error) {
+	result, err := SendRPC[CallToolResult](ctx, c.Transport, "tools/call", map[string]interface{}{
+		"name":      name,
+		"arguments": arguments,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("tools/call %s/%s: %w", c.Name, name, err)
+	}
+	return result, nil
+}
+
+// ListResources calls the resources/list method on the MCP server.
+func (c *MCPClient) ListResources(ctx context.Context) ([]ResourceDescription, error) {
+	result, err := SendRPC[ListResourcesResult](ctx, c.Transport, "resources/list", nil)
+	if err != nil {
+		return nil, fmt.Errorf("resources/list %s: %w", c.Name, err)
+	}
+	if result == nil {
+		return nil, nil
+	}
+	return result.Resources, nil
 }
