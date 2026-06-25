@@ -299,23 +299,26 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	case PermissionDecisionMsg:
+		// PermissionDecisionMsg is produced by PermissionView.Update() command,
+		// so it arrives as a new message in the next cycle.
+		if m.PermissionResponseChan != nil {
+			m.PermissionResponseChan <- msg.Allow
+			close(m.PermissionResponseChan)
+			m.PermissionResponseChan = nil
+		}
+		m.PendingPermission = nil
+		return m, nil
+
 	case NewSessionMsg:
 		m.SessionID = generateUUID()
 		return m, nil
 	}
 
+	// Delegate keyboard input to PermissionView when permission is pending
 	if m.PendingPermission != nil {
 		var cmd tea.Cmd
 		m.PermissionView, cmd = m.PermissionView.Update(msg)
-		if dec, ok := msg.(PermissionDecisionMsg); ok {
-			if m.PermissionResponseChan != nil {
-				m.PermissionResponseChan <- dec.Allow
-				close(m.PermissionResponseChan)
-				m.PermissionResponseChan = nil
-			}
-			m.PendingPermission = nil
-			_ = dec
-		}
 		return m, cmd
 	}
 
