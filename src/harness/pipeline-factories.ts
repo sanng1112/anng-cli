@@ -18,7 +18,8 @@ export function createPlanStep(
   filesToRead: string[],
   filesToWrite: string[],
   acceptance: string[],
-  dependsOn: string[] = []
+  dependsOn: string[] = [],
+  verifyScope?: PlanStep["verifyScope"]
 ): PlanStep {
   return {
     id,
@@ -29,6 +30,7 @@ export function createPlanStep(
     dependsOn,
     acceptance,
     status: "pending",
+    verifyScope,
   };
 }
 

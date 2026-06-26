@@ -25,6 +25,7 @@ export interface PlanStep {
   dependsOn: string[];
   acceptance: string[];
   status: "pending" | "running" | "done" | "failed";
+  verifyScope?: "step" | "milestone" | "final";
 }
 
 export interface FailureRecord {
