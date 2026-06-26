@@ -1,7 +1,8 @@
 import * as fs from "fs";
+import * as path from "path";
 import { applyPatch } from "./patch-handler";
 import { PlannerOutputSchema, ExecutorOutputSchema } from "./pipeline-contracts";
-import type { PipelineState, PipelineRun, FailureRecord, PlanStep } from "./pipeline-types";
+import type { PipelineState, PipelineRun, FailureRecord, PlanStep, PipelineErrorType } from "./pipeline-types";
 import { buildErrorSignature } from "./pipeline-error-utils";
 import { createInitialPipelineRun } from "./pipeline-factories";
 
@@ -10,6 +11,7 @@ export interface OrchestratorConfig {
   executorModel: string;
   fixerModel: string;
   maxRepairAttempts: number;
+  tracePath?: string;
 }
 
 /**
@@ -35,11 +37,13 @@ const VALID_TRANSITIONS: Record<PipelineState, PipelineState[]> = {
  * - Track failure records and repair attempt limits
  * - Detect repeated identical failures for anti-loop guardrails
  * - Coordinate E2E execution with structured IO contracts and stubs
+ * - Write run traces to artifacts for developer-level debugging
  */
 export class PipelineOrchestrator {
   private state: PipelineState = "planning";
   private runState: PipelineRun;
   private config: OrchestratorConfig;
+  private traceEvents: Record<string, unknown>[] = [];
 
   constructor(userPrompt: string, config: OrchestratorConfig) {
     this.config = config;
@@ -71,7 +75,7 @@ export class PipelineOrchestrator {
    * Record a failure for a given step.
    * Uses a normalized signature to enable stable anti-loop detection.
    */
-  public recordFailure(stepId: string, errorMsg: string): FailureRecord {
+  public recordFailure(stepId: string, errorMsg: string, errorType?: PipelineErrorType): FailureRecord {
     const sig = buildErrorSignature(errorMsg);
     const failures = this.runState.failures.filter((f) => f.stepId === stepId);
     const failure: FailureRecord = {
@@ -80,6 +84,7 @@ export class PipelineOrchestrator {
       errorSignature: sig,
       errorMessage: errorMsg,
       timestamp: new Date().toISOString(),
+      errorType,
     };
     this.runState.failures.push(failure);
     return failure;
@@ -113,6 +118,36 @@ export class PipelineOrchestrator {
     return !this.canRetry(stepId) || this.hasRepeatedFailure(stepId, errorMsg);
   }
 
+  private logTraceEvent(event: Record<string, unknown>): void {
+    this.traceEvents.push({
+      timestamp: new Date().toISOString(),
+      state: this.state,
+      ...event,
+    });
+  }
+
+  private saveTraceLog(): void {
+    if (this.config.tracePath) {
+      try {
+        const dir = path.dirname(this.config.tracePath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+        const data = {
+          userPrompt: this.runState.userPrompt,
+          finalState: this.state,
+          failures: this.runState.failures,
+          modifiedFiles: this.runState.modifiedFiles,
+          attemptCount: this.runState.attemptCount,
+          events: this.traceEvents,
+        };
+        fs.writeFileSync(this.config.tracePath, JSON.stringify(data, null, 2), "utf8");
+      } catch (err) {
+        console.error("Failed to write E2E execution trace log:", err);
+      }
+    }
+  }
+
   /**
    * Executes the E2E pipeline flow in a deterministic/stubbed environment.
    * Fully validates output contracts (Zod) and enforces state invariants.
@@ -133,6 +168,8 @@ export class PipelineOrchestrator {
         case "planning": {
           try {
             const rawPlan = await stubs.plannerStub(this.runState.userPrompt);
+            this.logTraceEvent({ eventType: "planner_response", rawPlan });
+
             const parsed = PlannerOutputSchema.parse(rawPlan);
 
             this.runState.plan = parsed.plan.map((step) => ({
@@ -142,8 +179,10 @@ export class PipelineOrchestrator {
 
             this.transitionTo("executing");
           } catch (err: unknown) {
-            this.transitionTo("failed");
             const msg = err instanceof Error ? err.message : String(err);
+            this.logTraceEvent({ eventType: "planner_error", error: msg });
+
+            this.transitionTo("failed");
             throw new Error(`Planner output contract violation: ${msg}`);
           }
           break;
@@ -179,6 +218,8 @@ export class PipelineOrchestrator {
 
           try {
             const rawOutput = await stubs.executorStub(currentStep);
+            this.logTraceEvent({ eventType: "executor_response", stepId: currentStep.id, rawOutput });
+
             const parsedOutput = ExecutorOutputSchema.parse(rawOutput);
 
             // Execute the structured output action
@@ -207,8 +248,18 @@ export class PipelineOrchestrator {
           } catch (err: unknown) {
             currentStep.status = "failed";
             const errSummary = err instanceof Error ? err.message : String(err);
+
+            let errorType: PipelineErrorType = "executor_schema_error";
+            if (errSummary.includes("Semantic validation")) {
+              errorType = "executor_semantic_error";
+            } else if (errSummary.includes("patch") || errSummary.includes("Patch")) {
+              errorType = "patch_apply_error";
+            }
+
+            this.logTraceEvent({ eventType: "executor_error", stepId: currentStep.id, error: errSummary, errorType });
+
             const isAbort = this.shouldAbortRepair(currentStep.id, errSummary);
-            this.recordFailure(currentStep.id, errSummary);
+            this.recordFailure(currentStep.id, errSummary, errorType);
 
             if (isAbort) {
               this.transitionTo("failed");
@@ -232,6 +283,7 @@ export class PipelineOrchestrator {
 
           if (verification.success) {
             currentStep.status = "done";
+            this.logTraceEvent({ eventType: "step_verify_success", stepId: currentStep.id });
 
             // Check milestone verification
             const milestoneVerification = await stubs.verifyStub("milestone", {
@@ -242,8 +294,11 @@ export class PipelineOrchestrator {
             if (!milestoneVerification.success) {
               currentStep.status = "failed";
               const mErr = milestoneVerification.errorSummary || "Milestone verification failed";
+
+              this.logTraceEvent({ eventType: "milestone_verify_failure", stepId: currentStep.id, error: mErr });
+
               const isAbort = this.shouldAbortRepair(currentStep.id, mErr);
-              this.recordFailure(currentStep.id, mErr);
+              this.recordFailure(currentStep.id, mErr, "verify_failure");
 
               if (isAbort) {
                 this.transitionTo("failed");
@@ -263,8 +318,11 @@ export class PipelineOrchestrator {
           } else {
             currentStep.status = "failed";
             const errSummary = verification.errorSummary || "Step verification failed";
+
+            this.logTraceEvent({ eventType: "step_verify_failure", stepId: currentStep.id, error: errSummary });
+
             const isAbort = this.shouldAbortRepair(currentStep.id, errSummary);
-            this.recordFailure(currentStep.id, errSummary);
+            this.recordFailure(currentStep.id, errSummary, "verify_failure");
 
             if (isAbort) {
               this.transitionTo("failed");
@@ -284,6 +342,12 @@ export class PipelineOrchestrator {
           this.runState.attemptCount++;
           const lastFailure = this.runState.failures[this.runState.failures.length - 1];
 
+          this.logTraceEvent({
+            eventType: "repair_attempt",
+            stepId: currentStep.id,
+            attempt: this.runState.attemptCount,
+          });
+
           await stubs.fixerStub(currentStep, lastFailure);
 
           // Reset step status to retry
@@ -298,12 +362,15 @@ export class PipelineOrchestrator {
           });
 
           if (finalVerification.success) {
+            this.logTraceEvent({ eventType: "final_verify_success" });
             this.transitionTo("done");
           } else {
             const fErr = finalVerification.errorSummary || "Final verification failed";
+            this.logTraceEvent({ eventType: "final_verify_failure", error: fErr });
+
             if (currentStep) {
               const isAbort = this.shouldAbortRepair(currentStep.id, fErr);
-              this.recordFailure(currentStep.id, fErr);
+              this.recordFailure(currentStep.id, fErr, "verify_failure");
               if (isAbort) {
                 this.transitionTo("failed");
               } else {
@@ -321,6 +388,7 @@ export class PipelineOrchestrator {
       }
     }
 
+    this.saveTraceLog();
     return this.state;
   }
 }

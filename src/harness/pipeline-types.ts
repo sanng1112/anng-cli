@@ -28,12 +28,22 @@ export interface PlanStep {
   verifyScope?: "step" | "milestone" | "final";
 }
 
+export type PipelineErrorType =
+  | "planner_schema_error"
+  | "planner_semantic_error"
+  | "executor_schema_error"
+  | "executor_semantic_error"
+  | "patch_apply_error"
+  | "verify_failure"
+  | "repair_loop_abort";
+
 export interface FailureRecord {
   stepId: string;
   attempt: number;
   errorSignature: string;
   errorMessage: string;
   timestamp: string;
+  errorType?: PipelineErrorType;
 }
 
 export interface PipelineRun {
