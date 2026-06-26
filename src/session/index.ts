@@ -6,6 +6,7 @@ import { DEFAULT_MAX_TURNS, AUTO_LINTER_TIMEOUT_MS } from "../common/constants";
 import * as os from "os";
 import * as crypto from "crypto";
 import matter from "gray-matter";
+import { APIUserAbortError } from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { launchNotifyScript } from "../common/notify";
 import { maybeRotateApiKeyOnError } from "../common/openai-client";
@@ -54,6 +55,8 @@ import {
 } from "../common/permissions";
 import { clearSessionWorkingDir } from "../tools/bash-handler";
 import { reportNewPrompt } from "../common/telemetry";
+import { ensureProjectStorageDir, getProjectStoragePaths } from "../common/project-storage";
+import { writeTextFileAtomic } from "../common/json-store";
 import { shouldCompactContext } from "./compacter";
 import { countMessagesTokens } from "../common/tokenizer";
 import { OpenAIMessageConverter } from "../common/openai-message-converter";
@@ -246,6 +249,20 @@ export class SessionManager {
     return this.messageConverter.buildMessages(messages, thinkingEnabled, model);
   }
 
+  private ensurePromptableMessages(messages: ChatCompletionMessageParam[]): ChatCompletionMessageParam[] {
+    if (messages.some((message) => message.role !== "system")) {
+      return messages;
+    }
+
+    return [
+      ...messages,
+      {
+        role: "user",
+        content: "Continue with the current task using the available context.",
+      },
+    ];
+  }
+
   async initMcpServers(servers?: Record<string, McpServerConfig>): Promise<void> {
     this.mcpManager.setOnToolsListChanged(() => {
       this.mcpToolDefinitions = this.mcpManager.getMcpToolDefinitions();
@@ -352,6 +369,86 @@ export class SessionManager {
     throw error;
   }
 
+  private normalizeChatCompletionError(error: unknown): {
+    status?: number;
+    code?: number | string;
+    message: string;
+  } {
+    if (!(error instanceof Error)) {
+      return { message: String(error) };
+    }
+    const err = error as Error & { status?: number; code?: number | string };
+    return {
+      status: err.status,
+      code: err.code,
+      message: err.message ?? "",
+    };
+  }
+
+  private maybeBuildCompatibilityRetryRequest(
+    request: Record<string, unknown>,
+    error: unknown,
+    appliedFixes: Set<string>
+  ): { nextRequest: Record<string, unknown>; fix: string } | null {
+    const { status, code, message } = this.normalizeChatCompletionError(error);
+    const lowerMessage = message.toLowerCase();
+    const isBadRequest = status === 400 || code === 400 || lowerMessage.includes("400");
+    if (!isBadRequest) {
+      return null;
+    }
+
+    if (
+      !appliedFixes.has("stream_options") &&
+      Object.prototype.hasOwnProperty.call(request, "stream_options") &&
+      /(stream[_\s-]?options|include_usage)/.test(lowerMessage)
+    ) {
+      const nextRequest = JSON.parse(JSON.stringify(request)) as Record<string, unknown>;
+      delete nextRequest.stream_options;
+      return { nextRequest, fix: "stream_options" };
+    }
+
+    if (
+      !appliedFixes.has("thinking") &&
+      (Object.prototype.hasOwnProperty.call(request, "thinking") ||
+        Object.prototype.hasOwnProperty.call(request, "extra_body")) &&
+      /(thinking|reasoning_effort|extra_body)/.test(lowerMessage)
+    ) {
+      const nextRequest = JSON.parse(JSON.stringify(request)) as Record<string, unknown>;
+      delete nextRequest.thinking;
+      delete nextRequest.extra_body;
+      return { nextRequest, fix: "thinking" };
+    }
+
+    if (
+      !appliedFixes.has("reasoning_content") &&
+      Array.isArray(request.messages) &&
+      /reasoning_content/.test(lowerMessage)
+    ) {
+      const nextRequest = JSON.parse(JSON.stringify(request)) as Record<string, unknown>;
+      nextRequest.messages = (nextRequest.messages as Array<Record<string, unknown>>).map((messageRecord) => {
+        if (!messageRecord || typeof messageRecord !== "object" || Array.isArray(messageRecord)) {
+          return messageRecord;
+        }
+        const clone = { ...messageRecord };
+        delete clone.reasoning_content;
+        return clone;
+      });
+      return { nextRequest, fix: "reasoning_content" };
+    }
+
+    if (
+      !appliedFixes.has("response_format") &&
+      Object.prototype.hasOwnProperty.call(request, "response_format") &&
+      /(response_format|json_object|json_schema|json schema)/.test(lowerMessage)
+    ) {
+      const nextRequest = JSON.parse(JSON.stringify(request)) as Record<string, unknown>;
+      delete nextRequest.response_format;
+      return { nextRequest, fix: "response_format" };
+    }
+
+    return null;
+  }
+
   private async createChatCompletionStream(
     client: NonNullable<ReturnType<CreateOpenAIClient>["client"]>,
     request: Record<string, unknown>,
@@ -377,42 +474,62 @@ export class SessionManager {
       },
     };
 
+    let requestForExecution: Record<string, unknown> = streamRequest;
+    const appliedCompatibilityFixes = new Set<string>();
     let response: unknown;
-    try {
-      response = await (
-        client.chat.completions.create as unknown as (
-          body: Record<string, unknown>,
-          options?: Record<string, unknown>
-        ) => Promise<unknown>
-      )(streamRequest, options);
-    } catch (error) {
-      this.logChatCompletionDebug(debug, {
-        timestamp: new Date().toISOString(),
-        location: debug?.location ?? "SessionManager.createChatCompletionStream:create",
-        requestId,
-        sessionId,
-        model: typeof request.model === "string" ? request.model : undefined,
-        baseURL: debug?.baseURL,
-        durationMs: Date.now() - startedAtMs,
-        params: { ...debug?.params, options: summarizeCompletionOptions(options) },
-        request: streamRequest,
-        error: normalizeDebugError(error),
-      });
-      logApiError({
-        timestamp: new Date().toISOString(),
-        location: "SessionManager.createChatCompletionStream:create",
-        requestId,
-        sessionId,
-        model: typeof request.model === "string" ? request.model : undefined,
-        error: {
-          name: error instanceof Error ? error.name : "UnknownError",
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        },
-        request: streamRequest,
-      });
-      this.emitLlmStreamProgress(requestId, startedAt, estimatedTokens, "end", sessionId);
-      throw error;
+    while (true) {
+      try {
+        response = await (
+          client.chat.completions.create as unknown as (
+            body: Record<string, unknown>,
+            options?: Record<string, unknown>
+          ) => Promise<unknown>
+        )(requestForExecution, options);
+        break;
+      } catch (error) {
+        const compatibilityRetry = this.maybeBuildCompatibilityRetryRequest(
+          requestForExecution,
+          error,
+          appliedCompatibilityFixes
+        );
+        if (compatibilityRetry) {
+          appliedCompatibilityFixes.add(compatibilityRetry.fix);
+          requestForExecution = compatibilityRetry.nextRequest;
+          continue;
+        }
+
+        this.logChatCompletionDebug(debug, {
+          timestamp: new Date().toISOString(),
+          location: debug?.location ?? "SessionManager.createChatCompletionStream:create",
+          requestId,
+          sessionId,
+          model: typeof request.model === "string" ? request.model : undefined,
+          baseURL: debug?.baseURL,
+          durationMs: Date.now() - startedAtMs,
+          params: {
+            ...debug?.params,
+            compatibilityFixes: Array.from(appliedCompatibilityFixes),
+            options: summarizeCompletionOptions(options),
+          },
+          request: requestForExecution,
+          error: normalizeDebugError(error),
+        });
+        logApiError({
+          timestamp: new Date().toISOString(),
+          location: "SessionManager.createChatCompletionStream:create",
+          requestId,
+          sessionId,
+          model: typeof request.model === "string" ? request.model : undefined,
+          error: {
+            name: error instanceof Error ? error.name : "UnknownError",
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+          request: requestForExecution,
+        });
+        this.emitLlmStreamProgress(requestId, startedAt, estimatedTokens, "end", sessionId);
+        throw error;
+      }
     }
 
     if (!response || typeof (response as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] !== "function") {
@@ -425,8 +542,12 @@ export class SessionManager {
         model: typeof request.model === "string" ? request.model : undefined,
         baseURL: debug?.baseURL,
         durationMs: Date.now() - startedAtMs,
-        params: { ...debug?.params, options: summarizeCompletionOptions(options) },
-        request: streamRequest,
+        params: {
+          ...debug?.params,
+          compatibilityFixes: Array.from(appliedCompatibilityFixes),
+          options: summarizeCompletionOptions(options),
+        },
+        request: requestForExecution,
         response,
       });
       return response as { choices?: Array<{ message?: Record<string, unknown> }>; usage?: ModelUsage | null };
@@ -527,8 +648,12 @@ export class SessionManager {
         model: typeof request.model === "string" ? request.model : undefined,
         baseURL: debug?.baseURL,
         durationMs: Date.now() - startedAtMs,
-        params: { ...debug?.params, options: summarizeCompletionOptions(options) },
-        request: streamRequest,
+        params: {
+          ...debug?.params,
+          compatibilityFixes: Array.from(appliedCompatibilityFixes),
+          options: summarizeCompletionOptions(options),
+        },
+        request: requestForExecution,
         responseChunks,
         error: normalizeDebugError(error),
       });
@@ -543,7 +668,7 @@ export class SessionManager {
           message: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         },
-        request: streamRequest,
+        request: requestForExecution,
       });
       throw error;
     } finally {
@@ -577,8 +702,12 @@ export class SessionManager {
       model: typeof request.model === "string" ? request.model : undefined,
       baseURL: debug?.baseURL,
       durationMs: Date.now() - startedAtMs,
-      params: { ...debug?.params, options: summarizeCompletionOptions(options) },
-      request: streamRequest,
+      params: {
+        ...debug?.params,
+        compatibilityFixes: Array.from(appliedCompatibilityFixes),
+        options: summarizeCompletionOptions(options),
+      },
+      request: requestForExecution,
       responseChunks,
       response: finalResponse,
     });
@@ -1165,8 +1294,18 @@ ${agentInstructions}
     permissionPrompt?: UserPromptContent
   ): Promise<void> {
     const startedAt = Date.now();
-    const { client, model, baseURL, temperature, thinkingEnabled, reasoningEffort, debugLogEnabled, notify, env } =
-      this.createOpenAIClient();
+    const {
+      client,
+      model,
+      baseURL,
+      providerStateKey,
+      temperature,
+      thinkingEnabled,
+      reasoningEffort,
+      debugLogEnabled,
+      notify,
+      env,
+    } = this.createOpenAIClient();
     const now = new Date().toISOString();
     rebuildSessionStateFromHistory(sessionId, this.listSessionMessages(sessionId));
 
@@ -1335,7 +1474,15 @@ ${agentInstructions}
           activeMessages.push(shockAbsorberMessage);
         }
 
-        const messages = this.messageConverter.buildMessages(activeMessages, thinkingEnabled, model);
+        const currentTools = getTools(this.getPromptToolOptions(), this.mcpToolDefinitions);
+        const knownToolNames = new Set(
+          currentTools
+            .map((t) => (t as { function?: { name?: string } }).function?.name)
+            .filter((n): n is string => typeof n === "string" && n.length > 0)
+        );
+        const messages = this.ensurePromptableMessages(
+          this.messageConverter.buildMessages(activeMessages, thinkingEnabled, model, knownToolNames)
+        );
         const thinkingOptions = buildThinkingRequestOptions(thinkingEnabled, baseURL, reasoningEffort);
         const response = await this.createChatCompletionStream(
           client,
@@ -1343,7 +1490,7 @@ ${agentInstructions}
             model,
             ...(temperature !== undefined ? { temperature } : {}),
             messages,
-            tools: getTools(this.getPromptToolOptions(), this.mcpToolDefinitions),
+            tools: currentTools,
             ...thinkingOptions,
           },
           { signal: sessionController.signal },
@@ -1469,7 +1616,7 @@ ${agentInstructions}
 
       // Rotate API key on rate-limit/quota errors
       if (!aborted) {
-        const rotated = maybeRotateApiKeyOnError(baseURL ?? "", error);
+        const rotated = maybeRotateApiKeyOnError(providerStateKey ?? baseURL ?? "", error);
         if (rotated) {
           this.addSessionSystemMessage(
             sessionId,
@@ -1584,9 +1731,16 @@ ${agentInstructions}
       return;
     }
 
+    const summaryIndexesToMerge = sessionMessages
+      .map((message, index) =>
+        !message.compacted && index < endIndex && message.meta?.isSummary === true ? index : -1
+      )
+      .filter((index) => index >= 0);
+    const compactStartIndex = summaryIndexesToMerge[0] ?? startIndex;
+
     // Limit the maximum tokens we send to the LLM summarizer to avoid 429 rate limit
     // We slice the messages to compact and strip/truncate very long outputs if necessary.
-    const sliceToCompact = sessionMessages.slice(startIndex, endIndex).map((msg) => {
+    const sliceToCompact = sessionMessages.slice(compactStartIndex, endIndex).map((msg) => {
       let content = msg.content;
       if (typeof content === "string" && content.length > 8000) {
         content = content.slice(0, 8000) + "\n...[TRUNCATED TO PREVENT RATE LIMIT (429)]...";
@@ -1643,7 +1797,9 @@ ${agentInstructions}
     }
 
     const llmResponse = typeof rawLlmResponse === "string" ? rawLlmResponse : "";
-    const compactedSummary = llmResponse.replace(/<analysis>[\s\S]*?<\/analysis>/gi, "").trim();
+    const compactedSummary =
+      llmResponse.replace(/<analysis>[\s\S]*?<\/analysis>/gi, "").trim() ||
+      this.buildFallbackCompactionSummary(sliceToCompact);
 
     const now = new Date().toISOString();
     this.updateSessionEntry(sessionId, (entry) => ({
@@ -1654,7 +1810,7 @@ ${agentInstructions}
       updateTime: now,
     }));
 
-    for (let i = startIndex; i < endIndex; i += 1) {
+    for (let i = compactStartIndex; i < endIndex; i += 1) {
       sessionMessages[i] = { ...sessionMessages[i], compacted: true, updateTime: now };
     }
 
@@ -1675,6 +1831,43 @@ ${agentInstructions}
     };
     sessionMessages.splice(endIndex, 0, summaryMessage);
     this.saveSessionMessages(sessionId, sessionMessages);
+  }
+
+  private buildFallbackCompactionSummary(messages: SessionMessage[]): string {
+    const meaningfulMessages = messages.filter(
+      (message) =>
+        message.meta?.isSummary !== true && typeof message.content === "string" && message.content.trim().length > 0
+    );
+    const roleCounts = meaningfulMessages.reduce<Record<string, number>>((counts, message) => {
+      counts[message.role] = (counts[message.role] ?? 0) + 1;
+      return counts;
+    }, {});
+    const roleSummary = Object.entries(roleCounts)
+      .map(([role, count]) => `${role}=${count}`)
+      .join(", ");
+    const highlights = meaningfulMessages
+      .slice(-6)
+      .map((message) => `- ${message.role}: ${this.truncateFallbackSummaryText(message.content ?? "", 240)}`);
+
+    const sections = [
+      "Fallback compaction summary generated locally because the model returned an empty summary.",
+      `Messages compacted: ${messages.length}.`,
+      roleSummary ? `Role counts: ${roleSummary}.` : "Role counts: none.",
+    ];
+
+    if (highlights.length > 0) {
+      sections.push(`Recent highlights:\n${highlights.join("\n")}`);
+    }
+
+    return sections.join("\n");
+  }
+
+  private truncateFallbackSummaryText(value: string, limit: number): string {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    if (normalized.length <= limit) {
+      return normalized;
+    }
+    return `${normalized.slice(0, limit)}...`;
   }
 
   private getPromptToolOptions(): { model: string; webSearchEnabled: boolean } {
@@ -1718,8 +1911,8 @@ ${agentInstructions}
     }
 
     const controller = this.sessionControllers.get(sessionId);
-    if (controller) {
-      controller.abort();
+    if (controller && !controller.signal.aborted) {
+      controller.abort(new APIUserAbortError({ message: "Interrupted by user" }));
       this.sessionControllers.delete(sessionId);
     }
 
@@ -1958,9 +2151,7 @@ ${agentInstructions}
     projectDir: string;
     sessionsIndexPath: string;
   } {
-    const projectCode = getProjectCode(this.projectRoot);
-    const projectDir = path.join(os.homedir(), ".anng", "projects", projectCode);
-    const sessionsIndexPath = path.join(projectDir, "sessions-index.json");
+    const { projectCode, projectDir, sessionsIndexPath } = getProjectStoragePaths(this.projectRoot);
     return { projectCode, projectDir, sessionsIndexPath };
   }
 
@@ -2037,9 +2228,7 @@ ${agentInstructions}
   }
 
   private ensureProjectDir(): string {
-    const { projectDir } = this.getProjectStorage();
-    fs.mkdirSync(projectDir, { recursive: true });
-    return projectDir;
+    return ensureProjectStorageDir(this.projectRoot);
   }
 
   private loadSessionsIndex(): SessionsIndex {
@@ -2085,7 +2274,7 @@ ${agentInstructions}
       originalPath: this.projectRoot,
     };
     const payload = JSON.stringify(normalized, null, 2);
-    globalFileWriteQueue.enqueue(() => fsPromises.writeFile(sessionsIndexPath, payload, "utf8"));
+    globalFileWriteQueue.enqueue(() => writeTextFileAtomic(sessionsIndexPath, `${payload}\n`));
   }
 
   private getSessionMessagesPath(sessionId: string): string {

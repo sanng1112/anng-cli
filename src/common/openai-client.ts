@@ -5,7 +5,14 @@ import * as crypto from "crypto";
 import { OpenAI } from "openai";
 import { Agent, fetch as undiciFetch } from "undici";
 import { resolveCurrentSettings, type ResolvedDeepcodingSettings } from "../settings";
-import { KeyRotator } from "./key-rotator";
+import { quarantineGeminiKey } from "./gemini-keys-sync";
+import { KeyRotator, type KeyStat } from "./key-rotator";
+import {
+  acquireGeminiQuotaSlot,
+  getGeminiQuotaSnapshot,
+  markGeminiQuotaKeyInvalid,
+  type GeminiGlobalQuotaSnapshot,
+} from "./gemini-quota-coordinator";
 
 // Custom undici Agent with a 180-second keepAlive timeout.  The default
 // global fetch (undici) only keeps connections alive for 4 seconds, which
@@ -15,15 +22,83 @@ import { KeyRotator } from "./key-rotator";
 const keepAliveAgent = new Agent({ keepAliveTimeout: 180_000 });
 
 // Module-level cache for the OpenAI client instances (one per provider).
-// Each provider has its own client, key rotator, and cache key.
-const providerState = new Map<string, { client: OpenAI; cacheKey: string; rotator: KeyRotator }>();
+// Each provider has its own client and key rotator state.
+type ProviderState = {
+  client: OpenAI;
+  baseURL: string;
+  providerStateKey: string;
+  rotator: KeyRotator;
+  providerLabel: string;
+};
+
+type OpenAIHttpError = Error & {
+  status?: number;
+  code?: number | string;
+  type?: string;
+  responseBody?: unknown;
+  retryAfterSec?: number;
+};
+
+const providerState = new Map<string, ProviderState>();
 
 // Detect provider from model name
-const GEMINI_MODEL_PREFIX = "gemini";
 const GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 
-function isGeminiModel(model: string): boolean {
-  return model.toLowerCase().startsWith(GEMINI_MODEL_PREFIX);
+function buildProviderStateKey(baseURL: string, apiKey: string): string {
+  const normalizedBaseURL = baseURL.trim().replace(/\/+$/g, "");
+  const hash = crypto.createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
+  return `${normalizedBaseURL}|${hash}`;
+}
+
+function createOpenAIHttpError(
+  status: number,
+  rawBody: string,
+  parsedBody: unknown,
+  retryAfterSec?: number
+): OpenAIHttpError {
+  const errorPayload =
+    parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)
+      ? ((parsedBody as { error?: Record<string, unknown> }).error ?? parsedBody)
+      : {};
+  const code =
+    typeof (errorPayload as { code?: unknown }).code === "string" ||
+    typeof (errorPayload as { code?: unknown }).code === "number"
+      ? (errorPayload as { code: string | number }).code
+      : undefined;
+  const type =
+    typeof (errorPayload as { type?: unknown }).type === "string" ? (errorPayload as { type: string }).type : undefined;
+  const message =
+    typeof (errorPayload as { message?: unknown }).message === "string"
+      ? (errorPayload as { message: string }).message
+      : rawBody.trim() || `HTTP ${status}`;
+  const error = new Error(message) as OpenAIHttpError;
+  error.name = "OpenAIHTTPError";
+  error.status = status;
+  error.code = code;
+  error.type = type;
+  error.responseBody = parsedBody || rawBody;
+  error.retryAfterSec = retryAfterSec;
+  return error;
+}
+
+function parseRetryAfterSeconds(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const asNumber = Number(value);
+  if (Number.isFinite(asNumber) && asNumber >= 0) {
+    return Math.ceil(asNumber);
+  }
+  const asDate = Date.parse(value);
+  if (Number.isNaN(asDate)) {
+    return undefined;
+  }
+  return Math.max(0, Math.ceil((asDate - Date.now()) / 1000));
+}
+
+export function isGeminiModel(model: string): boolean {
+  const lower = model.toLowerCase();
+  return lower.startsWith("gemini") || lower.startsWith("gemma");
 }
 
 export function getProviderConfig(settings: ResolvedDeepcodingSettings): {
@@ -43,7 +118,7 @@ export function getProviderConfig(settings: ResolvedDeepcodingSettings): {
 }
 
 export function rotateApiKey(providerKey: string): void {
-  const state = providerState.get(providerKey);
+  const state = resolveProviderState(providerKey);
   if (state && state.rotator.getKeyCount() > 1) {
     state.rotator.rotate();
     state.client.apiKey = state.rotator.getCurrentKey();
@@ -80,7 +155,7 @@ export function maybeRotateApiKeyOnError(providerKey: string, error: unknown): b
     return false;
   }
 
-  const state = providerState.get(providerKey);
+  const state = resolveProviderState(providerKey);
   if (state && state.rotator.getKeyCount() > 1) {
     const oldKey = state.rotator.getCurrentKey();
     state.rotator.rotate();
@@ -94,10 +169,42 @@ export function maybeRotateApiKeyOnError(providerKey: string, error: unknown): b
   return false;
 }
 
+function resolveProviderState(providerKey: string): ProviderState | undefined {
+  const direct = providerState.get(providerKey);
+  if (direct) {
+    return direct;
+  }
+  for (const state of providerState.values()) {
+    if (state.baseURL === providerKey) {
+      return state;
+    }
+  }
+  return undefined;
+}
+
+function pruneProviderStatesForBaseURL(baseURL: string, keepProviderStateKey: string): void {
+  for (const [providerStateKey, state] of providerState.entries()) {
+    if (providerStateKey === keepProviderStateKey) {
+      continue;
+    }
+    if (state.baseURL === baseURL) {
+      providerState.delete(providerStateKey);
+    }
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function createOpenAIClient(projectRoot: string = process.cwd()): {
   client: OpenAI | null;
   model: string;
   baseURL: string;
+  providerStateKey?: string;
   temperature?: number;
   thinkingEnabled: boolean;
   reasoningEffort: "high" | "max";
@@ -110,12 +217,15 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
 } {
   const settings = resolveCurrentSettings(projectRoot);
   const providerConfig = getProviderConfig(settings);
+  const isGeminiProvider =
+    isGeminiModel(settings.model) || providerConfig.baseURL.includes("generativelanguage.googleapis.com");
 
   if (!providerConfig.apiKey) {
     return {
       client: null,
       model: settings.model,
       baseURL: providerConfig.baseURL,
+      providerStateKey: undefined,
       temperature: settings.temperature,
       thinkingEnabled: settings.thinkingEnabled,
       reasoningEffort: settings.reasoningEffort,
@@ -128,8 +238,9 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
     };
   }
 
-  const providerKey = `${providerConfig.baseURL}|${providerConfig.apiKey}`;
-  const state = providerState.get(providerKey);
+  const providerStateKey = buildProviderStateKey(providerConfig.baseURL, providerConfig.apiKey);
+  const state = providerState.get(providerStateKey);
+  pruneProviderStatesForBaseURL(providerConfig.baseURL, providerStateKey);
 
   // Cache hit: same provider, same API key set
   if (state) {
@@ -137,6 +248,7 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
       client: state.client,
       model: settings.model,
       baseURL: providerConfig.baseURL,
+      providerStateKey,
       temperature: settings.temperature,
       thinkingEnabled: settings.thinkingEnabled,
       reasoningEffort: settings.reasoningEffort,
@@ -150,18 +262,39 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
   }
 
   // New provider: create client with key rotation support
-  const rotator = new KeyRotator(providerConfig.apiKey);
+  const rotator = new KeyRotator(providerConfig.apiKey, {
+    requestsPerMinute: isGeminiProvider ? 5 : undefined,
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fetchWithRotation = async (url: any, init: any): Promise<any> => {
     let lastError: unknown;
-    const maxRetries = Math.max(2, rotator.getKeyCount());
+    const maxRetries = Math.max(1, rotator.getKeyCount());
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       if (attempt > 0) {
         rotator.rotate();
       }
+      if (isGeminiProvider) {
+        const allocation = await acquireGeminiQuotaSlot(
+          rotator.getAvailabilitySnapshot().map((candidate) => ({
+            index: candidate.index,
+            key: candidate.key,
+            maskedKey: candidate.maskedKey,
+            localStatus: candidate.status,
+            localWaitMs: candidate.waitMs,
+          }))
+        );
+        rotator.setCurrentIndex(allocation.selectedIndex);
+      } else {
+        const waitMs = rotator.ensureAvailableKey();
+        if (waitMs > 0) {
+          await delay(waitMs);
+          rotator.ensureAvailableKey();
+        }
+      }
       const currentKey = rotator.getCurrentKey();
+      rotator.markRequest();
 
       const headers = new Headers(init.headers);
       headers.set("authorization", `Bearer ${currentKey}`);
@@ -192,6 +325,7 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
         }
       }, 300000);
 
+      let handled = false;
       try {
         const response = await undiciFetch(url, {
           ...init,
@@ -203,9 +337,42 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
         clearTimeout(ttfbTimeoutId);
         clearTimeout(timeoutId);
 
-        if (response.status === 429 || response.status === 401 || response.status >= 500) {
-          await response.text().catch(() => {});
-          throw new Error(`ApiError${response.status}`);
+        if (response.status >= 400) {
+          handled = true;
+          const rawBody = await response.text().catch(() => "");
+          let parsedBody: unknown = null;
+          try {
+            parsedBody = rawBody ? JSON.parse(rawBody) : null;
+          } catch {
+            // ignore
+          }
+          const retryAfterSec = parseRetryAfterSeconds(response.headers.get("retry-after"));
+          const apiError = createOpenAIHttpError(response.status, rawBody, parsedBody, retryAfterSec);
+          const isRetryableAcrossKeys =
+            response.status === 401 || response.status === 403 || response.status === 429 || response.status >= 500;
+
+          if (isRetryableAcrossKeys) {
+            if (response.status === 429) {
+              rotator.markFailure(retryAfterSec ?? 60);
+            } else if (response.status === 401 || response.status === 403) {
+              if (isGeminiProvider) {
+                quarantineGeminiKey(currentKey, `${response.status}: ${apiError.message}`);
+                await markGeminiQuotaKeyInvalid(currentKey, `${response.status}: ${apiError.message}`);
+                rotator.markInvalid();
+              } else {
+                rotator.markFailure(300);
+              }
+            } else {
+              rotator.markFailure(15);
+            }
+          }
+
+          if (!isRetryableAcrossKeys || attempt >= maxRetries - 1 || rotator.getKeyCount() <= 1) {
+            throw apiError;
+          }
+
+          lastError = apiError;
+          continue;
         }
 
         return response;
@@ -213,7 +380,13 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
         clearTimeout(ttfbTimeoutId);
         clearTimeout(timeoutId);
         lastError = err;
+        if (!handled) {
+          rotator.markFailure(10);
+        }
         if (abortedByCaller) {
+          throw err;
+        }
+        if (!handled && attempt >= maxRetries - 1) {
           throw err;
         }
       }
@@ -227,7 +400,13 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
     fetch: fetchWithRotation,
   });
 
-  providerState.set(providerKey, { client, cacheKey: providerConfig.apiKey, rotator });
+  providerState.set(providerStateKey, {
+    client,
+    baseURL: providerConfig.baseURL,
+    providerStateKey,
+    rotator,
+    providerLabel: isGeminiProvider ? "Gemini" : "OpenAI-compatible",
+  });
 
   // Fire-and-forget warmup: pre-establish TCP+TLS connection to the API
   void (async () => {
@@ -244,6 +423,7 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
     client,
     model: settings.model,
     baseURL: providerConfig.baseURL,
+    providerStateKey,
     temperature: settings.temperature,
     thinkingEnabled: settings.thinkingEnabled,
     reasoningEffort: settings.reasoningEffort,
@@ -271,5 +451,51 @@ function getMachineId(): string | undefined {
     return generated;
   } catch {
     return undefined;
+  }
+}
+
+export type ProviderQuotaStats = {
+  baseURL: string;
+  providerLabel: string;
+  totalKeys: number;
+  usableKeys: number;
+  activeKeys: number;
+  cooldownKeys: number;
+  rateLimitedKeys: number;
+  invalidKeys: number;
+  totalRequests: number;
+  totalFailures: number;
+  keyStats: KeyStat[];
+  globalQuota?: GeminiGlobalQuotaSnapshot;
+};
+
+export function getActiveRotatorsStats(): ProviderQuotaStats[] {
+  const stats: ProviderQuotaStats[] = [];
+  for (const state of providerState.values()) {
+    const keyStats = state.rotator.getKeyStats();
+    stats.push({
+      baseURL: state.baseURL || "unknown",
+      providerLabel: state.providerLabel,
+      totalKeys: keyStats.length,
+      usableKeys: state.rotator.getUsableKeyCount(),
+      activeKeys: keyStats.filter((stat) => stat.status === "active").length,
+      cooldownKeys: keyStats.filter((stat) => stat.status === "cooldown").length,
+      rateLimitedKeys: keyStats.filter((stat) => stat.status === "rate_limited").length,
+      invalidKeys: keyStats.filter((stat) => stat.status === "invalid").length,
+      totalRequests: keyStats.reduce((sum, stat) => sum + stat.requests, 0),
+      totalFailures: keyStats.reduce((sum, stat) => sum + stat.failures, 0),
+      keyStats,
+      globalQuota:
+        state.providerLabel === "Gemini"
+          ? getGeminiQuotaSnapshot(state.rotator.getKeys().filter((key) => key.trim().length > 0))
+          : undefined,
+    });
+  }
+  return stats;
+}
+
+export function resetKeyRotators(): void {
+  for (const state of providerState.values()) {
+    state.rotator.reset();
   }
 }

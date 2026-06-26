@@ -72,7 +72,26 @@ export type PromptSubmission = {
   selectedSkills?: SkillInfo[];
   permissions?: UserToolPermission[];
   alwaysAllows?: PermissionScope[];
-  command?: "new" | "resume" | "continue" | "undo" | "mcp" | "exit" | "team" | "custom-agents" | "settings" | "query" | "btw" | "bg";
+  queueTask?: {
+    queueName: string;
+    taskId: string;
+  };
+  command?:
+    | "new"
+    | "resume"
+    | "continue"
+    | "undo"
+    | "mcp"
+    | "help"
+    | "exit"
+    | "team"
+    | "custom-agents"
+    | "settings"
+    | "status"
+    | "goal"
+    | "query"
+    | "btw"
+    | "bg";
 };
 
 export type PromptDraft = {
@@ -471,14 +490,17 @@ export const PromptInput = React.memo(function PromptInput({
       if (busy && isPlainReturn) {
         const trimmed = buffer.text.trim();
         if (trimmed) {
-          // Direct queue import - always works, bypasses prop threading
-          try {
-            const qList = queueList(projectRoot);
-            const qName = qList.length > 0 ? qList[0].name : "main";
-            queueAdd(projectRoot, qName, trimmed);
-          } catch { /* silent */ }
-          // Also notify parent if callback exists
-          if (onQueueWhenBusy) onQueueWhenBusy(trimmed);
+          if (onQueueWhenBusy) {
+            onQueueWhenBusy(trimmed);
+          } else {
+            try {
+              const qList = queueList(projectRoot);
+              const qName = qList.length > 0 ? qList[0].name : "main";
+              queueAdd(projectRoot, qName, trimmed);
+            } catch {
+              /* silent */
+            }
+          }
           // Clear input & show confirmation
           updateBuffer(() => EMPTY_BUFFER);
           resetPastes();
@@ -744,6 +766,11 @@ export const PromptInput = React.memo(function PromptInput({
       resetPromptInput();
       return;
     }
+    if (item.kind === "help") {
+      onSubmit({ text: "/help", imageUrls: [], command: "help" });
+      resetPromptInput();
+      return;
+    }
     if (item.kind === "exit") {
       onSubmit({ text: "/exit", imageUrls: [], command: "exit" });
       setBuffer(EMPTY_BUFFER);
@@ -766,10 +793,21 @@ export const PromptInput = React.memo(function PromptInput({
       resetPromptInput();
       return;
     }
-    if (item.kind === "query") {
+    if (item.kind === "status") {
       const rawText = buffer.text.trim();
-      const queryText = rawText.startsWith("/query") ? rawText.slice(6).trim() : "";
-      onSubmit({ text: queryText || "/query", imageUrls: [], command: "query" });
+      const statusText = rawText.startsWith("/status")
+        ? rawText.slice(7).trim()
+        : rawText.startsWith("/query")
+          ? rawText.slice(6).trim()
+          : "";
+      onSubmit({ text: statusText || "/status", imageUrls: [], command: "status" });
+      resetPromptInput();
+      return;
+    }
+    if (item.kind === "goal") {
+      const rawText = buffer.text.trim();
+      const goalText = rawText.startsWith("/goal") ? rawText.slice(5).trim() : "";
+      onSubmit({ text: goalText ? `/goal ${goalText}` : "/goal", imageUrls: [], command: "goal" });
       resetPromptInput();
       return;
     }
@@ -902,6 +940,7 @@ export const PromptInput = React.memo(function PromptInput({
         onSelect={toggleSelectedSkill}
       />
       <ModelsDropdown
+        projectRoot={projectRoot}
         open={showModelDropdown}
         modelConfig={modelConfig}
         width={screenWidth}

@@ -11,11 +11,13 @@ export type SlashCommandKind =
   | "undo"
   | "mcp"
   | "raw"
+  | "help"
   | "exit"
   | "team"
   | "custom-agents"
   | "settings"
-  | "query"
+  | "status"
+  | "goal"
   | "btw"
   | "bg"
   | "queue";
@@ -88,6 +90,12 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
     description: "Toggle display mode for viewing or collapsing reasoning content",
   },
   {
+    kind: "help",
+    name: "help",
+    label: "/help",
+    description: "Show commands, shortcuts, and quick usage help",
+  },
+  {
     kind: "exit",
     name: "exit",
     label: "/exit",
@@ -112,10 +120,16 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
     description: "Manage API Key, Base URL, Models, and other configurations",
   },
   {
-    kind: "query",
-    name: "query",
-    label: "/query",
-    description: "Show session summary, model info, project stats and system status",
+    kind: "status",
+    name: "status",
+    label: "/status",
+    description: "Show model, session, goal, storage, and key pool status",
+  },
+  {
+    kind: "goal",
+    name: "goal",
+    label: "/goal",
+    description: "Manage the active project goal: show, set, complete, clear",
   },
   {
     kind: "btw",
@@ -187,6 +201,7 @@ export function findExactSlashCommand(items: SlashCommandItem[], token: string):
   let query = token.slice(1);
   // Alias: /models -> /model
   if (query === "models") query = "model";
+  if (query === "query") query = "status";
   const matches = items.filter((item) => item.name === query);
   return matches.find((item) => item.kind !== "skill") ?? matches[0] ?? null;
 }

@@ -167,7 +167,9 @@ function readToolDocs(extensionRoot: string, options: PromptToolOptions = {}): s
 
 export function buildSkillDocumentsPrompt(skills: SkillPromptDocument[]): string {
   const blocks = skills.map((skill) => renderSkillDocumentBlock(skill));
-  return `Use the skill documents below to assist the user:\n${blocks.join("\n\n")}`;
+  return `Use the skill documents below as reference instructions to assist the user.
+These skills are documentation, not callable function tools. Never emit a tool call whose name is a skill name; only call tools that appear in the provided tools array.
+\n${blocks.join("\n\n")}`;
 }
 
 function renderSkillDocumentBlock(skill: SkillPromptDocument): string {
@@ -505,7 +507,6 @@ export function getTools(_options: PromptToolOptions = {}, externalTools: ToolDe
                   "unknown",
                 ],
               },
-              uniqueItems: true,
             },
             run_in_background: {
               type: "boolean",
@@ -707,12 +708,58 @@ export function getTools(_options: PromptToolOptions = {}, externalTools: ToolDe
     },
   });
 
+  tools.push({
+    type: "function",
+    function: {
+      name: "searchweb",
+      description: "Perform web searching using a query to find relevant URLs and summaries.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "A search query phrased as a clear, specific natural language question or statement.",
+          },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    },
+  });
+
+  tools.push({
+    type: "function",
+    function: {
+      name: "searchsegment",
+      description: "Fetch and extract the text content of a specific web page URL as clean markdown.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description: "The absolute HTTP or HTTPS URL of the webpage to fetch.",
+          },
+        },
+        required: ["url"],
+        additionalProperties: false,
+      },
+    },
+  });
+
   for (const tool of externalTools) {
     tools.push(tool);
   }
 
   if (_options.planMode) {
-    const allowedPlanTools = new Set(["AnalyzeProject", "AskUserQuestion", "UpdatePlan", "read", "WebSearch"]);
+    const allowedPlanTools = new Set([
+      "AnalyzeProject",
+      "AskUserQuestion",
+      "UpdatePlan",
+      "read",
+      "WebSearch",
+      "searchweb",
+      "searchsegment",
+    ]);
     return tools.filter((t) => allowedPlanTools.has(t.function.name));
   }
 

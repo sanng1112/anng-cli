@@ -125,7 +125,6 @@ export type ResolvedDeepcodingSettings = {
   geminiBaseURL?: string;
   autoLinter?: string;
   provider?: string;
-  pipeline: PipelineSettings;
 };
 
 // ==========================================================================
@@ -134,21 +133,6 @@ export type ResolvedDeepcodingSettings = {
 
 export const DEFAULT_MODEL = "deepseek-v4-pro";
 export const DEFAULT_BASE_URL = "https://opencode.ai/zen/v1";
-
-// Pipeline settings for Multi-Model PEVF orchestration
-export interface PipelineSettings {
-  plannerModel: string;
-  executorModel: string;
-  fixerModel: string;
-  maxRepairAttempts: number;
-}
-
-export const DEFAULT_PIPELINE_SETTINGS: PipelineSettings = {
-  plannerModel: "gemini-3.5-flash",
-  executorModel: "gemini-3.1-flash-lite",
-  fixerModel: "gemini-3.5-flash",
-  maxRepairAttempts: 3,
-};
 
 // ==========================================================================
 // Resolution context (input sources for merging)
@@ -481,7 +465,10 @@ export function resolveSettingsSources(
 
   const env = { ...userEnv, ...projectEnv, ...systemEnv };
   const model = firstString(src, "MODEL", "model", defaults.model);
-  const geminiApiKey = firstString(src, "GEMINI_API_KEY", "geminiApiKey") || syncGeminiKeys() || undefined;
+  const geminiApiKey =
+    firstString(src, "GEMINI_API_KEY", "geminiApiKey") ||
+    syncGeminiKeys(process.cwd(), { importDownloads: "bootstrap" }) ||
+    undefined;
   const geminiBaseURL = firstString(src, "GEMINI_BASE_URL", "geminiBaseURL") || undefined;
   const rawApiKey = trimString(env.API_KEY) || undefined;
   const rawBaseURL = trimString(env.BASE_URL) || defaults.baseURL;
@@ -518,7 +505,6 @@ export function resolveSettingsSources(
     geminiApiKey,
     geminiBaseURL,
     provider,
-    pipeline: DEFAULT_PIPELINE_SETTINGS,
   };
 }
 

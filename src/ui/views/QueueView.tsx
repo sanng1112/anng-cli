@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useWindowSize } from "ink";
 import { useTerminalInput } from "../hooks/useTerminalInput";
 import {
   listQueues,
@@ -56,7 +56,11 @@ export const QueueView = React.memo(function QueueView({
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeQueue = queues[activeQueueIdx];
-  const panelWidth = Math.min(screenWidth, 100);
+  const { columns } = useWindowSize();
+  const effectiveWidth = screenWidth || columns || 80;
+  const panelWidth = Math.max(20, Math.min(effectiveWidth, 100));
+  const contentWidth = Math.max(18, panelWidth - 2);
+  const compactLayout = effectiveWidth < 90;
   const primaryColor = "#D4704B";
 
   const showStatus = useCallback((msg: string) => {
@@ -326,132 +330,119 @@ export const QueueView = React.memo(function QueueView({
     { isActive: queueVisible }
   );
 
+  function buildDivider(width: number): string {
+    return "─".repeat(Math.max(12, width));
+  }
+
   if (!queueVisible) return React.createElement(Box, {}, null);
   if (screen === "add") {
     return (
-      <Box
-        flexDirection="column"
-        padding={1}
-        borderStyle="round"
-        borderColor={primaryColor}
-        width={panelWidth}
-        minWidth={60}
-      >
-        <Text bold color={primaryColor}>
-          + Add Task to "{activeQueue?.label}"
-        </Text>
-        <Box marginTop={1} paddingX={1}>
+      <Box flexDirection="column" paddingX={1} width={panelWidth}>
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold color={primaryColor}>
+            + Add Task to "{activeQueue?.label}"
+          </Text>
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+        </Box>
+        <Box marginTop={1} paddingLeft={2}>
           <Text bold color={primaryColor}>
             &gt;{" "}
           </Text>
           <Text>{inputBuffer || ""}</Text>
-          <Text dimColor>{inputBuffer.length === 0 ? "Type task and press Enter..." : "|"}</Text>
+          <Text dimColor>{inputBuffer.length === 0 ? "Type task and press Enter..." : "█"}</Text>
         </Box>
-        <Box marginTop={1}>
-          <Text dimColor>Enter to save . Esc to cancel</Text>
+        <Box marginTop={2} flexDirection="column">
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+          <Text dimColor>Enter to save · Esc to cancel</Text>
         </Box>
       </Box>
     );
   }
   if (screen === "edit") {
     return (
-      <Box
-        flexDirection="column"
-        padding={1}
-        borderStyle="round"
-        borderColor={primaryColor}
-        width={panelWidth}
-        minWidth={60}
-      >
-        <Text bold color={primaryColor}>
-          Edit Task #{editIndex + 1}
-        </Text>
-        <Box marginTop={1} paddingX={1}>
+      <Box flexDirection="column" paddingX={1} width={panelWidth}>
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold color={primaryColor}>
+            Edit Task #{editIndex + 1}
+          </Text>
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+        </Box>
+        <Box marginTop={1} paddingLeft={2}>
           <Text bold color={primaryColor}>
             &gt;{" "}
           </Text>
           <Text>{inputBuffer || ""}</Text>
-          <Text dimColor>|</Text>
+          <Text dimColor>█</Text>
         </Box>
-        <Box marginTop={1}>
-          <Text dimColor>Enter to save . Esc to cancel</Text>
+        <Box marginTop={2} flexDirection="column">
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+          <Text dimColor>Enter to save · Esc to cancel</Text>
         </Box>
       </Box>
     );
   }
   if (screen === "confirm-clear") {
     return (
-      <Box
-        flexDirection="column"
-        padding={1}
-        borderStyle="round"
-        borderColor={primaryColor}
-        width={panelWidth}
-        minWidth={60}
-      >
-        <Box paddingY={1}>
+      <Box flexDirection="column" paddingX={1} width={panelWidth}>
+        <Box flexDirection="column" marginBottom={1}>
           <Text bold color="red">
             Clear all {tasks.length} tasks from "{activeQueue?.label}"?
           </Text>
+          <Text color="red">{buildDivider(contentWidth)}</Text>
         </Box>
-        <Box>
-          <Text dimColor>Press Enter to confirm . Esc to cancel</Text>
+        <Box marginTop={2} flexDirection="column">
+          <Text dimColor>Press Enter to confirm · Esc to cancel</Text>
         </Box>
       </Box>
     );
   }
   if (screen === "queue-menu") {
     return (
-      <Box
-        flexDirection="column"
-        padding={1}
-        borderStyle="round"
-        borderColor={primaryColor}
-        width={panelWidth}
-        minWidth={60}
-      >
-        <Text bold color={primaryColor}>
-          Manage Queues
-        </Text>
-        <Box marginTop={1} flexDirection="column" paddingX={1}>
+      <Box flexDirection="column" paddingX={1} width={panelWidth}>
+        <Box flexDirection="column" marginBottom={1}>
+          <Text bold color={primaryColor}>
+            Manage Queues
+          </Text>
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column" paddingLeft={2}>
           {queues.map((q, i) => (
             <Box key={q.name} flexDirection="row">
               <Text bold={i === activeQueueIdx} color={i === activeQueueIdx ? primaryColor : undefined}>
-                {i === activeQueueIdx ? "> " : "  "}
+                {i === activeQueueIdx ? "▸ " : "  "}
                 {q.label}
               </Text>
               <Text dimColor> ({q.taskCount} tasks)</Text>
             </Box>
           ))}
         </Box>
-        <Box marginTop={1}>
+        <Box marginTop={2} paddingLeft={2}>
           <Text bold color={primaryColor}>
             &gt;{" "}
           </Text>
           <Text>{inputBuffer || ""}</Text>
-          <Text dimColor>{inputBuffer.length === 0 ? "Type new queue name..." : "|"}</Text>
+          <Text dimColor>{inputBuffer.length === 0 ? "Type new queue name..." : "█"}</Text>
         </Box>
-        <Box marginTop={1}>
-          <Text dimColor>Enter to create . Esc back . Tab cycles queues</Text>
+        <Box marginTop={2} flexDirection="column">
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+          <Text dimColor>Enter to create · Esc back · Tab cycles queues</Text>
         </Box>
       </Box>
     );
   }
   if (showHistory) {
     return (
-      <Box
-        flexDirection="column"
-        padding={1}
-        borderStyle="round"
-        borderColor={primaryColor}
-        width={panelWidth}
-        minWidth={60}
-      >
-        <Text bold color={primaryColor}>
-          Pull from History
-        </Text>
-        <Text dimColor> (Select to add to "{activeQueue?.label}")</Text>
-        <Box marginTop={1} flexDirection="column" paddingX={1}>
+      <Box flexDirection="column" paddingX={1} width={panelWidth}>
+        <Box flexDirection="column" marginBottom={1}>
+          <Box flexDirection="row" justifyContent="space-between">
+            <Text bold color={primaryColor}>
+              Pull from History
+            </Text>
+            <Text dimColor> (Select to add to "{activeQueue?.label}")</Text>
+          </Box>
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column" paddingLeft={2}>
           {filteredHistory.length === 0 ? (
             <Text dimColor>No history available</Text>
           ) : (
@@ -461,7 +452,7 @@ export const QueueView = React.memo(function QueueView({
               .map((h, i) => (
                 <Box key={i} flexDirection="row">
                   <Text color={i === historyIndex ? primaryColor : undefined} bold={i === historyIndex}>
-                    {i === historyIndex ? "> " : "  "}
+                    {i === historyIndex ? "▸ " : "  "}
                   </Text>
                   <Text wrap="truncate-end" dimColor={i !== historyIndex}>
                     {h.slice(0, 80)}
@@ -470,43 +461,35 @@ export const QueueView = React.memo(function QueueView({
               ))
           )}
         </Box>
-        <Box marginTop={1}>
-          <Text dimColor>Up/Down Select . Enter Pull . Esc Cancel</Text>
+        <Box marginTop={2} flexDirection="column">
+          <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+          <Text dimColor>Up/Down Select · Enter Pull · Esc Cancel</Text>
         </Box>
       </Box>
     );
   }
 
   return (
-    <Box
-      flexDirection="column"
-      padding={1}
-      borderStyle="round"
-      borderColor={primaryColor}
-      width={panelWidth}
-      minWidth={60}
-    >
-      <Box marginBottom={1} justifyContent="space-between">
-        <Box flexDirection="row" gap={1}>
-          {queues.map((q, i) => (
-            <Box
-              key={q.name}
-              paddingX={1}
-              borderStyle={i === activeQueueIdx ? "round" : undefined}
-              borderColor={i === activeQueueIdx ? primaryColor : undefined}
-            >
-              <Text bold={i === activeQueueIdx} color={i === activeQueueIdx ? primaryColor : undefined}>
-                {q.label}
-              </Text>
-              <Text dimColor> ({q.pendingCount})</Text>
-            </Box>
-          ))}
+    <Box flexDirection="column" paddingX={1} width={panelWidth}>
+      <Box marginBottom={1} flexDirection="column">
+        <Box flexDirection={compactLayout ? "column" : "row"} justifyContent="space-between">
+          <Box flexDirection="row" gap={2}>
+            {queues.map((q, i) => (
+              <Box key={q.name}>
+                <Text bold={i === activeQueueIdx} color={i === activeQueueIdx ? primaryColor : undefined}>
+                  {i === activeQueueIdx ? "● " : "○ "}
+                  {q.label} ({q.pendingCount})
+                </Text>
+              </Box>
+            ))}
+          </Box>
+          <Box>
+            <Text dimColor>
+              {tasks.length} tasks · {pendingCount} pending
+            </Text>
+          </Box>
         </Box>
-        <Box>
-          <Text dimColor>
-            {tasks.length} tasks . {pendingCount} pending
-          </Text>
-        </Box>
+        <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
       </Box>
       {tasks.length === 0 ? (
         <Box flexDirection="column" paddingX={2} paddingY={1}>
@@ -516,7 +499,7 @@ export const QueueView = React.memo(function QueueView({
             <Text bold color={primaryColor}>
               A
             </Text>{" "}
-            to add .{" "}
+            to add ·{" "}
             <Text bold color={primaryColor}>
               H
             </Text>{" "}
@@ -530,11 +513,11 @@ export const QueueView = React.memo(function QueueView({
             return (
               <Box key={task.id} flexDirection="row" paddingY={0}>
                 <Box width={2} flexShrink={0}>
-                  <Text color={isSelected ? primaryColor : undefined}>{isSelected ? ">" : " "}</Text>
+                  <Text color={isSelected ? primaryColor : undefined}>{isSelected ? "▸" : " "}</Text>
                 </Box>
                 <Box width={3} flexShrink={0}>
                   <Text color={task.done ? "green" : "yellow"} bold>
-                    {task.done ? "v" : "o"}
+                    {task.done ? "✓" : "○"}
                   </Text>
                 </Box>
                 <Box flexGrow={1} flexShrink={1}>
@@ -552,41 +535,42 @@ export const QueueView = React.memo(function QueueView({
           <Text dimColor>{statusMsg}</Text>
         </Box>
       ) : null}
-      <Box marginTop={1}>
+      <Box marginTop={1} flexDirection="column">
+        <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
         <Text dimColor>
-          Tab Switch . 1-9 Jump . Up/Down Nav .{" "}
+          Tab Switch · 1-9 Jump · Up/Down Nav ·{" "}
           <Text bold color={primaryColor}>
             E
           </Text>
-          dit .{" "}
+          dit ·{" "}
           <Text bold color={primaryColor}>
             A
           </Text>
-          dd .{" "}
+          dd ·{" "}
           <Text bold color={primaryColor}>
             D
           </Text>
-          el .{" "}
+          el ·{" "}
           <Text bold color={primaryColor}>
             C
           </Text>
-          lear .{" "}
+          lear ·{" "}
           <Text bold color={primaryColor}>
             P
           </Text>
-          rocess .{" "}
+          rocess ·{" "}
           <Text bold color={primaryColor}>
             H
           </Text>
-          istory .{" "}
+          istory ·{" "}
           <Text bold color={primaryColor}>
             Q
           </Text>
-          ueues .{" "}
+          ueues ·{" "}
           <Text bold color={primaryColor}>
             V
           </Text>{" "}
-          Hide . Shift+Up/Down Move
+          Hide · Shift+Up/Down Move
         </Text>
       </Box>
     </Box>

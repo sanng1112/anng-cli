@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useStdout, useWindowSize } from "ink";
 import chalk from "chalk";
-import { createOpenAIClient } from "../../common/openai-client";
+import { createOpenAIClient, resetKeyRotators } from "../../common/openai-client";
 import type { PermissionScope } from "../../settings";
 import { type ModelConfigSelection } from "../../settings";
 import { type PromptDraft, PromptInput, type PromptSubmission } from "./PromptInput";
@@ -51,13 +51,17 @@ import { AgentsConfigView } from "./AgentsConfigView";
 import { TeamCreateView, type TeamAgentRule } from "./TeamCreateView";
 import { SettingsView } from "./SettingsView";
 import { QueryView } from "./QueryView";
+import { HelpView } from "./HelpView";
 import { BackgroundProcessesView } from "./BackgroundProcessesView";
 import { QueueView } from "./QueueView";
+import { clearActiveGoal, completeActiveGoal, setActiveGoal } from "../../common/goal-store";
 import {
   addTask as queueAddTask,
+  getNextPendingQueueTask,
   listQueues as queueListQueues,
   loadQueue as queueLoadQueue,
   markTaskDoneById,
+  clearQueue,
 } from "../../common/task-queue";
 import * as fs from "fs";
 import * as path from "path";
@@ -67,14 +71,19 @@ type View =
   | "session-list"
   | "undo"
   | "mcp-status"
+  | "help"
   | "agents-config"
   | "settings"
   | "team-create"
-  | "query"
+  | "status"
   | "bg"
   | "queue";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function isQueueAwaitingUser(status: SessionStatus | null): boolean {
+  return status === "waiting_for_user" || status === "ask_permission" || status === "permission_denied";
+}
 
 type AppProps = {
   projectRoot: string;
@@ -168,7 +177,7 @@ function App({
   const [nowTick, setNowTick] = useState(0);
   const [mcpStatuses, setMcpStatuses] = useState<ReturnType<typeof sessionManager.getMcpStatus>>([]);
   const [showProcessStdout, setShowProcessStdout] = useState(false);
-  const [_queryTopic, setQueryTopic] = useState<string>("");
+  const [_statusTopic, setStatusTopic] = useState<string>("");
   const [sessionProcessCount, setSessionProcessCount] = useState(0);
   const [queueVisible, setQueueVisible] = useState(true);
   const [queueRefreshTick, setQueueRefreshTick] = useState(0);
@@ -499,6 +508,18 @@ function App({
         return;
       }
       if (submission.command === "new") {
+        try {
+          const qList = queueListQueues(projectRoot);
+          for (const q of qList) {
+            clearQueue(projectRoot, q.name);
+          }
+          setQueueRefreshTick((t) => t + 1);
+        } catch {
+          /* ignore */
+        }
+
+        resetKeyRotators();
+
         if (onRestart) {
           onRestart();
         } else {
@@ -530,6 +551,10 @@ function App({
       if (submission.command === "mcp") {
         setMcpStatuses(sessionManager.getMcpStatus());
         navigateToSubView("mcp-status");
+        return;
+      }
+      if (submission.command === "help") {
+        navigateToSubView("help");
         return;
       }
       if (submission.command === "team") {
@@ -599,10 +624,62 @@ function App({
         navigateToSubView("settings");
         return;
       }
-      if (submission.command === "query") {
-        const topic = submission.text === "/query" ? "" : submission.text;
-        setQueryTopic(topic);
-        navigateToSubView("query");
+      if (submission.command === "status" || submission.command === "query") {
+        const topic =
+          submission.text === "/status" || submission.text === "/query"
+            ? ""
+            : submission.text.replace(/^\/(?:status|query)\s*/i, "");
+        setStatusTopic(topic);
+        navigateToSubView("status");
+        return;
+      }
+      if (submission.command === "goal") {
+        const rawGoalText = submission.text.trim();
+        const goalCommand = rawGoalText.startsWith("/goal") ? rawGoalText.slice(5).trim() : rawGoalText;
+        const [subCmdRaw, ...restParts] = goalCommand.split(/\s+/).filter(Boolean);
+        const subCmd = subCmdRaw?.toLowerCase() ?? "";
+        const remainingText = restParts.join(" ").trim();
+
+        if (!goalCommand || subCmd === "status" || subCmd === "show" || subCmd === "list") {
+          setStatusTopic("goal");
+          navigateToSubView("status");
+          return;
+        }
+
+        if (subCmd === "done" || subCmd === "complete") {
+          const goal = completeActiveGoal(projectRoot);
+          if (goal) {
+            setMessages((prev) => [...prev, buildSyntheticUserMessage(`✅ Goal completed: ${goal.text}`, 0)]);
+            setStatusLine(`Completed goal: "${goal.text.slice(0, 80)}"`);
+          } else {
+            setStatusLine("No active goal to complete.");
+          }
+          return;
+        }
+
+        if (subCmd === "clear" || subCmd === "cancel") {
+          const goal = clearActiveGoal(projectRoot);
+          if (goal) {
+            setMessages((prev) => [...prev, buildSyntheticUserMessage(`🧹 Goal cleared: ${goal.text}`, 0)]);
+            setStatusLine(`Cleared goal: "${goal.text.slice(0, 80)}"`);
+          } else {
+            setStatusLine("No active goal to clear.");
+          }
+          return;
+        }
+
+        const goalText = subCmd === "set" ? remainingText : goalCommand;
+        if (!goalText) {
+          setErrorLine("Usage: /goal <text>, /goal done, /goal clear, /goal list");
+          return;
+        }
+        try {
+          const goal = setActiveGoal(projectRoot, goalText);
+          setMessages((prev) => [...prev, buildSyntheticUserMessage(`🎯 Goal set: ${goal.text}`, 0)]);
+          setStatusLine(`Active goal: "${goal.text.slice(0, 80)}"`);
+        } catch (error) {
+          setErrorLine(error instanceof Error ? error.message : "Failed to update goal.");
+        }
         return;
       }
       if (submission.command === "btw") {
@@ -669,7 +746,24 @@ function App({
           return;
         }
         if (subCmd === "process" || subCmd === "run") {
-          navigateToSubView("queue");
+          // Directly trigger queue execution instead of just navigating to the queue view
+          const nextTask = getNextPendingQueueTask(projectRoot);
+          if (nextTask) {
+            setView("chat");
+            setPromptDraft(null);
+            setStatusLine(`Processing queue task: "${nextTask.task.text.slice(0, 80)}"`);
+            void handlePrompt({
+              text: nextTask.task.text,
+              imageUrls: [],
+              queueTask: {
+                queueName: nextTask.queueName,
+                taskId: nextTask.task.id,
+              },
+            });
+          } else {
+            setStatusLine("No pending tasks in any queue.");
+            navigateToSubView("queue");
+          }
           return;
         }
         navigateToSubView("queue");
@@ -682,43 +776,9 @@ function App({
         return;
       }
 
-      const trimmedOriginalText = (submission.text ?? "").trim();
-      let processedText = submission.text;
-      if (trimmedOriginalText.startsWith("!")) {
-        const cmd = trimmedOriginalText.substring(1).trim();
-        if (cmd) {
-          processedText = `Execute the following bash command immediately and exactly as provided, and report back the output:\n\n\`\`\`bash\n${cmd}\n\`\`\``;
-        }
-      }
-
-      const prompt: UserPromptContent = {
-        text: processedText,
-        imageUrls: submission.imageUrls,
-        skills:
-          submission.selectedSkills && submission.selectedSkills.length > 0 ? submission.selectedSkills : undefined,
-        permissions: submission.permissions,
-        alwaysAllows: submission.alwaysAllows,
-      };
-      const activeSessionId = sessionManager.getActiveSessionId();
-      const permissionReply =
-        pendingPermissionReply && activeSessionId === pendingPermissionReply.sessionId ? pendingPermissionReply : null;
-      if (permissionReply) {
-        prompt.permissions = permissionReply.permissions;
-        prompt.alwaysAllows = permissionReply.alwaysAllows;
-      }
-
-      const selectedSkillNames = submission.selectedSkills?.map((skill) => skill.name).filter(Boolean) ?? [];
-      const userDisplayContent =
-        trimmedOriginalText ||
-        (selectedSkillNames.length > 0 ? `Use skills: ${selectedSkillNames.join(", ")}` : "") ||
-        (submission.imageUrls.length > 0 ? "[Image]" : "");
-
-      if (userDisplayContent && submission.command !== "continue") {
-        setMessages((prev) => [...prev, buildSyntheticUserMessage(userDisplayContent, submission.imageUrls.length)]);
-      }
-
       setBusy(true);
       setErrorLine(null);
+      const activeSessionId = sessionManager.getActiveSessionId();
       const activeProcesses = activeSessionId ? (sessionManager.getSession(activeSessionId)?.processes ?? null) : null;
       setRunningProcesses(activeProcesses);
       setShowProcessStdout(false);
@@ -726,40 +786,144 @@ function App({
         processStdoutRef.current.clear();
       }
       try {
-        await sessionManager.handleUserPrompt(prompt);
-        if (permissionReply) {
-          setPendingPermissionReply(null);
-        }
-        await refreshSkills();
-        refreshSessionsList();
+        let currentSubmission: PromptSubmission | null = submission;
 
-        // ── After AI finishes: mark queue task done and auto-load next ──
-        const processingTask = processingQueueTaskRef.current;
-        if (processingTask) {
+        while (currentSubmission) {
+          if (
+            currentSubmission &&
+            !currentSubmission.queueTask &&
+            currentSubmission.command !== "continue" &&
+            (currentSubmission.text ?? "").trim()
+          ) {
+            try {
+              const qList = queueListQueues(projectRoot);
+              const qName = qList.length > 0 ? qList[0].name : "main";
+              const added = queueAddTask(projectRoot, qName, currentSubmission.text);
+              if (added) {
+                setQueueRefreshTick((t) => t + 1);
+                const nextTask = getNextPendingQueueTask(projectRoot, qName);
+                if (nextTask) {
+                  if (nextTask.task.id !== added.id) {
+                    setMessages((prev) => [
+                      ...prev,
+                      buildSyntheticUserMessage(`📋 Queued: "${currentSubmission!.text}"`, 0),
+                    ]);
+                  }
+                  currentSubmission = {
+                    text: nextTask.task.text,
+                    imageUrls: currentSubmission.imageUrls,
+                    queueTask: {
+                      queueName: nextTask.queueName,
+                      taskId: nextTask.task.id,
+                    },
+                  };
+                }
+              }
+            } catch {
+              /* fallback */
+            }
+          }
+
+          const submissionToRun = currentSubmission;
+          const trimmedOriginalText = (submissionToRun.text ?? "").trim();
+          let processedText = submissionToRun.text;
+          if (trimmedOriginalText.startsWith("!")) {
+            const cmd = trimmedOriginalText.substring(1).trim();
+            if (cmd) {
+              processedText = `Execute the following bash command immediately and exactly as provided, and report back the output:\n\n\`\`\`bash\n${cmd}\n\`\`\``;
+            }
+          }
+
+          const resumedQueueTask =
+            submissionToRun.queueTask ?? (isQueueAwaitingUser(activeStatus) ? processingQueueTaskRef.current : null);
+          processingQueueTaskRef.current = resumedQueueTask;
+
+          const prompt: UserPromptContent = {
+            text: processedText,
+            imageUrls: submissionToRun.imageUrls,
+            skills:
+              submissionToRun.selectedSkills && submissionToRun.selectedSkills.length > 0
+                ? submissionToRun.selectedSkills
+                : undefined,
+            permissions: submissionToRun.permissions,
+            alwaysAllows: submissionToRun.alwaysAllows,
+          };
+          const permissionReply =
+            pendingPermissionReply && activeSessionId === pendingPermissionReply.sessionId
+              ? pendingPermissionReply
+              : null;
+          if (permissionReply) {
+            prompt.permissions = permissionReply.permissions;
+            prompt.alwaysAllows = permissionReply.alwaysAllows;
+          }
+
+          const selectedSkillNames = submissionToRun.selectedSkills?.map((skill) => skill.name).filter(Boolean) ?? [];
+          const userDisplayContent =
+            trimmedOriginalText ||
+            (selectedSkillNames.length > 0 ? `Use skills: ${selectedSkillNames.join(", ")}` : "") ||
+            (submissionToRun.imageUrls.length > 0 ? "[Image]" : "");
+
+          if (userDisplayContent && submissionToRun.command !== "continue") {
+            setMessages((prev) => [
+              ...prev,
+              buildSyntheticUserMessage(userDisplayContent, submissionToRun.imageUrls.length),
+            ]);
+          }
+
+          await sessionManager.handleUserPrompt(prompt);
+          if (permissionReply) {
+            setPendingPermissionReply(null);
+          }
+          await refreshSkills();
+          refreshSessionsList();
+
+          const latestActiveSessionId = sessionManager.getActiveSessionId();
+          const sessionStatus = latestActiveSessionId
+            ? (sessionManager.getSession(latestActiveSessionId)?.status ?? null)
+            : null;
+          const processingTask = processingQueueTaskRef.current;
+          if (!processingTask) {
+            currentSubmission = null;
+            continue;
+          }
+
+          if (isQueueAwaitingUser(sessionStatus)) {
+            setStatusLine("Queue paused — awaiting user input before continuing.");
+            currentSubmission = null;
+            continue;
+          }
+
+          if (sessionStatus !== "completed") {
+            processingQueueTaskRef.current = null;
+            setStatusLine(`Queue paused — task not completed (${sessionStatus ?? "unknown"}).`);
+            currentSubmission = null;
+            continue;
+          }
+
           markTaskDoneById(projectRoot, processingTask.queueName, processingTask.taskId);
           processingQueueTaskRef.current = null;
           setQueueRefreshTick((t) => t + 1);
-          // Auto-load next pending task into promptDraft so user can press Enter
-          try {
-            const qList = queueListQueues(projectRoot);
-            const nextQueue = qList.find((q) => q.name === processingTask.queueName) ?? qList[0];
-            if (nextQueue) {
-              const { getNextPendingTask } = await import("../../common/task-queue");
-              const nextTask = getNextPendingTask(projectRoot, nextQueue.name);
-              if (nextTask) {
-                processingQueueTaskRef.current = { queueName: nextQueue.name, taskId: nextTask.id };
-                setView("chat");
-                setPromptDraft({ nonce: Date.now(), text: nextTask.text, imageUrls: [] });
-                setStatusLine(
-                  `Next queue task ready (${nextQueue.name}). Press Enter to process: "${nextTask.text.slice(0, 60)}"`
-                );
-              } else {
-                setStatusLine("Queue complete — all tasks processed ✓");
-              }
-            }
-          } catch {
-            /* silent */
+
+          const nextQueuedTask = getNextPendingQueueTask(projectRoot, processingTask.queueName);
+          if (!nextQueuedTask) {
+            setStatusLine("Queue complete — all tasks processed ✓");
+            currentSubmission = null;
+            continue;
           }
+
+          setView("chat");
+          setPromptDraft(null);
+          setStatusLine(
+            `Auto-processing next queue task (${nextQueuedTask.queueName}): "${nextQueuedTask.task.text.slice(0, 60)}"`
+          );
+          currentSubmission = {
+            text: nextQueuedTask.task.text,
+            imageUrls: [],
+            queueTask: {
+              queueName: nextQueuedTask.queueName,
+              taskId: nextQueuedTask.task.id,
+            },
+          };
         }
       } catch (error) {
         processingQueueTaskRef.current = null;
@@ -790,6 +954,7 @@ function App({
       teamResult,
       processStdoutRef,
       projectRoot,
+      activeStatus,
     ]
   );
 
@@ -820,28 +985,31 @@ function App({
 
   const handleQueueProcessTask = useCallback(
     (taskText: string, taskId?: string, queueName?: string) => {
-      // Track which queue task is being processed so we can mark it done after AI finishes
-      if (taskId && queueName) {
-        processingQueueTaskRef.current = { queueName, taskId };
-      } else {
-        // Fallback: find task by text when ID not provided
+      let queueTask = taskId && queueName ? { queueName, taskId } : null;
+      if (!queueTask) {
         try {
           const qList = queueListQueues(projectRoot);
           const qName = queueName ?? (qList.length > 0 ? qList[0].name : "main");
           const tasks = queueLoadQueue(projectRoot, qName);
           const match = tasks.find((t) => !t.done && t.text === taskText);
           if (match) {
-            processingQueueTaskRef.current = { queueName: qName, taskId: match.id };
+            queueTask = { queueName: qName, taskId: match.id };
           }
         } catch {
           /* silent */
         }
       }
+
       setView("chat");
-      setPromptDraft({ nonce: Date.now(), text: taskText, imageUrls: [] });
-      setStatusLine(`Queue task ready. Press Enter to process: "${taskText.slice(0, 80)}"`);
+      setPromptDraft(null);
+      setStatusLine(`Processing queue task: "${taskText.slice(0, 80)}"`);
+      void handlePrompt({
+        text: taskText,
+        imageUrls: [],
+        queueTask: queueTask ?? undefined,
+      });
     },
-    [projectRoot]
+    [handlePrompt, projectRoot]
   );
 
   const handleToggleProcessStdout = useCallback(() => {
@@ -903,9 +1071,21 @@ function App({
 
   const handleSubmit = useCallback(
     (submission: PromptSubmission) => {
+      const activeSessionId = sessionManager.getActiveSessionId();
+      if (!activeSessionId && !submission.command) {
+        try {
+          const qList = queueListQueues(projectRoot);
+          for (const q of qList) {
+            clearQueue(projectRoot, q.name);
+          }
+          setQueueRefreshTick((t) => t + 1);
+        } catch {
+          /* ignore */
+        }
+      }
       void handlePrompt(submission);
     },
-    [handlePrompt]
+    [handlePrompt, sessionManager, projectRoot]
   );
 
   const reloadActiveSessionView = useCallback(
@@ -1306,6 +1486,8 @@ function App({
             void sessionManager.reconnectMcpServer(name, latest.mcpServers?.[name]);
           }}
         />
+      ) : view === "help" ? (
+        <HelpView onExit={() => navigateToSubView("chat")} />
       ) : view === "agents-config" ? (
         <AgentsConfigView projectRoot={projectRoot} onExit={() => navigateToSubView("chat")} />
       ) : view === "team-create" ? (
@@ -1327,11 +1509,13 @@ function App({
             navigateToSubView("chat");
           }}
         />
-      ) : view === "query" ? (
+      ) : view === "status" ? (
         <QueryView
           projectRoot={projectRoot}
           sessionInfo={{
             activeSessionId: sessionManager.getActiveSessionId(),
+            activeStatus: activeStatus,
+            activeTokens: sessionManager.getSession(sessionManager.getActiveSessionId() ?? "")?.activeTokens ?? 0,
             messageCount: messages.length,
             sessionCount: sessions.length,
           }}
@@ -1341,6 +1525,11 @@ function App({
             thinkingEnabled: resolvedSettings.thinkingEnabled,
             reasoningEffort: resolvedSettings.reasoningEffort,
           }}
+          runtimeInfo={{
+            executionMode,
+            permissionDefaultMode: resolvedSettings.permissions.defaultMode,
+          }}
+          topic={_statusTopic}
           onExit={() => navigateToSubView("chat")}
         />
       ) : view === "bg" ? (

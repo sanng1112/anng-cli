@@ -7,6 +7,7 @@ import { handleReadTool } from "./read-handler";
 import { handleUpdatePlanTool } from "./update-plan-handler";
 import { handleWebSearchTool } from "./web-search-handler";
 import { handleAnalyzeProjectTool } from "./analyze-project-handler";
+import { handleSearchSegmentTool } from "./searchsegment-handler";
 
 import { handleWriteTool } from "./write-handler";
 import type { McpManager } from "../mcp/mcp-manager";
@@ -19,6 +20,7 @@ export type CreateOpenAIClient = () => {
   client: OpenAI | null;
   model: string;
   baseURL?: string;
+  providerStateKey?: string;
   apiKey?: string;
   temperature?: number;
   thinkingEnabled: boolean;
@@ -127,6 +129,8 @@ const BUILT_IN_TOOL_NAME_ALIASES = new Map<string, string>([
   ["Read", "read"],
   ["Write", "write"],
   ["Edit", "edit"],
+  ["searchweb", "WebSearch"],
+  ["searchsegment", "searchsegment"],
 ]);
 
 export type ToolCallExecution = {
@@ -216,6 +220,7 @@ export class ToolExecutor {
     this.toolHandlers.set("AskUserQuestion", handleAskUserQuestionTool);
     this.toolHandlers.set("UpdatePlan", handleUpdatePlanTool);
     this.toolHandlers.set("WebSearch", handleWebSearchTool);
+    this.toolHandlers.set("searchsegment", handleSearchSegmentTool);
     this.toolHandlers.set("AnalyzeProject", handleAnalyzeProjectTool as unknown as ToolHandler);
   }
 
@@ -269,6 +274,12 @@ export class ToolExecutor {
         ok: false,
         name: toolName,
         error: `Unknown tool: ${toolName}`,
+        followUpMessages: [
+          {
+            role: "system",
+            content: this.buildUnknownToolCorrection(toolName),
+          },
+        ],
       };
     }
 
@@ -416,5 +427,13 @@ export class ToolExecutor {
     if (result.awaitUserResponse === true) payload.awaitUserResponse = true;
 
     return JSON.stringify(payload, null, 2);
+  }
+
+  private buildUnknownToolCorrection(toolName: string): string {
+    return [
+      `The previous tool call "${toolName}" is invalid because that name is not in the available tools list.`,
+      "If this refers to a loaded skill, treat the skill as documentation/instructions rather than a callable function.",
+      "Use only the actual tools provided in the tools array for the next step.",
+    ].join(" ");
   }
 }

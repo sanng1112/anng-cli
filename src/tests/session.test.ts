@@ -110,6 +110,54 @@ test("SessionManager preserves structured system content when building OpenAI me
   ]);
 });
 
+test("SessionManager.ensurePromptableMessages appends a user anchor when only system messages remain", () => {
+  const manager = new SessionManager({
+    projectRoot: process.cwd(),
+    createOpenAIClient: () => ({
+      client: null,
+      model: "test-model",
+      thinkingEnabled: false,
+    }),
+    getResolvedSettings: () => ({ model: "test-model" }),
+    renderMarkdown: (text) => text,
+    onAssistantMessage: () => {},
+  });
+
+  const result = (manager as any).ensurePromptableMessages([
+    { role: "system", content: "summary only" },
+    { role: "system", content: "skills only" },
+  ]) as Array<{ role: string; content: string }>;
+
+  assert.deepEqual(
+    result.map((message) => message.role),
+    ["system", "system", "user"]
+  );
+  assert.match(result[2]?.content ?? "", /Continue with the current task/);
+});
+
+test("SessionManager.ensurePromptableMessages preserves existing conversational messages", () => {
+  const manager = new SessionManager({
+    projectRoot: process.cwd(),
+    createOpenAIClient: () => ({
+      client: null,
+      model: "test-model",
+      thinkingEnabled: false,
+    }),
+    getResolvedSettings: () => ({ model: "test-model" }),
+    renderMarkdown: (text) => text,
+    onAssistantMessage: () => {},
+  });
+
+  const input = [
+    { role: "system", content: "summary only" },
+    { role: "user", content: "actual prompt" },
+  ];
+  const result = (manager as any).ensurePromptableMessages(input) as Array<{ role: string; content: string }>;
+
+  assert.equal(result.length, 2);
+  assert.deepEqual(result, input);
+});
+
 test("SessionManager appends failed background log tail as XML", () => {
   const workspace = createTempDir("anng-background-log-workspace-");
   const home = createTempDir("anng-background-log-home-");
@@ -1126,7 +1174,7 @@ test("createSession appends default system prompts in prefix-cache-friendly orde
 
   assert.equal(systemContents.length >= 4, true);
   // [0] = base system prompt (most static — no model-specific content)
-  assert.match(systemContents[0] ?? "", /# ROLE & OBJECTIVE/);
+  assert.match(systemContents[0] ?? "", /You are ANNG, an elite, autonomous/);
   assert.doesNotMatch(systemContents[0] ?? "", /# Local Workspace Environment/);
   assert.doesNotMatch(systemContents[0] ?? "", /The current LLM model is test-model/);
   // [1] = capabilities (static)
@@ -3079,6 +3127,169 @@ test("SessionManager active tokens reflect latest response usage with tokenizer-
   assert.ok(session?.activeTokens !== undefined, "activeTokens should be set");
 });
 
+test("SessionManager compaction merges prior active summaries into a single new summary", async () => {
+  const workspace = createTempDir("anng-compact-summary-workspace-");
+  const home = createTempDir("anng-compact-summary-home-");
+  setHomeDir(home);
+
+  const manager = createMockedClientSessionManager(workspace, [
+    createChatResponse("initial assistant", {
+      prompt_tokens: 2,
+      completion_tokens: 3,
+      total_tokens: 5,
+    }),
+    createChatResponse("merged summary", {
+      prompt_tokens: 4,
+      completion_tokens: 5,
+      total_tokens: 9,
+    }),
+  ]);
+
+  const sessionId = await manager.createSession({ text: "seed prompt" });
+  const now = "2026-01-01T00:00:00.000Z";
+  (manager as any).saveSessionMessages(sessionId, [
+    {
+      id: "sys-1",
+      sessionId,
+      role: "system",
+      content: "base system",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: false,
+      createTime: now,
+      updateTime: now,
+    },
+    {
+      id: "summary-old",
+      sessionId,
+      role: "system",
+      content: "old summary that should be merged",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: false,
+      createTime: now,
+      updateTime: now,
+      meta: { isSummary: true },
+    },
+    {
+      id: "user-1",
+      sessionId,
+      role: "user",
+      content: "first request",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: true,
+      createTime: now,
+      updateTime: now,
+    },
+    {
+      id: "assistant-1",
+      sessionId,
+      role: "assistant",
+      content: "first response",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: true,
+      createTime: now,
+      updateTime: now,
+    },
+    {
+      id: "user-2",
+      sessionId,
+      role: "user",
+      content: "second request",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: true,
+      createTime: now,
+      updateTime: now,
+    },
+  ]);
+
+  await (manager as any).compactSession(sessionId, { compactUpToIndex: 3 });
+
+  const messages = manager.listSessionMessages(sessionId);
+  const activeSummaries = messages.filter((message) => !message.compacted && message.meta?.isSummary);
+  assert.equal(activeSummaries.length, 1);
+  assert.match(activeSummaries[0]?.content ?? "", /merged summary/);
+  const oldSummary = messages.find((message) => message.id === "summary-old");
+  assert.equal(oldSummary?.compacted, true);
+});
+
+test("SessionManager compaction falls back to a local summary when the model returns empty output", async () => {
+  const workspace = createTempDir("anng-compact-fallback-workspace-");
+  const home = createTempDir("anng-compact-fallback-home-");
+  setHomeDir(home);
+
+  const manager = createMockedClientSessionManager(workspace, [
+    createChatResponse("initial assistant", {
+      prompt_tokens: 2,
+      completion_tokens: 3,
+      total_tokens: 5,
+    }),
+    createChatResponse("", {
+      prompt_tokens: 4,
+      completion_tokens: 5,
+      total_tokens: 9,
+    }),
+  ]);
+
+  const sessionId = await manager.createSession({ text: "seed prompt" });
+  const now = "2026-01-01T00:00:00.000Z";
+  (manager as any).saveSessionMessages(sessionId, [
+    {
+      id: "sys-1",
+      sessionId,
+      role: "system",
+      content: "base system",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: false,
+      createTime: now,
+      updateTime: now,
+    },
+    {
+      id: "user-1",
+      sessionId,
+      role: "user",
+      content: "first request with detail",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: true,
+      createTime: now,
+      updateTime: now,
+    },
+    {
+      id: "assistant-1",
+      sessionId,
+      role: "assistant",
+      content: "first response with useful context",
+      contentParams: null,
+      messageParams: null,
+      compacted: false,
+      visible: true,
+      createTime: now,
+      updateTime: now,
+    },
+  ]);
+
+  await (manager as any).compactSession(sessionId, { compactUpToIndex: 2 });
+
+  const summary = manager
+    .listSessionMessages(sessionId)
+    .find((message) => !message.compacted && message.meta?.isSummary === true);
+  assert.ok(summary);
+  assert.match(summary?.content ?? "", /Fallback compaction summary generated locally/);
+  assert.match(summary?.content ?? "", /Recent highlights:/);
+});
+
 test("SessionManager streams chat completions and counts reasoning progress", async () => {
   const workspace = createTempDir("anng-stream-workspace-");
   const home = createTempDir("anng-stream-home-");
@@ -3146,6 +3357,96 @@ test("SessionManager streams chat completions and counts reasoning progress", as
   );
   assert.ok(typeof progressEvents[1]?.estimatedTokens === "number", "estimatedTokens should be a number");
   assert.ok(typeof progressEvents[2]?.formattedTokens === "string", "formattedTokens should be a string");
+});
+
+test("SessionManager retries compatible chat-completion requests after recoverable 400 errors", async () => {
+  const workspace = createTempDir("anng-compat-400-workspace-");
+  const home = createTempDir("anng-compat-400-home-");
+  setHomeDir(home);
+
+  let callCount = 0;
+  const client = {
+    chat: {
+      completions: {
+        create: async (request: Record<string, unknown>) => {
+          callCount += 1;
+
+          if (callCount === 1) {
+            return createChatStreamResponse([
+              { choices: [{ delta: { content: "seed" } }] },
+              { choices: [], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } },
+            ]);
+          }
+
+          if (callCount === 2) {
+            assert.deepEqual(request.stream_options, { include_usage: true });
+            const messages = request.messages as Array<Record<string, unknown>>;
+            assert.equal(
+              messages.some((message) => Object.prototype.hasOwnProperty.call(message, "reasoning_content")),
+              true
+            );
+            throw Object.assign(new Error("Unknown parameter: stream_options"), { status: 400 });
+          }
+
+          if (callCount === 3) {
+            assert.equal(Object.prototype.hasOwnProperty.call(request, "stream_options"), false);
+            const messages = request.messages as Array<Record<string, unknown>>;
+            assert.equal(
+              messages.some((message) => Object.prototype.hasOwnProperty.call(message, "reasoning_content")),
+              true
+            );
+            throw Object.assign(new Error("Unknown parameter: reasoning_content"), { status: 400 });
+          }
+
+          assert.equal(callCount, 4);
+          assert.equal(Object.prototype.hasOwnProperty.call(request, "stream_options"), false);
+          const messages = request.messages as Array<Record<string, unknown>>;
+          assert.equal(
+            messages.some((message) => Object.prototype.hasOwnProperty.call(message, "reasoning_content")),
+            false
+          );
+          return createChatStreamResponse([
+            { choices: [{ delta: { content: "recovered" } }] },
+            { choices: [], usage: { prompt_tokens: 2, completion_tokens: 2, total_tokens: 4 } },
+          ]);
+        },
+      },
+    },
+  };
+
+  const manager = new SessionManager({
+    projectRoot: workspace,
+    createOpenAIClient: () => ({
+      client: client as any,
+      model: "test-model",
+      baseURL: "https://api.deepseek.com",
+      thinkingEnabled: true,
+      reasoningEffort: "max",
+    }),
+    getResolvedSettings: () => ({ model: "test-model" }),
+    renderMarkdown: (text) => text,
+    onAssistantMessage: () => {},
+  });
+
+  const sessionId = await manager.createSession({ text: "seed prompt" });
+  const seededMessages = manager.listSessionMessages(sessionId).map((message) =>
+    message.role === "assistant"
+      ? {
+          ...message,
+          messageParams: {
+            ...((message.messageParams as Record<string, unknown> | null) ?? {}),
+            reasoning_content: "cached reasoning",
+          },
+        }
+      : message
+  );
+  (manager as any).saveSessionMessages(sessionId, seededMessages);
+
+  await manager.replySession(sessionId, { text: "next prompt" });
+
+  assert.equal(callCount, 4);
+  const assistantMessages = manager.listSessionMessages(sessionId).filter((message) => message.role === "assistant");
+  assert.equal(assistantMessages.at(-1)?.content, "recovered");
 });
 
 test("SessionManager persists session and user message before skill matching is cancelled", async () => {
@@ -3232,6 +3533,47 @@ test("SessionManager treats OpenAI APIUserAbortError as interrupted", async () =
   const session = manager.getSession(activeSessionId);
   assert.equal(session?.status, "interrupted");
   assert.equal(session?.failReason, "interrupted");
+});
+
+test("SessionManager omits empty user messages from the chat completion payload", async () => {
+  const workspace = createTempDir("anng-empty-user-payload-workspace-");
+  const home = createTempDir("anng-empty-user-payload-home-");
+  setHomeDir(home);
+
+  const capturedRequests: Record<string, unknown>[] = [];
+  const client = {
+    chat: {
+      completions: {
+        create: async (request: Record<string, unknown>) => {
+          capturedRequests.push(request);
+          return createChatResponse("noop", { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 });
+        },
+      },
+    },
+  };
+
+  const manager = new SessionManager({
+    projectRoot: workspace,
+    createOpenAIClient: () => ({
+      client: client as any,
+      model: "test-model",
+      baseURL: "https://api.deepseek.com",
+      thinkingEnabled: false,
+    }),
+    getResolvedSettings: () => ({ model: "test-model" }),
+    renderMarkdown: (text) => text,
+    onAssistantMessage: () => {},
+  });
+
+  await manager.handleUserPrompt({ text: "" });
+
+  assert.equal(capturedRequests.length, 1);
+  const messages = capturedRequests[0]?.messages as Array<{ role: string; content?: string }>;
+  assert.ok(Array.isArray(messages));
+  assert.equal(
+    messages.some((message) => message.role === "user" && message.content === ""),
+    false
+  );
 });
 
 test("SessionManager marks MCP server as failed on single failed attempt (no auto-retry)", async () => {

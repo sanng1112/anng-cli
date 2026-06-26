@@ -15,6 +15,10 @@ export type OpenAIMessageConverterOptions = {
  * - Thinking-mode reasoning_content injection
  * - Multimodal content (images) filtering by model capability
  * - Compaction filtering
+ * - Orphaned tool-call stripping: assistant messages that called an unknown tool
+ *   (e.g. a skill name mistaken for a function) are sanitised so the messages
+ *   sent to the API never reference a tool not present in the `tools` array.
+ *   This prevents Gemini / strict OpenAI-compatible APIs from returning 400.
  */
 export class OpenAIMessageConverter {
   constructor(private readonly options: OpenAIMessageConverterOptions = {}) {}
@@ -23,7 +27,12 @@ export class OpenAIMessageConverter {
    * Build the OpenAI messages array from session messages, applying compaction
    * filtering, tool pairing, and format conversion.
    */
-  buildMessages(messages: SessionMessage[], thinkingEnabled: boolean, model: string): ChatCompletionMessageParam[] {
+  buildMessages(
+    messages: SessionMessage[],
+    thinkingEnabled: boolean,
+    model: string,
+    knownToolNames?: Set<string>
+  ): ChatCompletionMessageParam[] {
     const activeMessages = messages.filter((message) => !message.compacted);
     const toolPairings = this.pairToolMessages(activeMessages);
     const openAIMessages: ChatCompletionMessageParam[] = [];
@@ -34,9 +43,68 @@ export class OpenAIMessageConverter {
         continue;
       }
 
-      openAIMessages.push(this.convertMessage(message, thinkingEnabled, model));
-
+      // Collect all tool calls for this assistant message
       const toolCalls = this.getAssistantToolCalls(message);
+
+      if (message.role === "assistant" && toolCalls.length > 0 && knownToolNames) {
+        // Filter out tool_calls that reference unknown tools (e.g. skill names
+        // mistakenly called as functions). If all calls are unknown, replace the
+        // assistant message with a plain text version to avoid orphaned pairs.
+        const validToolCalls = toolCalls.filter((tc) => {
+          const name = this.getToolCallName(tc);
+          return name == null || knownToolNames.has(name);
+        });
+
+        if (validToolCalls.length === 0 && toolCalls.length > 0) {
+          // All tool_calls are unknown — try to emit the assistant message as
+          // a plain text message (no tool_calls).  If there is no text content
+          // either, skip the message entirely: APIs reject assistant messages
+          // that have neither text nor tool calls ("model output must contain
+          // either output text or tool calls, these cannot both be empty").
+          const textContent = this.renderContent(message).trim();
+          if (textContent) {
+            const strippedMsg = this.convertMessage(message, thinkingEnabled, model);
+            const strippedAny = strippedMsg as unknown as Record<string, unknown>;
+            delete strippedAny["tool_calls"];
+            openAIMessages.push(strippedMsg);
+          }
+          // Skip appending paired tool results since we stripped the calls.
+          continue;
+        }
+
+        if (validToolCalls.length < toolCalls.length) {
+          // Some calls are unknown — emit assistant message with only valid calls.
+          const converted = this.convertMessage(message, thinkingEnabled, model);
+          (converted as unknown as Record<string, unknown>)["tool_calls"] = validToolCalls;
+          if (!this.isStructurallyEmptyMessage(converted)) {
+            openAIMessages.push(converted);
+          }
+
+          // Append paired tool results only for the valid tool calls.
+          for (let toolCallIndex = 0; toolCallIndex < toolCalls.length; toolCallIndex += 1) {
+            const toolCall = toolCalls[toolCallIndex];
+            const toolCallId = this.getToolCallId(toolCall);
+            if (!toolCallId) continue;
+            const name = this.getToolCallName(toolCall);
+            if (name != null && !knownToolNames.has(name)) continue; // skip unknown
+
+            const pairedToolIndex = toolPairings.get(this.buildToolPairingKey(index, toolCallIndex));
+            if (pairedToolIndex != null) {
+              openAIMessages.push(this.convertMessage(activeMessages[pairedToolIndex], thinkingEnabled, model));
+            } else {
+              openAIMessages.push(this.buildInterruptedOpenAIToolMessage(toolCalls, toolCallId, model));
+            }
+          }
+          continue;
+        }
+      }
+
+      const converted = this.convertMessage(message, thinkingEnabled, model);
+      if (this.isStructurallyEmptyMessage(converted)) {
+        continue;
+      }
+      openAIMessages.push(converted);
+
       if (toolCalls.length === 0) {
         continue;
       }
@@ -250,6 +318,16 @@ export class OpenAIMessageConverter {
     return typeof id === "string" && id ? id : null;
   }
 
+  private getToolCallName(toolCall: unknown): string | null {
+    if (!toolCall || typeof toolCall !== "object") {
+      return null;
+    }
+    const fn = (toolCall as { function?: { name?: unknown } }).function;
+    if (!fn || typeof fn !== "object") return null;
+    const name = (fn as { name?: unknown }).name;
+    return typeof name === "string" && name ? name : null;
+  }
+
   private getToolMessageCallId(message: SessionMessage): string | null {
     const messageParams = message.messageParams as { tool_call_id?: unknown } | null;
     const toolCallId = messageParams?.tool_call_id;
@@ -278,7 +356,6 @@ export class OpenAIMessageConverter {
     model: string
   ): ChatCompletionMessageParam {
     const toolFunction = this.findToolFunction(toolCalls, toolCallId);
-    // Gemini does not support role "tool".
     const role = model.startsWith("gemini") ? ("user" as const) : ("tool" as const);
     return {
       role,
@@ -318,5 +395,13 @@ export class OpenAIMessageConverter {
       null,
       2
     );
+  }
+
+  private isStructurallyEmptyMessage(message: ChatCompletionMessageParam): boolean {
+    const content = (message as { content?: unknown }).content;
+    const hasTextContent =
+      typeof content === "string" ? content.trim().length > 0 : Array.isArray(content) ? content.length > 0 : false;
+    const toolCalls = (message as { tool_calls?: unknown[] }).tool_calls;
+    return !hasTextContent && (!Array.isArray(toolCalls) || toolCalls.length === 0);
   }
 }

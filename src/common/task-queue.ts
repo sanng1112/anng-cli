@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { writeTextFileAtomicSync } from "./json-store";
 
 export type QueueTask = {
   id: string;
@@ -13,6 +14,11 @@ export type QueueInfo = {
   label: string;
   taskCount: number;
   pendingCount: number;
+};
+
+export type PendingQueueTask = {
+  queueName: string;
+  task: QueueTask;
 };
 
 const QUEUES_DIR = path.join(".anng", "memory", "queues");
@@ -106,7 +112,7 @@ export function saveQueue(projectRoot: string, queueName: string, tasks: QueueTa
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const content = tasks.map((t) => `- [${t.done ? "x" : " "}] \`${t.id}\` ${t.text}`).join("\n") + "\n";
-    fs.writeFileSync(filePath, content, "utf8");
+    writeTextFileAtomicSync(filePath, content);
     return true;
   } catch {
     /* ignore */
@@ -162,6 +168,26 @@ export function clearQueue(projectRoot: string, queueName: string): boolean {
 export function getNextPendingTask(projectRoot: string, queueName: string): QueueTask | null {
   const tasks = loadQueue(projectRoot, queueName);
   return tasks.find((t) => !t.done) ?? null;
+}
+
+export function getNextPendingQueueTask(projectRoot: string, preferredQueueName?: string): PendingQueueTask | null {
+  const queues = listQueues(projectRoot);
+  if (queues.length === 0) {
+    return null;
+  }
+
+  const orderedQueueNames = preferredQueueName
+    ? [preferredQueueName, ...queues.map((queue) => queue.name).filter((name) => name !== preferredQueueName)]
+    : queues.map((queue) => queue.name);
+
+  for (const queueName of orderedQueueNames) {
+    const task = getNextPendingTask(projectRoot, queueName);
+    if (task) {
+      return { queueName, task };
+    }
+  }
+
+  return null;
 }
 
 export function markTaskDoneById(projectRoot: string, queueName: string, taskId: string): boolean {

@@ -29,11 +29,13 @@ test("buildSlashCommands prefixes built-ins before skills", () => {
     "undo",
     "mcp",
     "raw",
+    "help",
     "exit",
     "team",
     "custom-agents",
     "settings",
-    "query",
+    "status",
+    "goal",
     "btw",
     "bg",
     "queue",
@@ -110,6 +112,14 @@ test("findExactSlashCommand returns built-in /raw", () => {
   const item = findExactSlashCommand(items, "/raw");
   assert.ok(item);
   assert.equal(item?.kind, "raw");
+});
+
+test("findExactSlashCommand maps legacy /query to /status", () => {
+  const items = buildSlashCommands(skills);
+  const item = findExactSlashCommand(items, "/query");
+  assert.ok(item);
+  assert.equal(item?.kind, "status");
+  assert.equal(item?.name, "status");
 });
 
 test("findExactSlashCommand returns the matching skill", () => {

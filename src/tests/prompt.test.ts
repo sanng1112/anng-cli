@@ -94,6 +94,18 @@ test("buildSkillDocumentsPrompt excludes SKILL.md frontmatter metadata", () => {
   assert.equal(prompt.includes("allow-implicit-invocation"), false);
 });
 
+test("buildSkillDocumentsPrompt clarifies that skills are not callable tools", () => {
+  const prompt = buildSkillDocumentsPrompt([
+    {
+      name: "repo-scan",
+      content: "# Repo Scan\n\nInspect the repository layout.\n",
+    },
+  ]);
+
+  assert.equal(prompt.includes("These skills are documentation, not callable function tools."), true);
+  assert.equal(prompt.includes("Never emit a tool call whose name is a skill name"), true);
+});
+
 test("buildSkillDocumentsPrompt lists skill resources", () => {
   const skillDir = createTempDir("anng-skill-resources-");
   fs.mkdirSync(path.join(skillDir, "scripts"), { recursive: true });

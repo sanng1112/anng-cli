@@ -162,6 +162,34 @@ test("OpenAIMessageConverter skips compacted messages", () => {
   );
 });
 
+test("OpenAIMessageConverter skips empty user messages without attachments", () => {
+  const c = converter();
+  const messages: SessionMessage[] = [userMsg("u1", ""), userMsg("u2", "actual prompt")];
+
+  const result = c.buildMessages(messages, false, "test-model") as Array<{ role: string; content: string }>;
+
+  assert.deepEqual(result, [{ role: "user", content: "actual prompt" }]);
+});
+
+test("OpenAIMessageConverter skips empty assistant messages without text or tool calls", () => {
+  const c = converter();
+  const messages: SessionMessage[] = [
+    userMsg("u1", "hello"),
+    msg({ id: "a1", role: "assistant", content: "", messageParams: null, visible: false }),
+    msg({ id: "a2", role: "assistant", content: "real answer" }),
+  ];
+
+  const result = c.buildMessages(messages, false, "test-model") as Array<{ role: string; content: string }>;
+
+  assert.deepEqual(
+    result.map((message) => ({ role: message.role, content: message.content })),
+    [
+      { role: "user", content: "hello" },
+      { role: "assistant", content: "real answer" },
+    ]
+  );
+});
+
 // ---------------------------------------------------------------------------
 // buildMessages — tool-call pairing
 // ---------------------------------------------------------------------------
@@ -341,6 +369,54 @@ test("OpenAIMessageConverter preserves a real failed tool result", () => {
   assert.doesNotMatch(result[1]?.content ?? "", /Previous tool call did not complete/);
 });
 
+test("OpenAIMessageConverter maps tool results to user role for Gemini models", () => {
+  const c = converter();
+  const messages: SessionMessage[] = [
+    assistantMsg("a1", [
+      { id: "call-1", type: "function", function: { name: "AnalyzeProject", arguments: '{"depth":2}' } },
+    ]),
+    toolMsg("t1", "call-1", JSON.stringify({ ok: true, name: "AnalyzeProject", output: "tree" }), {
+      name: "AnalyzeProject",
+      arguments: '{"depth":2}',
+    }),
+  ];
+
+  const result = c.buildMessages(messages, false, "gemini-3.1-flash-lite") as Array<{
+    role: string;
+    content: string;
+    tool_call_id?: string;
+  }>;
+
+  assert.deepEqual(
+    result.map((message) => message.role),
+    ["assistant", "user"]
+  );
+  assert.equal(result[1]?.tool_call_id, "call-1");
+});
+
+test("OpenAIMessageConverter maps interrupted tool placeholders to user role for Gemini models", () => {
+  const c = converter();
+  const messages: SessionMessage[] = [
+    assistantMsg("a1", [
+      { id: "call-1", type: "function", function: { name: "AnalyzeProject", arguments: '{"depth":2}' } },
+    ]),
+    userMsg("u1", "continue"),
+  ];
+
+  const result = c.buildMessages(messages, false, "gemini-3.1-flash-lite") as Array<{
+    role: string;
+    content: string;
+    tool_call_id?: string;
+  }>;
+
+  assert.deepEqual(
+    result.map((message) => message.role),
+    ["assistant", "user", "user"]
+  );
+  assert.equal(result[1]?.tool_call_id, "call-1");
+  assert.match(result[1]?.content ?? "", /Previous tool call did not complete/);
+});
+
 test("OpenAIMessageConverter repairs mixed missing/duplicate/orphan tool messages", () => {
   const c = converter();
   const messages: SessionMessage[] = [
@@ -414,6 +490,139 @@ test("OpenAIMessageConverter ignores tool messages before their assistant", () =
   );
   assert.match(result[1]?.content ?? "", /Previous tool call did not complete/);
   assert.doesNotMatch(result[1]?.content ?? "", /too early/);
+});
+
+// ---------------------------------------------------------------------------
+// buildMessages — orphaned tool-call stripping (knownToolNames)
+// ---------------------------------------------------------------------------
+
+test("OpenAIMessageConverter strips all tool_calls when all are unknown and content is empty (prevents Gemini 400)", () => {
+  const c = converter();
+  const knownTools = new Set(["bash", "read"]);
+  const messages: SessionMessage[] = [
+    userMsg("u1", "audit my project"),
+    // Assistant had empty content + only unknown tool_calls
+    assistantMsg("a1", [
+      { id: "call-1", type: "function", function: { name: "workspace-surface-audit", arguments: "{}" } },
+    ]),
+    toolMsg(
+      "t1",
+      "call-1",
+      JSON.stringify({ ok: false, name: "workspace-surface-audit", error: "Unknown tool: workspace-surface-audit" })
+    ),
+    userMsg("u2", "continue"),
+  ];
+
+  const result = c.buildMessages(messages, false, "gemini-2.5-pro", knownTools) as Array<{
+    role: string;
+    tool_calls?: unknown[];
+    content?: string;
+  }>;
+
+  // The empty-content assistant message must be omitted entirely to avoid
+  // "model output must contain either output text or tool calls" API errors.
+  const assistantMessages = result.filter((m) => m.role === "assistant");
+  assert.equal(assistantMessages.length, 0);
+  // No orphaned replay messages should appear either
+  const replayMessages = result.filter((m) => m.role === "tool" || m.role === "user");
+  assert.equal(replayMessages.length, 2);
+  // User messages before/after are still present
+  assert.equal(result.filter((m) => m.role === "user").length, 2);
+});
+
+test("OpenAIMessageConverter keeps assistant message when it has text content despite unknown tool_calls", () => {
+  const c = converter();
+  const knownTools = new Set(["bash"]);
+  // Build a message with both text content AND an unknown tool_call
+  const msgWithTextAndCall: SessionMessage = {
+    id: "a1",
+    sessionId: "session-1",
+    role: "assistant",
+    content: "I will use this skill",
+    contentParams: null,
+    messageParams: {
+      tool_calls: [{ id: "call-skill", type: "function", function: { name: "repo-scan", arguments: "{}" } }],
+    },
+    compacted: false,
+    visible: true,
+    createTime: "2026-01-01T00:00:00.000Z",
+    updateTime: "2026-01-01T00:00:00.000Z",
+  };
+  const messages: SessionMessage[] = [
+    userMsg("u1", "please analyse"),
+    msgWithTextAndCall,
+    toolMsg("t-skill", "call-skill", JSON.stringify({ ok: false, error: "Unknown tool: repo-scan" })),
+  ];
+
+  const result = c.buildMessages(messages, false, "gemini-2.5-pro", knownTools) as Array<{
+    role: string;
+    tool_calls?: unknown[];
+    content?: string;
+  }>;
+
+  const assistantMessages = result.filter((m) => m.role === "assistant");
+  // Message must be kept (has text), but without tool_calls
+  assert.equal(assistantMessages.length, 1);
+  assert.equal(assistantMessages[0]?.tool_calls, undefined);
+  assert.equal(assistantMessages[0]?.content, "I will use this skill");
+  // No orphaned replay result
+  assert.equal(result.filter((m) => m.role === "tool").length, 0);
+});
+
+test("OpenAIMessageConverter strips only unknown tool_calls when mixed (known + unknown)", () => {
+  const c = converter();
+  const knownTools = new Set(["bash"]);
+  const messages: SessionMessage[] = [
+    userMsg("u1", "audit"),
+    assistantMsg("a1", [
+      { id: "call-skill", type: "function", function: { name: "repo-scan", arguments: "{}" } },
+      { id: "call-bash", type: "function", function: { name: "bash", arguments: '{"command":"ls","sideEffects":[]}' } },
+    ]),
+    toolMsg("t-skill", "call-skill", JSON.stringify({ ok: false, error: "Unknown tool: repo-scan" })),
+    toolMsg("t-bash", "call-bash", JSON.stringify({ ok: true, output: "file1.ts\n" })),
+  ];
+
+  const result = c.buildMessages(messages, false, "gemini-2.5-pro", knownTools) as Array<{
+    role: string;
+    tool_calls?: Array<{ id: string; function: { name: string } }>;
+    tool_call_id?: string;
+    content?: string;
+  }>;
+
+  const aMsg = result.find((m) => m.role === "assistant");
+  // Only "bash" call should remain in tool_calls
+  assert.ok(aMsg?.tool_calls);
+  assert.equal(aMsg?.tool_calls?.length, 1);
+  assert.equal(aMsg?.tool_calls?.[0]?.function?.name, "bash");
+
+  // Only the replay for "bash" should appear, mapped to user role for Gemini
+  const replayMsgs = result.filter((m) => m.tool_call_id != null);
+  assert.equal(replayMsgs.length, 1);
+  assert.equal(replayMsgs[0]?.role, "user");
+  assert.equal(replayMsgs[0]?.tool_call_id, "call-bash");
+});
+
+test("OpenAIMessageConverter does not filter when knownToolNames is not provided (backward compat)", () => {
+  const c = converter();
+  const messages: SessionMessage[] = [
+    userMsg("u1", "audit"),
+    assistantMsg("a1", [
+      { id: "call-skill", type: "function", function: { name: "workspace-surface-audit", arguments: "{}" } },
+    ]),
+    toolMsg("t-skill", "call-skill", JSON.stringify({ ok: false, error: "Unknown tool" })),
+  ];
+
+  // No knownToolNames passed — backward compat: nothing stripped
+  const result = c.buildMessages(messages, false, "deepseek-v4-pro") as Array<{
+    role: string;
+    tool_calls?: unknown[];
+  }>;
+
+  const aMsg = result.find((m) => m.role === "assistant");
+  assert.ok(aMsg?.tool_calls);
+  assert.equal((aMsg?.tool_calls as unknown[]).length, 1);
+  const toolMsgs = result.filter((m) => m.role === "tool");
+  assert.equal(toolMsgs.length, 1);
 });
 
 // ---------------------------------------------------------------------------

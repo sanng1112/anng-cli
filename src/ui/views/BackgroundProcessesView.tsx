@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useWindowSize } from "ink";
 import { useTerminalInput } from "../hooks/useTerminalInput";
 import type { SessionEntry } from "../../session";
 
@@ -24,6 +24,10 @@ type ProcessInfo = {
 };
 
 const REFRESH_INTERVAL_MS = 500;
+
+function buildDivider(width: number): string {
+  return "─".repeat(Math.max(12, width));
+}
 
 export const BackgroundProcessesView = React.memo(function BackgroundProcessesView({
   processStdoutRef,
@@ -66,7 +70,11 @@ export const BackgroundProcessesView = React.memo(function BackgroundProcessesVi
     return () => clearInterval(interval);
   }, [runningProcesses, processStdoutRef]);
 
-  const panelWidth = Math.min(screenWidth, 100);
+  const { columns } = useWindowSize();
+  const effectiveWidth = screenWidth || columns || 80;
+  const panelWidth = Math.max(20, Math.min(effectiveWidth, 100));
+  const contentWidth = Math.max(18, panelWidth - 2);
+  const compactLayout = effectiveWidth < 90;
 
   useTerminalInput(
     (input, key) => {
@@ -106,19 +114,22 @@ export const BackgroundProcessesView = React.memo(function BackgroundProcessesVi
   const primaryColor = "#D4704B";
 
   return (
-    <Box flexDirection="column" padding={1} borderStyle="round" borderColor={primaryColor} width={panelWidth} minWidth={60}>
-      <Box marginBottom={1} justifyContent="space-between">
-        <Box>
-          <Text bold color={primaryColor}>
-            ⚙ Background Processes
-          </Text>
-          <Text dimColor>  (Enter to expand · Esc to close)</Text>
+    <Box flexDirection="column" paddingX={1} width={panelWidth}>
+      <Box marginBottom={1} flexDirection="column">
+        <Box flexDirection={compactLayout ? "column" : "row"} justifyContent="space-between">
+          <Box flexDirection="row" gap={1}>
+            <Text bold color={primaryColor}>
+              ⚙ Background Processes
+            </Text>
+            <Text dimColor> (Enter to expand · Esc to close)</Text>
+          </Box>
+          <Box>
+            <Text dimColor>
+              {processList.length} active · {sessionProcessCount} total this session
+            </Text>
+          </Box>
         </Box>
-        <Box>
-          <Text dimColor>
-            {processList.length} active · {sessionProcessCount} total this session
-          </Text>
-        </Box>
+        <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
       </Box>
       {/* No processes */}
       {processList.length === 0 ? (
@@ -132,17 +143,13 @@ export const BackgroundProcessesView = React.memo(function BackgroundProcessesVi
             const isSelected = idx === selectedIndex;
             const isExpanded = expandedPid === proc.pid;
             const elapsed = getElapsed(proc.startTime, now);
-            const deadline = proc.timeoutMs
-              ? getDeadlineText(proc.startTime, proc.timeoutMs, now)
-              : "no timeout";
+            const deadline = proc.timeoutMs ? getDeadlineText(proc.startTime, proc.timeoutMs, now) : "no timeout";
 
             return (
               <Box key={proc.pid} flexDirection="column">
                 <Box flexDirection="row" paddingX={1} paddingY={0}>
                   <Box width={2} flexShrink={0}>
-                    <Text color={isSelected ? primaryColor : undefined}>
-                      {isSelected ? "▸" : " "}
-                    </Text>
+                    <Text color={isSelected ? primaryColor : undefined}>{isSelected ? "▸" : " "}</Text>
                   </Box>
                   <Box width={8} flexShrink={0}>
                     <Text bold color={proc.timedOut ? "red" : undefined}>
@@ -176,7 +183,9 @@ export const BackgroundProcessesView = React.memo(function BackgroundProcessesVi
                     borderBottom={true}
                     borderDimColor
                   >
-                    <Text bold dimColor>Output:</Text>
+                    <Text bold dimColor>
+                      Output:
+                    </Text>
                     <Text wrap="wrap">{proc.stdout || "(no output yet)"}</Text>
                   </Box>
                 ) : isExpanded ? (
@@ -190,9 +199,8 @@ export const BackgroundProcessesView = React.memo(function BackgroundProcessesVi
         </Box>
       )}
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>
-          ↑↓ Navigate · Enter Toggle Output · Esc/← Collapse All · Ctrl+O Close
-        </Text>
+        <Text color={primaryColor}>{buildDivider(contentWidth)}</Text>
+        <Text dimColor>↑↓ Navigate · Enter Toggle Output · Esc/← Collapse All · Ctrl+O Close</Text>
       </Box>
     </Box>
   );
@@ -238,5 +246,3 @@ function isExpired(startTime: string, timeoutMs: number | undefined, now: number
 }
 
 export default BackgroundProcessesView;
-
-

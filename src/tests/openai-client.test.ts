@@ -32,12 +32,6 @@ function makeSettings(overrides: Partial<ResolvedDeepcodingSettings> = {}): Reso
     maxTurns: DEFAULT_MAX_TURNS,
     headlessPrompt: "",
     fullPowerMode: false,
-    pipeline: {
-      plannerModel: "gemini-3.5-flash",
-      executorModel: "gemini-3.1-flash-lite",
-      fixerModel: "gemini-3.5-flash",
-      maxRepairAttempts: 3,
-    },
     ...overrides,
   };
 }

@@ -59,7 +59,9 @@ if (args.includes("--help") || args.includes("-h")) {
       "  /undo            Restore code and/or conversation to a previous point",
       "  /mcp             Show MCP server status and available tools",
       "  /raw             Toggle display mode for viewing or collapsing reasoning content",
-      "  /query           Show session summary, model info, project stats and system status",
+      "  /help            Show commands, shortcuts, and quick usage help",
+      "  /status          Show model, session, goal, storage, and key pool status",
+      "  /goal            Manage the active project goal",
       "  /btw <message>   Send a casual note/reminder to the AI without starting a new task",
       "  /bg              View all background processes and running tasks",
       "  /queue           Manage task queue: add, list, remove, clear, process",
@@ -103,7 +105,6 @@ let initialPrompt = extractInitialPrompt(args);
 // Harness flags for headless CI/CD execution
 const autoAcceptEnabled = args.includes("--yolo") || args.includes("-y");
 const planModeEnabled = args.includes("--plan");
-const pipelineModeEnabled = args.includes("--pipeline");
 
 // Team orchestration flags
 const teamMode = args.includes("--team");

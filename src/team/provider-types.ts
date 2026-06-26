@@ -13,11 +13,12 @@ export type Provider = {
 };
 
 // ---------------------------------------------------------------------------
-// ModelEntry: a model name (NOT bound to any provider)
+// ModelEntry: a model name bound to a provider
 // ---------------------------------------------------------------------------
 export type ModelEntry = {
   name: string;
   tested: boolean;
+  providerId: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -70,9 +71,21 @@ export function saveProviders(projectRoot: string, providers: Provider[]): void 
 // Load / Save models
 // ---------------------------------------------------------------------------
 
+function getProviderIdForModel(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.startsWith("gemini") || lower.startsWith("gemma")) {
+    return "gemini";
+  }
+  return "deepseek";
+}
+
 /** Create default models from the built-in list */
 function createDefaultModels(projectRoot: string): ModelEntry[] {
-  const models: ModelEntry[] = MODEL_COMMAND_MODELS.map((m) => ({ name: m, tested: false }));
+  const models: ModelEntry[] = MODEL_COMMAND_MODELS.map((m) => ({
+    name: m,
+    tested: false,
+    providerId: getProviderIdForModel(m),
+  }));
   saveModels(projectRoot, models);
   return models;
 }
@@ -85,7 +98,8 @@ export function loadModels(projectRoot: string): ModelEntry[] {
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return createDefaultModels(projectRoot);
     const valid = data.filter(
-      (x: unknown): x is ModelEntry => typeof x === "object" && x !== null && typeof (x as ModelEntry).name === "string"
+      (x: unknown): x is Omit<ModelEntry, "providerId"> & { providerId?: string } =>
+        typeof x === "object" && x !== null && typeof (x as { name?: unknown }).name === "string"
     );
     if (valid.length === 0) {
       return createDefaultModels(projectRoot);
@@ -95,7 +109,11 @@ export function loadModels(projectRoot: string): ModelEntry[] {
     for (const m of valid) {
       if (!seen.has(m.name)) {
         seen.add(m.name);
-        deduped.push(m);
+        deduped.push({
+          name: m.name,
+          tested: m.tested ?? false,
+          providerId: m.providerId || getProviderIdForModel(m.name),
+        });
       }
     }
     if (deduped.length !== valid.length) {
