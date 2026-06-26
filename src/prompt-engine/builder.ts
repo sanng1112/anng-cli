@@ -15,6 +15,7 @@ import * as path from "path";
 import type { AgentMode } from "../harness/types";
 import { DEFAULT_SYSTEM_PROMPT, YOLO_SYSTEM_PROMPT, PLAN_MODE_INSTRUCTIONS } from "./templates";
 import { buildWorkspaceMetadata } from "./metadata";
+import { getGoalSnapshot } from "../common/goal-store";
 
 // =============================================================================
 // Types
@@ -50,7 +51,7 @@ export function buildSystemPrompt(options: BuildPromptOptions): BuildPromptResul
   const explicit = options.explicitSystemPrompt || options.overridePrompt;
   if (explicit?.trim()) {
     const trimmed = explicit.trim();
-    const prompt = trimmed.includes("{{CLINE_METADATA}}")
+    let prompt = trimmed.includes("{{CLINE_METADATA}}")
       ? replacePlaceholders(trimmed, {
           PLATFORM: metadata.platform,
           CURRENT_DATE: metadata.date,
@@ -59,6 +60,14 @@ export function buildSystemPrompt(options: BuildPromptOptions): BuildPromptResul
           CLINE_RULES: resolveRules(options),
         })
       : trimmed;
+    try {
+      const goalSnapshot = getGoalSnapshot(options.cwd);
+      if (goalSnapshot.activeGoal) {
+        prompt = `# ACTIVE PROJECT GOAL\n\nYou are currently working towards this project-wide goal:\n${goalSnapshot.activeGoal.text}\n\n${prompt}`;
+      }
+    } catch {
+      // ignore
+    }
     return { systemPrompt: prompt, metadata };
   }
 
@@ -74,7 +83,17 @@ export function buildSystemPrompt(options: BuildPromptOptions): BuildPromptResul
     CLINE_RULES: resolveRules(options),
   });
 
-  return { systemPrompt, metadata };
+  let finalPrompt = systemPrompt;
+  try {
+    const goalSnapshot = getGoalSnapshot(options.cwd);
+    if (goalSnapshot.activeGoal) {
+      finalPrompt = `# ACTIVE PROJECT GOAL\n\nYou are currently working towards this project-wide goal:\n${goalSnapshot.activeGoal.text}\n\n${finalPrompt}`;
+    }
+  } catch {
+    // ignore
+  }
+
+  return { systemPrompt: finalPrompt, metadata };
 }
 
 // =============================================================================

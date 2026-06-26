@@ -3427,6 +3427,7 @@ test("SessionManager retries compatible chat-completion requests after recoverab
     renderMarkdown: (text) => text,
     onAssistantMessage: () => {},
   });
+  manager.listSkills = async () => [];
 
   const sessionId = await manager.createSession({ text: "seed prompt" });
   const seededMessages = manager.listSessionMessages(sessionId).map((message) =>

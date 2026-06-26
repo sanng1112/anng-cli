@@ -677,10 +677,12 @@ function App({
           const goal = setActiveGoal(projectRoot, goalText);
           setMessages((prev) => [...prev, buildSyntheticUserMessage(`🎯 Goal set: ${goal.text}`, 0)]);
           setStatusLine(`Active goal: "${goal.text.slice(0, 80)}"`);
+          submission.text = goalText;
+          submission.command = undefined;
         } catch (error) {
           setErrorLine(error instanceof Error ? error.message : "Failed to update goal.");
+          return;
         }
-        return;
       }
       if (submission.command === "btw") {
         // Insert as a user message with BTW context note
@@ -779,6 +781,7 @@ function App({
       setBusy(true);
       setErrorLine(null);
       const activeSessionId = sessionManager.getActiveSessionId();
+      const currentActiveStatus = activeSessionId ? (sessionManager.getSession(activeSessionId)?.status ?? null) : null;
       const activeProcesses = activeSessionId ? (sessionManager.getSession(activeSessionId)?.processes ?? null) : null;
       setRunningProcesses(activeProcesses);
       setShowProcessStdout(false);
@@ -793,7 +796,8 @@ function App({
             currentSubmission &&
             !currentSubmission.queueTask &&
             currentSubmission.command !== "continue" &&
-            (currentSubmission.text ?? "").trim()
+            (currentSubmission.text ?? "").trim() &&
+            !isQueueAwaitingUser(currentActiveStatus)
           ) {
             try {
               const qList = queueListQueues(projectRoot);
@@ -835,7 +839,8 @@ function App({
           }
 
           const resumedQueueTask =
-            submissionToRun.queueTask ?? (isQueueAwaitingUser(activeStatus) ? processingQueueTaskRef.current : null);
+            submissionToRun.queueTask ??
+            (isQueueAwaitingUser(currentActiveStatus) ? processingQueueTaskRef.current : null);
           processingQueueTaskRef.current = resumedQueueTask;
 
           const prompt: UserPromptContent = {
@@ -954,7 +959,6 @@ function App({
       teamResult,
       processStdoutRef,
       projectRoot,
-      activeStatus,
     ]
   );
 

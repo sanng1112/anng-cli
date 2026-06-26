@@ -383,6 +383,8 @@ export const QueryView = React.memo(function QueryView({
 
   const primaryColor = "#D4704B";
 
+  const colWidth = Math.floor((panelWidth - 2) / 2);
+
   return (
     <Box flexDirection="column" paddingX={1} width={panelWidth}>
       <Box borderStyle="round" borderColor={primaryColor} flexDirection="column" paddingX={1} marginBottom={1}>
@@ -413,26 +415,266 @@ export const QueryView = React.memo(function QueryView({
         )}
       </Box>
 
-      {sections.length === 0 ? (
-        <Box marginLeft={2}>
-          <Text dimColor>No sections match the current filter.</Text>
-        </Box>
-      ) : (
-        sections.map((section, sectionIndex) => (
-          <Box key={sectionIndex} flexDirection="column" marginBottom={1}>
-            <Text bold color={primaryColor}>
-              {section.section}
-            </Text>
-            {section.rows.map((row, rowIndex) => (
-              <Box key={rowIndex} flexDirection="row" marginLeft={2}>
-                <Text wrap="truncate-end" dimColor>
-                  {row.label}:{" "}
-                </Text>
-                <Text wrap="truncate-end">{row.value}</Text>
-              </Box>
-            ))}
+      {normalizedTopic ? (
+        sections.length === 0 ? (
+          <Box marginLeft={2}>
+            <Text dimColor>No sections match the current filter.</Text>
           </Box>
-        ))
+        ) : (
+          sections.map((section, sectionIndex) => (
+            <Box key={sectionIndex} flexDirection="column" marginBottom={1}>
+              <Text bold color={primaryColor}>
+                {section.section}
+              </Text>
+              {section.rows.map((row, rowIndex) => (
+                <Box key={rowIndex} flexDirection="row" marginLeft={2}>
+                  <Text wrap="truncate-end" dimColor>
+                    {row.label}:{" "}
+                  </Text>
+                  <Text wrap="truncate-end">{row.value}</Text>
+                </Box>
+              ))}
+            </Box>
+          ))
+        )
+      ) : (
+        <Box flexDirection="column">
+          {/* Row 1 */}
+          <Box flexDirection="row" marginBottom={1}>
+            <DashboardCard title="Session & Goal" icon="💬" borderColor="#4CAF50" width={colWidth}>
+              <CardRow
+                label="Active Session"
+                value={
+                  sessionInfo.activeSessionId ? (
+                    <Text color="#4CAF50" bold>
+                      {sessionInfo.activeSessionId.slice(0, 8)}...
+                    </Text>
+                  ) : (
+                    <Text dimColor>None</Text>
+                  )
+                }
+              />
+              <CardRow
+                label="Session Status"
+                value={
+                  <Text
+                    color={
+                      sessionInfo.activeStatus === "completed"
+                        ? "#4CAF50"
+                        : sessionInfo.activeStatus === "processing"
+                          ? "#2196F3"
+                          : sessionInfo.activeStatus === "failed"
+                            ? "#F44336"
+                            : undefined
+                    }
+                    bold
+                  >
+                    {sessionInfo.activeStatus ?? "idle"}
+                  </Text>
+                }
+              />
+              <CardRow label="Messages" value={String(sessionInfo.messageCount)} />
+              <CardRow label="Total Sessions" value={String(sessionInfo.sessionCount)} />
+              <CardRow
+                label="Active Goal"
+                value={
+                  goalSnapshot.activeGoal?.text ? (
+                    <Text color="#FF9800" bold>
+                      {goalSnapshot.activeGoal.text}
+                    </Text>
+                  ) : (
+                    <Text dimColor>None</Text>
+                  )
+                }
+              />
+              <CardRow
+                label="Goal Progress"
+                value={`${goalSnapshot.completedGoals} completed / ${goalSnapshot.totalGoals} total`}
+              />
+            </DashboardCard>
+
+            <Box width={2} />
+
+            <DashboardCard title="Project Info" icon="📁" borderColor="#2196F3" width={panelWidth - colWidth - 2}>
+              <CardRow label="Root" value={formatPathForCard(projectRoot, colWidth - 18)} />
+              <CardRow label="Files" value={String(projectStats.fileCount)} />
+              <CardRow label="Size" value={projectStats.totalSizeMB} />
+              <CardRow label="Project Code" value={storageSnapshot.projectCode} />
+            </DashboardCard>
+          </Box>
+
+          {/* Row 2 */}
+          <Box flexDirection="row" marginBottom={1}>
+            <DashboardCard title="System Info" icon="💻" borderColor="#E5C07B" width={colWidth}>
+              <CardRow label="Platform" value={stats.platform} />
+              <CardRow
+                label="CPU"
+                value={`${stats.cpuModel
+                  .split("@")[0]
+                  .trim()
+                  .replace(/\(TM\)|\(R\)/g, "")} (${stats.cpuCores} cores)`}
+              />
+              <CardRow
+                label="Memory"
+                value={
+                  <Box flexDirection="row">
+                    <Text>{buildProgressBar(stats.freeMemory, stats.totalMemory, Math.max(5, colWidth - 28))}</Text>
+                    <Text dimColor>{` (${stats.freeMemory} free)`}</Text>
+                  </Box>
+                }
+              />
+              <CardRow label="Node.js" value={stats.nodeVersion} />
+              <CardRow label="Uptime" value={stats.uptime} />
+            </DashboardCard>
+
+            <Box width={2} />
+
+            <DashboardCard title="Storage Info" icon="💾" borderColor="#9C27B0" width={panelWidth - colWidth - 2}>
+              <CardRow label="Project DB Dir" value={formatPathForCard(storageSnapshot.projectDir, colWidth - 18)} />
+              <CardRow
+                label="Project DB Ready"
+                value={
+                  storageSnapshot.projectDirExists ? (
+                    <Text color="#4CAF50">✔ Yes</Text>
+                  ) : (
+                    <Text color="#F44336">✘ No</Text>
+                  )
+                }
+              />
+              <CardRow
+                label="Sessions Index"
+                value={
+                  storageSnapshot.sessionsIndexExists ? (
+                    <Text color="#4CAF50">✔ Yes</Text>
+                  ) : (
+                    <Text color="#F44336">✘ No</Text>
+                  )
+                }
+              />
+              <CardRow
+                label="Local DB Present"
+                value={
+                  storageSnapshot.localDbExists ? <Text color="#4CAF50">✔ Yes</Text> : <Text color="#F44336">✘ No</Text>
+                }
+              />
+              <CardRow
+                label="Queue Tasks"
+                value={
+                  <Text color={storageSnapshot.queueFileCount > 0 ? "#FF9800" : undefined}>
+                    {storageSnapshot.queueFileCount} pending tasks
+                  </Text>
+                }
+              />
+            </DashboardCard>
+          </Box>
+
+          {/* Key Pools */}
+          {rotationStats.map((provider, providerIndex) => (
+            <Box key={providerIndex} marginBottom={1}>
+              <DashboardCard
+                title={`Key Pool: ${provider.providerLabel}`}
+                icon="🔑"
+                borderColor="#00BCD4"
+                width={panelWidth}
+              >
+                <CardRow label="Base URL" value={provider.baseURL} labelWidth={16} />
+                <CardRow
+                  label="Key Stats"
+                  labelWidth={16}
+                  value={
+                    <Text>
+                      Total: <Text bold>{provider.totalKeys}</Text> | Usable:{" "}
+                      <Text color="#4CAF50" bold>
+                        {provider.usableKeys}
+                      </Text>{" "}
+                      | Active:{" "}
+                      <Text color="#2196F3" bold>
+                        {provider.activeKeys}
+                      </Text>{" "}
+                      | Cooldown:{" "}
+                      <Text color="#FF9800" bold>
+                        {provider.cooldownKeys}
+                      </Text>{" "}
+                      | RateLimit:{" "}
+                      <Text color="#F44336" bold>
+                        {provider.rateLimitedKeys}
+                      </Text>
+                    </Text>
+                  }
+                />
+                <CardRow
+                  label="Requests"
+                  labelWidth={16}
+                  value={`${provider.totalRequests} total requests / ${provider.totalFailures} failures`}
+                />
+
+                {provider.globalQuota && (
+                  <Box flexDirection="column" marginTop={1} borderStyle="single" borderColor="#00BCD4" paddingX={1}>
+                    <Text bold color="#00BCD4">
+                      Global Quota Stats
+                    </Text>
+                    <CardRow label="State File" value={provider.globalQuota.statePath} labelWidth={16} />
+                    <CardRow
+                      label="Tracked Keys"
+                      value={String(provider.globalQuota.totalTrackedKeys)}
+                      labelWidth={16}
+                    />
+                    <CardRow
+                      label="Quota Keys"
+                      labelWidth={16}
+                      value={`Usable: ${provider.globalQuota.usableKeys} | Active: ${provider.globalQuota.activeKeys} | Rate-limited: ${provider.globalQuota.rateLimitedKeys}`}
+                    />
+                    <CardRow
+                      label="Next Recovery"
+                      labelWidth={16}
+                      value={
+                        provider.globalQuota.nextAvailableInSec > 0
+                          ? `${provider.globalQuota.nextAvailableInSec}s`
+                          : "ready"
+                      }
+                      valueColor={provider.globalQuota.nextAvailableInSec > 0 ? "#FF9800" : "#4CAF50"}
+                    />
+                  </Box>
+                )}
+              </DashboardCard>
+            </Box>
+          ))}
+
+          {/* Gemini Key Files */}
+          {(geminiInventory.userKeys.length > 0 || geminiInventory.downloadedKeys.length > 0) && (
+            <Box marginBottom={1}>
+              <DashboardCard title="Gemini Key Files" icon="🔑" borderColor="#E91E63" width={panelWidth}>
+                <CardRow label="User Store Keys" value={String(geminiInventory.userKeys.length)} labelWidth={20} />
+                <CardRow label="Downloads Keys" value={String(geminiInventory.downloadedKeys.length)} labelWidth={20} />
+                <CardRow
+                  label="Downloads Import"
+                  value={
+                    geminiInventory.userKeys.length > 0
+                      ? "Bootstrap only; existing user store stays authoritative"
+                      : "Bootstrap pending"
+                  }
+                  labelWidth={20}
+                />
+              </DashboardCard>
+            </Box>
+          )}
+
+          {/* Gemini Quarantine */}
+          {geminiInventory.quarantinedKeys.length > 0 && (
+            <Box marginBottom={1}>
+              <DashboardCard title="Gemini Quarantine" icon="⚠️" borderColor="#F44336" width={panelWidth}>
+                {geminiInventory.quarantinedKeys.slice(0, 5).map((entry, index) => (
+                  <CardRow
+                    key={index}
+                    label={`Key #${index + 1}`}
+                    value={`${entry.key.slice(0, 8)}... | ${entry.reason} | last seen ${entry.lastDetectedAt}`}
+                    labelWidth={10}
+                  />
+                ))}
+              </DashboardCard>
+            </Box>
+          )}
+        </Box>
       )}
 
       <Box marginTop={1} flexDirection="column">
@@ -454,6 +696,84 @@ function StatusRow({ label, value }: { label: string; value: string }): React.Re
       </Box>
     </Box>
   );
+}
+
+function DashboardCard({
+  title,
+  icon,
+  borderColor,
+  children,
+  width,
+}: {
+  title: string;
+  icon: string;
+  borderColor: string;
+  children: React.ReactNode;
+  width: number;
+}): React.ReactElement {
+  return (
+    <Box borderStyle="round" borderColor={borderColor} flexDirection="column" paddingX={1} width={width}>
+      <Box flexDirection="row" marginBottom={1}>
+        <Text bold color={borderColor}>
+          {icon} {title}
+        </Text>
+      </Box>
+      {children}
+    </Box>
+  );
+}
+
+function CardRow({
+  label,
+  value,
+  labelWidth = 14,
+  valueColor,
+}: {
+  label: string;
+  value: React.ReactNode;
+  labelWidth?: number;
+  valueColor?: string;
+}): React.ReactElement {
+  return (
+    <Box flexDirection="row">
+      <Box width={labelWidth}>
+        <Text dimColor>{label}:</Text>
+      </Box>
+      <Box flexGrow={1}>
+        {typeof value === "string" ? (
+          <Text color={valueColor} wrap="truncate-end">
+            {value}
+          </Text>
+        ) : (
+          value
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+function buildProgressBar(freeStr: string, totalStr: string, width: number): string {
+  const free = parseFloat(freeStr);
+  const total = parseFloat(totalStr);
+  if (isNaN(free) || isNaN(total) || total === 0) return "";
+  const used = total - free;
+  const ratio = used / total;
+  const filled = Math.max(0, Math.min(width, Math.round(ratio * width)));
+  const empty = width - filled;
+  return "[" + "█".repeat(filled) + "░".repeat(empty) + `] ${Math.round(ratio * 100)}%`;
+}
+
+function formatPathForCard(filePath: string, maxLength: number): string {
+  if (filePath.length <= maxLength) return filePath;
+  const parts = filePath.split("/");
+  if (parts.length <= 2) {
+    return "..." + filePath.slice(-(maxLength - 3));
+  }
+  const filename = parts.pop() || "";
+  const folder = parts.pop() || "";
+  const combined = `.../${folder}/${filename}`;
+  if (combined.length <= maxLength) return combined;
+  return "..." + filename.slice(-(maxLength - 4));
 }
 
 export default QueryView;

@@ -65,12 +65,19 @@ export function shouldCompactContext(options: {
   }
 
   const keepFromIndex = originalIndices[compactUpToIndex] ?? options.messages.length;
+  const decisionCompactUpToIndex =
+    originalIndices[compactUpToIndex - 1] ?? options.messages.length - (activeMessages.length - boundaryIndex);
+  const endIndex = decisionCompactUpToIndex + 1;
+  const startIndex = options.messages.findIndex((message) => !message.compacted && message.role !== "system");
+
+  if (startIndex === -1 || endIndex <= startIndex) {
+    return { shouldCompact: false, estimatedTokens };
+  }
 
   return {
     shouldCompact: true,
     estimatedTokens,
-    compactUpToIndex:
-      originalIndices[compactUpToIndex - 1] ?? options.messages.length - (activeMessages.length - boundaryIndex),
+    compactUpToIndex: decisionCompactUpToIndex,
     keepFromIndex,
   };
 }
