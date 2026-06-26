@@ -103,6 +103,7 @@ let initialPrompt = extractInitialPrompt(args);
 // Harness flags for headless CI/CD execution
 const autoAcceptEnabled = args.includes("--yolo") || args.includes("-y");
 const planModeEnabled = args.includes("--plan");
+const pipelineModeEnabled = args.includes("--pipeline");
 
 // Team orchestration flags
 const teamMode = args.includes("--team");

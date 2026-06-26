@@ -3,6 +3,7 @@ import { DEFAULT_MAX_TURNS } from "./common/constants";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { syncGeminiKeys } from "./common/gemini-keys-sync";
 
 // ==========================================================================
 // Types
@@ -95,6 +96,7 @@ export type DeepcodingSettings = {
   geminiBaseURL?: string;
   autoLinter?: string;
   fullPowerMode?: boolean;
+  provider?: string;
 };
 
 // -- Resolved settings (after merging sources) -----------------------------
@@ -122,6 +124,8 @@ export type ResolvedDeepcodingSettings = {
   geminiApiKey?: string;
   geminiBaseURL?: string;
   autoLinter?: string;
+  provider?: string;
+  pipeline: PipelineSettings;
 };
 
 // ==========================================================================
@@ -130,6 +134,21 @@ export type ResolvedDeepcodingSettings = {
 
 export const DEFAULT_MODEL = "deepseek-v4-pro";
 export const DEFAULT_BASE_URL = "https://opencode.ai/zen/v1";
+
+// Pipeline settings for Multi-Model PEVF orchestration
+export interface PipelineSettings {
+  plannerModel: string;
+  executorModel: string;
+  fixerModel: string;
+  maxRepairAttempts: number;
+}
+
+export const DEFAULT_PIPELINE_SETTINGS: PipelineSettings = {
+  plannerModel: "gemini-3.5-flash",
+  executorModel: "gemini-3.1-flash-lite",
+  fixerModel: "gemini-3.5-flash",
+  maxRepairAttempts: 3,
+};
 
 // ==========================================================================
 // Resolution context (input sources for merging)
@@ -462,11 +481,23 @@ export function resolveSettingsSources(
 
   const env = { ...userEnv, ...projectEnv, ...systemEnv };
   const model = firstString(src, "MODEL", "model", defaults.model);
+  const geminiApiKey = firstString(src, "GEMINI_API_KEY", "geminiApiKey") || syncGeminiKeys() || undefined;
+  const geminiBaseURL = firstString(src, "GEMINI_BASE_URL", "geminiBaseURL") || undefined;
+  const rawApiKey = trimString(env.API_KEY) || undefined;
+  const rawBaseURL = trimString(env.BASE_URL) || defaults.baseURL;
+
+  const isGemini = model.toLowerCase().startsWith("gemini") || model.toLowerCase().startsWith("gemma");
+  const isCustomBaseURL = rawBaseURL !== defaults.baseURL;
+  const provider = firstString(src, "PROVIDER", "provider") || (isGemini ? "gemini" : "deepseek");
 
   return {
     env,
-    apiKey: trimString(env.API_KEY) || undefined,
-    baseURL: trimString(env.BASE_URL) || defaults.baseURL,
+    apiKey: isGemini ? geminiApiKey || rawApiKey : rawApiKey,
+    baseURL: isGemini
+      ? geminiBaseURL ||
+        (isCustomBaseURL ? rawBaseURL : undefined) ||
+        "https://generativelanguage.googleapis.com/v1beta/openai/"
+      : rawBaseURL,
     model,
     temperature: firstTemperature(src, "TEMPERATURE", "temperature"),
     thinkingEnabled: firstBoolean(src, "THINKING_ENABLED", "thinkingEnabled", defaultsToThinkingMode(model)),
@@ -484,8 +515,10 @@ export function resolveSettingsSources(
     maxTurns: firstInteger(src, "MAX_TURNS", "maxTurns", DEFAULT_MAX_TURNS),
     headlessPrompt: undefined,
     fullPowerMode: firstBoolean(src, "FULL_POWER_MODE", "fullPowerMode", false),
-    geminiApiKey: firstString(src, "GEMINI_API_KEY", "geminiApiKey") || undefined,
-    geminiBaseURL: firstString(src, "GEMINI_BASE_URL", "geminiBaseURL") || undefined,
+    geminiApiKey,
+    geminiBaseURL,
+    provider,
+    pipeline: DEFAULT_PIPELINE_SETTINGS,
   };
 }
 
