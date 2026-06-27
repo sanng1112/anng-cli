@@ -1328,7 +1328,7 @@ test("createSession stores /init and sends generate prompt when no project AGENT
   assert.doesNotMatch(openAIUserMessage?.content ?? "", /Update \.\/AGENTS\.md/);
 });
 
-test("createSession reports a new prompt with the machineId token", async () => {
+test("createSession does not emit implicit telemetry", async () => {
   const workspace = createTempDir("anng-session-workspace-");
   const home = createTempDir("anng-session-home-");
   setHomeDir(home);
@@ -1353,15 +1353,10 @@ test("createSession reports a new prompt with the machineId token", async () => 
 
   assert.equal(activatedSessionIds.length, 1);
   assert.equal(activatedSessionIds[0], sessionId);
-  assert.equal(fetchCalls.length, 1);
-  assert.equal(String(fetchCalls[0].input), "https://anng.vegamo.cn/api/plugin/new");
-  assert.equal(fetchCalls[0].init?.method, "POST");
-  assert.ok(fetchCalls[0].init?.signal instanceof AbortSignal);
-  assert.deepEqual(JSON.parse(String(fetchCalls[0].init?.body)), {});
-  assert.equal((fetchCalls[0].init?.headers as Record<string, string>).Token, "machine-id-123");
+  assert.equal(fetchCalls.length, 0);
 });
 
-test("replySession reports a new prompt with the machineId token", async () => {
+test("replySession does not emit implicit telemetry", async () => {
   const workspace = createTempDir("anng-reply-workspace-");
   const home = createTempDir("anng-reply-home-");
   setHomeDir(home);
@@ -1385,15 +1380,10 @@ test("replySession reports a new prompt with the machineId token", async () => {
   await manager.replySession(sessionId, { text: "second prompt" });
   await flushPromises();
 
-  assert.equal(fetchCalls.length, 1);
-  assert.equal(String(fetchCalls[0].input), "https://anng.vegamo.cn/api/plugin/new");
-  assert.equal(fetchCalls[0].init?.method, "POST");
-  assert.ok(fetchCalls[0].init?.signal instanceof AbortSignal);
-  assert.deepEqual(JSON.parse(String(fetchCalls[0].init?.body)), {});
-  assert.equal((fetchCalls[0].init?.headers as Record<string, string>).Token, "machine-id-456");
+  assert.equal(fetchCalls.length, 0);
 });
 
-test("reporting a new prompt does not warn when the background request fails", async () => {
+test("createSession stays silent when telemetry hook is a no-op", async () => {
   const workspace = createTempDir("anng-report-failure-workspace-");
   const home = createTempDir("anng-report-failure-home-");
   setHomeDir(home);
@@ -3930,6 +3920,25 @@ function createNotifyingSessionManager(
     onAssistantMessage: () => {},
   });
 }
+
+test("SessionManager create-vs-reply behavior retains active session and answer", async () => {
+  const workspace = createTempDir("anng-create-vs-reply-workspace-");
+  const home = createTempDir("anng-create-vs-reply-home-");
+  setHomeDir(home);
+
+  const manager = createMockedClientSessionManager(workspace, [
+    createChatResponse("first answer", { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }),
+    createChatResponse("second answer", { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }),
+  ]);
+
+  const sessionId = await manager.createSession({ text: "first" });
+  assert.equal(manager.getActiveSessionId(), sessionId);
+  assert.equal(manager.getSession(sessionId)?.assistantReply, "first answer");
+
+  await manager.replySession(sessionId, { text: "second" });
+  assert.equal(manager.getActiveSessionId(), sessionId);
+  assert.equal(manager.getSession(sessionId)?.assistantReply, "second answer");
+});
 
 function createMockedClientSessionManager(projectRoot: string, responses: unknown[]): SessionManager {
   const client = {
