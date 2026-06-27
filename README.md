@@ -174,7 +174,23 @@ Nhập dấu `/` tại ô nhập liệu để mở menu lệnh nhanh:
 - `/init`: Tự động tạo file `AGENTS.md` (chứa hướng dẫn dự án cho LLM).
 - `/exit`: Thoát ứng dụng một cách an toàn.
 
-### 3. Khởi chạy bằng CLI Flags
+### 3. Danh sách Lệnh và Flags (CLI)
+
+#### Các Lệnh (Commands)
+- `anng`
+  Khởi động giao diện tương tác TUI (interactive shell).
+- `anng "prompt"`
+  Chạy chế độ một lần (one-shot mode) và in kết quả ra stdout.
+- `anng doctor`
+  Kiểm tra sức khỏe hệ thống, settings, tmux, kết nối MCP và chẩn đoán key-rotation.
+- `anng sessions`
+  Kiểm tra và xem lịch sử các phiên làm việc (sessions).
+- `anng mcp`
+  Kiểm tra các công cụ (tools) và server MCP đang được cấu hình.
+- `anng daemon`
+  Kiểm tra, hủy bỏ và đánh giá các tác vụ chạy nền (daemon tasks).
+
+#### Khởi chạy bằng CLI Flags
 Hỗ trợ chạy trực tiếp từ dòng lệnh không cần giao diện (Headless mode) hoặc tùy biến chế độ:
 ```bash
 # Chạy một yêu cầu trực tiếp và tự động đồng ý mọi quyền (YOLO Mode)

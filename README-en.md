@@ -170,7 +170,23 @@ Type `/` in the prompt input to open the commands menu:
 - `/init`: Initialize an `AGENTS.md` file (LLM-friendly project instructions).
 - `/exit`: Safely exit the TUI application.
 
-### 3. Command Line Flags (CLI execution)
+### 3. Commands and Flags (CLI)
+
+#### Commands
+- `anng`
+  Start the interactive ANNG terminal shell.
+- `anng "prompt"`
+  Run one-shot mode and print the result to stdout.
+- `anng doctor`
+  Check runtime health, settings, tmux availability, MCP visibility, and key-rotation diagnostics.
+- `anng sessions`
+  Inspect persisted session history.
+- `anng mcp`
+  Inspect configured and internal MCP tools.
+- `anng daemon`
+  Inspect, cancel, and review long-running daemon tasks.
+
+#### Command Line Flags
 Run in headless mode or configure execution states using command line arguments:
 ```bash
 # Direct execution in YOLO mode (auto-accept all operations)

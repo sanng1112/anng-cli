@@ -11,4 +11,12 @@ describe("release surface", () => {
     expect(pkg.bin?.anng).toBe("./dist/index.js");
     expect(pkg.main).toBe("./dist/index.js");
   });
+
+  it("documents the command groups that the runtime actually ships", () => {
+    const readme = fs.readFileSync("README.md", "utf8");
+    expect(readme).toContain("anng doctor");
+    expect(readme).toContain("anng sessions");
+    expect(readme).toContain("anng mcp");
+    expect(readme).toContain("anng daemon");
+  });
 });

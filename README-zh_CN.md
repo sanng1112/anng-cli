@@ -170,8 +170,24 @@ ANNG CLI 按照以下优先级解析配置文件：
 - `/init`：快速初始化 `AGENTS.md` 文件（用于对大模型说明项目规则）。
 - `/exit`：安全退出 TUI 应用。
 
-### 3. 命令行参数 (CLI 运行)
-可以通过命令行参数直接以无界面模式（Headless）或自定义状态启动：
+### 3. 命令与参数 (CLI)
+
+#### 命令
+- `anng`
+  启动 ANNG 交互式 TUI 终端。
+- `anng "prompt"`
+  以单次模式 (one-shot mode) 运行任务并将结果输出到 stdout。
+- `anng doctor`
+  检查运行时运行状况、设置、tmux 可用性、MCP 可见性以及密钥轮换诊断。
+- `anng sessions`
+  检查持久化的会话历史记录。
+- `anng mcp`
+  检查已配置和内部的 MCP 工具。
+- `anng daemon`
+  检查、取消和查看长期运行的后台守护进程任务。
+
+#### 命令行参数
+可以通过命令行参数直接以无界面模式（Headless）或自定义状态启动:
 ```bash
 # 在 YOLO 模式下直接执行任务（自动确认所有操作）
 anng --yolo -p "用 Node.js 编写一个 test.js 脚本并运行"
