@@ -22,7 +22,7 @@ import {
 import { PermissionPrompt, type PermissionPromptResult } from "./PermissionPrompt";
 import { buildExitSummaryText } from "../exit-summary";
 import { RawMode, useRawModeContext } from "../contexts";
-import { renderMessageToStdout } from "../components/MessageView/utils";
+import { renderMessageToStdout, buildToolSummary, getUpdatePlanPreviewLines } from "../components/MessageView/utils";
 import {
   buildPromptDraftFromSessionMessage,
   buildStatusLine,
@@ -184,6 +184,7 @@ function App({
   const [nowTick, setNowTick] = useState(0);
   const [mcpStatuses, setMcpStatuses] = useState<ReturnType<typeof sessionManager.getMcpStatus>>([]);
   const [showProcessStdout, setShowProcessStdout] = useState(false);
+  const [showTodoPanel, setShowTodoPanel] = useState(true);
   const [_statusTopic, setStatusTopic] = useState<string>("");
   const [sessionProcessCount, setSessionProcessCount] = useState(0);
   const [queueVisible, setQueueVisible] = useState(true);
@@ -1066,6 +1067,10 @@ function App({
     setShowProcessStdout(false);
   }, []);
 
+  const handleToggleTodoPanel = useCallback(() => {
+    setShowTodoPanel((prev) => !prev);
+  }, []);
+
   const handleAdjustBashTimeout = useCallback(
     (deltaMs: number) => sessionManager.adjustActiveBashTimeout(deltaMs),
     [sessionManager]
@@ -1342,6 +1347,30 @@ function App({
     }),
     [welcomeNonce]
   );
+  const latestPlanLines = useMemo(() => {
+    if (mode === RawMode.Raw) {
+      return [];
+    }
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "tool") {
+        const summary = buildToolSummary(msg);
+        if (summary.name === "UpdatePlan" && summary.ok) {
+          const lines = getUpdatePlanPreviewLines(summary);
+          if (lines && lines.length > 0) {
+            return lines;
+          }
+        }
+      }
+    }
+    return [];
+  }, [mode, messages]);
+
+  const hasPlan = latestPlanLines.length > 0;
+  const showPanel = showTodoPanel && hasPlan;
+  const todoPanelWidth = Math.min(35, Math.floor(screenWidth * 0.35));
+  const mainWidth = showPanel ? screenWidth - todoPanelWidth - 2 : screenWidth;
+
   const staticItems = useMemo(() => {
     if (mode === RawMode.Raw) {
       return [];
@@ -1439,204 +1468,247 @@ function App({
   }
 
   return (
-    <Box flexDirection="column" width={screenWidth} minWidth={80} overflowX={"visible"}>
-      <Static items={staticItems}>
-        {(item) => {
-          if (item.id.startsWith("__welcome__")) {
+    <Box flexDirection="row" width={screenWidth}>
+      <Box flexDirection="column" width={mainWidth} minWidth={80} overflowX={"visible"}>
+        <Static items={staticItems}>
+          {(item) => {
+            if (item.id.startsWith("__welcome__")) {
+              return (
+                <WelcomeScreen
+                  key={item.id}
+                  projectRoot={projectRoot}
+                  settings={resolvedSettings}
+                  skills={skills}
+                  width={mainWidth}
+                />
+              );
+            }
             return (
-              <WelcomeScreen
+              <MessageView
                 key={item.id}
-                projectRoot={projectRoot}
-                settings={resolvedSettings}
-                skills={skills}
-                width={screenWidth}
+                message={item}
+                collapsed={isCollapsedThinking(item, expandedThinkingId)}
+                width={mainWidth}
               />
             );
-          }
-          return (
-            <MessageView
-              key={item.id}
-              message={item}
-              collapsed={isCollapsedThinking(item, expandedThinkingId)}
-              width={screenWidth}
-            />
-          );
-        }}
-      </Static>
-      {streamProgress && (streamProgress.text || streamProgress.reasoningText) ? (
-        <MessageView
-          key={`stream-${streamProgress.requestId}`}
-          message={{
-            id: `stream-${streamProgress.requestId}`,
-            sessionId: streamProgress.sessionId ?? "",
-            role: "assistant",
-            content: streamProgress.text ?? "",
-            contentParams: null,
-            messageParams: streamProgress.reasoningText ? { reasoning_content: streamProgress.reasoningText } : null,
-            compacted: false,
-            visible: true,
-            createTime: streamProgress.startedAt,
-            updateTime: new Date().toISOString(),
           }}
-          collapsed={false}
-          width={screenWidth}
-        />
-      ) : null}
-      {busy || statusLine ? <StatusLine busy={busy} text={statusLine} /> : null}
-      {errorLine ? (
-        <Box>
-          <Text color="red">Error: {errorLine}</Text>
+        </Static>
+        {streamProgress && (streamProgress.text || streamProgress.reasoningText) ? (
+          <MessageView
+            key={`stream-${streamProgress.requestId}`}
+            message={{
+              id: `stream-${streamProgress.requestId}`,
+              sessionId: streamProgress.sessionId ?? "",
+              role: "assistant",
+              content: streamProgress.text ?? "",
+              contentParams: null,
+              messageParams: streamProgress.reasoningText ? { reasoning_content: streamProgress.reasoningText } : null,
+              compacted: false,
+              visible: true,
+              createTime: streamProgress.startedAt,
+              updateTime: new Date().toISOString(),
+            }}
+            collapsed={false}
+            width={mainWidth}
+          />
+        ) : null}
+        {busy || statusLine ? <StatusLine busy={busy} text={statusLine} /> : null}
+        {errorLine ? (
+          <Box>
+            <Text color="red">Error: {errorLine}</Text>
+          </Box>
+        ) : null}
+        {showProcessStdout ? (
+          <ProcessStdoutView
+            processStdoutRef={processStdoutRef}
+            runningProcesses={runningProcesses}
+            onDismiss={handleDismissProcessStdout}
+            onAdjustTimeout={handleAdjustBashTimeout}
+            screenWidth={mainWidth}
+            screenHeight={screenHeight}
+          />
+        ) : view === "session-list" ? (
+          <SessionList
+            sessions={sessions}
+            onSelect={(id) => void handleSelectSession(id)}
+            onCancel={() => setView("chat")}
+            onDelete={(id) => {
+              void handleDeleteSession(id);
+            }}
+            onRename={(id, newName) => {
+              if (sessionManager.renameSession(id, newName)) {
+                refreshSessionsList();
+                setStatusLine(`Session renamed to "${newName}".`);
+              } else {
+                setErrorLine("Failed to rename session.");
+              }
+            }}
+          />
+        ) : view === "undo" ? (
+          <UndoSelector
+            targets={undoTargets}
+            onSelect={(target, restoreMode) => void handleUndoRestore(target, restoreMode)}
+            onCancel={() => {
+              setPromptDraft(null);
+              navigateToSubView("chat");
+            }}
+          />
+        ) : view === "mcp-status" ? (
+          <McpStatusList
+            statuses={mcpStatuses}
+            onCancel={() => navigateToSubView("chat")}
+            onReconnect={(name) => {
+              const latest = resolveCurrentSettings(projectRoot);
+              void sessionManager.reconnectMcpServer(name, latest.mcpServers?.[name]);
+            }}
+          />
+        ) : view === "help" ? (
+          <HelpView onExit={() => navigateToSubView("chat")} />
+        ) : view === "agents-config" ? (
+          <AgentsConfigView projectRoot={projectRoot} onExit={() => navigateToSubView("chat")} />
+        ) : view === "team-create" ? (
+          <TeamCreateView
+            projectRoot={projectRoot}
+            screenWidth={mainWidth}
+            onRunTask={(taskText: string) => {
+              navigateToSubView("chat");
+              void runTeamTask(taskText);
+            }}
+            onStartTeam={startTeamWithTmux}
+            onExit={() => navigateToSubView("chat")}
+          />
+        ) : view === "settings" ? (
+          <SettingsView
+            projectRoot={projectRoot}
+            onExit={() => {
+              setResolvedSettings(resolveCurrentSettings(projectRoot));
+              navigateToSubView("chat");
+            }}
+          />
+        ) : view === "status" ? (
+          <QueryView
+            projectRoot={projectRoot}
+            sessionInfo={{
+              activeSessionId: sessionManager.getActiveSessionId(),
+              activeStatus: activeStatus,
+              activeTokens: sessionManager.getSession(sessionManager.getActiveSessionId() ?? "")?.activeTokens ?? 0,
+              messageCount: messages.length,
+              sessionCount: sessions.length,
+            }}
+            modelInfo={{
+              model: resolvedSettings.model,
+              baseURL: resolvedSettings.baseURL,
+              thinkingEnabled: resolvedSettings.thinkingEnabled,
+              reasoningEffort: resolvedSettings.reasoningEffort,
+            }}
+            runtimeInfo={{
+              executionMode,
+              permissionDefaultMode: resolvedSettings.permissions.defaultMode,
+            }}
+            topic={_statusTopic}
+            onExit={() => navigateToSubView("chat")}
+          />
+        ) : view === "bg" ? (
+          <BackgroundProcessesView
+            processStdoutRef={processStdoutRef}
+            runningProcesses={runningProcesses}
+            sessionProcessCount={sessionProcessCount}
+            onDismiss={() => navigateToSubView("chat")}
+            screenWidth={mainWidth}
+            screenHeight={screenHeight}
+          />
+        ) : view === "queue" ? (
+          <QueueView
+            projectRoot={projectRoot}
+            onExit={() => navigateToSubView("chat")}
+            onProcessTask={handleQueueProcessTask}
+            screenWidth={mainWidth}
+            promptHistory={promptHistory}
+            queueVisible={queueVisible}
+            onToggleVisibility={handleToggleQueueVisibility}
+            refreshTick={queueRefreshTick}
+          />
+        ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
+          <AskUserQuestionPrompt
+            questions={pendingQuestion.questions}
+            onSubmit={handleQuestionAnswers}
+            onCancel={handleQuestionCancel}
+          />
+        ) : activeStatus === "ask_permission" &&
+          activeAskPermissions &&
+          activeAskPermissions.length > 0 &&
+          !pendingPermissionReply &&
+          !busy ? (
+          <PermissionPrompt
+            requests={activeAskPermissions}
+            onSubmit={handlePermissionResult}
+            onCancel={handlePermissionCancel}
+          />
+        ) : isExiting ? null : (
+          <PromptInput
+            projectRoot={projectRoot}
+            screenWidth={mainWidth}
+            skills={skills}
+            modelConfig={resolvedSettings}
+            promptHistory={promptHistory}
+            busy={busy}
+            cursorLayoutKey={promptCursorLayoutKey}
+            loadingText={loadingText}
+            runningProcesses={runningProcesses}
+            promptDraft={promptDraft}
+            onSubmit={handleSubmit}
+            onModelConfigChange={handleModelConfigChange}
+            onRawModeChange={handleRawModeChange}
+            onInterrupt={handleInterrupt}
+            onToggleProcessStdout={handleToggleProcessStdout}
+            onQueueWhenBusy={handleQueueWhenBusy}
+            executionMode={executionMode}
+            onTogglePlanMode={handleTogglePlanMode}
+            onToggleAutoMode={handleToggleAutoMode}
+            onToggleTodoPanel={handleToggleTodoPanel}
+            placeholder="Type your message..."
+          />
+        )}
+      </Box>
+      {showPanel && (
+        <Box
+          flexDirection="column"
+          width={todoPanelWidth}
+          borderStyle="round"
+          borderColor="cyan"
+          marginLeft={1}
+          paddingX={1}
+        >
+          <Text bold color="cyan">
+            📋 Action Plan
+          </Text>
+          <Box flexDirection="column" marginTop={1}>
+            {latestPlanLines.map((line, idx) => {
+              const isActive = line.startsWith("- [>]") || line.startsWith("- [x]") || line.includes("[>]");
+              const isDone = line.startsWith("- [x]");
+              let color = "white";
+              if (isActive) color = "yellow";
+              else if (isDone) color = "gray";
+
+              let cleanLine = line;
+              if (line.startsWith("- [ ]")) {
+                cleanLine = "  ☐ " + line.slice(5).trim();
+              } else if (line.startsWith("- [x]")) {
+                cleanLine = "  ✔ " + line.slice(5).trim();
+              } else if (line.startsWith("- [>]")) {
+                cleanLine = "  ▸ " + line.slice(5).trim();
+              } else if (line.startsWith("- ")) {
+                cleanLine = "  • " + line.slice(2).trim();
+              }
+
+              return (
+                <Text key={idx} color={color} wrap="truncate-end">
+                  {cleanLine}
+                </Text>
+              );
+            })}
+          </Box>
         </Box>
-      ) : null}
-      {showProcessStdout ? (
-        <ProcessStdoutView
-          processStdoutRef={processStdoutRef}
-          runningProcesses={runningProcesses}
-          onDismiss={handleDismissProcessStdout}
-          onAdjustTimeout={handleAdjustBashTimeout}
-          screenWidth={screenWidth}
-          screenHeight={screenHeight}
-        />
-      ) : view === "session-list" ? (
-        <SessionList
-          sessions={sessions}
-          onSelect={(id) => void handleSelectSession(id)}
-          onCancel={() => setView("chat")}
-          onDelete={(id) => {
-            void handleDeleteSession(id);
-          }}
-          onRename={(id, newName) => {
-            if (sessionManager.renameSession(id, newName)) {
-              refreshSessionsList();
-              setStatusLine(`Session renamed to "${newName}".`);
-            } else {
-              setErrorLine("Failed to rename session.");
-            }
-          }}
-        />
-      ) : view === "undo" ? (
-        <UndoSelector
-          targets={undoTargets}
-          onSelect={(target, restoreMode) => void handleUndoRestore(target, restoreMode)}
-          onCancel={() => {
-            setPromptDraft(null);
-            navigateToSubView("chat");
-          }}
-        />
-      ) : view === "mcp-status" ? (
-        <McpStatusList
-          statuses={mcpStatuses}
-          onCancel={() => navigateToSubView("chat")}
-          onReconnect={(name) => {
-            const latest = resolveCurrentSettings(projectRoot);
-            void sessionManager.reconnectMcpServer(name, latest.mcpServers?.[name]);
-          }}
-        />
-      ) : view === "help" ? (
-        <HelpView onExit={() => navigateToSubView("chat")} />
-      ) : view === "agents-config" ? (
-        <AgentsConfigView projectRoot={projectRoot} onExit={() => navigateToSubView("chat")} />
-      ) : view === "team-create" ? (
-        <TeamCreateView
-          projectRoot={projectRoot}
-          screenWidth={screenWidth}
-          onRunTask={(taskText: string) => {
-            navigateToSubView("chat");
-            void runTeamTask(taskText);
-          }}
-          onStartTeam={startTeamWithTmux}
-          onExit={() => navigateToSubView("chat")}
-        />
-      ) : view === "settings" ? (
-        <SettingsView
-          projectRoot={projectRoot}
-          onExit={() => {
-            setResolvedSettings(resolveCurrentSettings(projectRoot));
-            navigateToSubView("chat");
-          }}
-        />
-      ) : view === "status" ? (
-        <QueryView
-          projectRoot={projectRoot}
-          sessionInfo={{
-            activeSessionId: sessionManager.getActiveSessionId(),
-            activeStatus: activeStatus,
-            activeTokens: sessionManager.getSession(sessionManager.getActiveSessionId() ?? "")?.activeTokens ?? 0,
-            messageCount: messages.length,
-            sessionCount: sessions.length,
-          }}
-          modelInfo={{
-            model: resolvedSettings.model,
-            baseURL: resolvedSettings.baseURL,
-            thinkingEnabled: resolvedSettings.thinkingEnabled,
-            reasoningEffort: resolvedSettings.reasoningEffort,
-          }}
-          runtimeInfo={{
-            executionMode,
-            permissionDefaultMode: resolvedSettings.permissions.defaultMode,
-          }}
-          topic={_statusTopic}
-          onExit={() => navigateToSubView("chat")}
-        />
-      ) : view === "bg" ? (
-        <BackgroundProcessesView
-          processStdoutRef={processStdoutRef}
-          runningProcesses={runningProcesses}
-          sessionProcessCount={sessionProcessCount}
-          onDismiss={() => navigateToSubView("chat")}
-          screenWidth={screenWidth}
-          screenHeight={screenHeight}
-        />
-      ) : view === "queue" ? (
-        <QueueView
-          projectRoot={projectRoot}
-          onExit={() => navigateToSubView("chat")}
-          onProcessTask={handleQueueProcessTask}
-          screenWidth={screenWidth}
-          promptHistory={promptHistory}
-          queueVisible={queueVisible}
-          onToggleVisibility={handleToggleQueueVisibility}
-          refreshTick={queueRefreshTick}
-        />
-      ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
-        <AskUserQuestionPrompt
-          questions={pendingQuestion.questions}
-          onSubmit={handleQuestionAnswers}
-          onCancel={handleQuestionCancel}
-        />
-      ) : activeStatus === "ask_permission" &&
-        activeAskPermissions &&
-        activeAskPermissions.length > 0 &&
-        !pendingPermissionReply &&
-        !busy ? (
-        <PermissionPrompt
-          requests={activeAskPermissions}
-          onSubmit={handlePermissionResult}
-          onCancel={handlePermissionCancel}
-        />
-      ) : isExiting ? null : (
-        <PromptInput
-          projectRoot={projectRoot}
-          screenWidth={screenWidth}
-          skills={skills}
-          modelConfig={resolvedSettings}
-          promptHistory={promptHistory}
-          busy={busy}
-          cursorLayoutKey={promptCursorLayoutKey}
-          loadingText={loadingText}
-          runningProcesses={runningProcesses}
-          promptDraft={promptDraft}
-          onSubmit={handleSubmit}
-          onModelConfigChange={handleModelConfigChange}
-          onRawModeChange={handleRawModeChange}
-          onInterrupt={handleInterrupt}
-          onToggleProcessStdout={handleToggleProcessStdout}
-          onQueueWhenBusy={handleQueueWhenBusy}
-          executionMode={executionMode}
-          onTogglePlanMode={handleTogglePlanMode}
-          onToggleAutoMode={handleToggleAutoMode}
-          placeholder="Type your message..."
-        />
       )}
     </Box>
   );

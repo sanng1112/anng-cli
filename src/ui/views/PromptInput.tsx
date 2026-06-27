@@ -123,6 +123,7 @@ type Props = {
   executionMode?: "default" | "plan" | "autoAccept";
   onTogglePlanMode?: () => void;
   onToggleAutoMode?: () => void;
+  onToggleTodoPanel?: () => void;
 };
 
 const PROMPT_PREFIX_WIDTH = 2;
@@ -157,6 +158,7 @@ export const PromptInput = React.memo(function PromptInput({
   executionMode = "default",
   onTogglePlanMode,
   onToggleAutoMode,
+  onToggleTodoPanel,
 }: Props): React.ReactElement {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -230,7 +232,7 @@ export const PromptInput = React.memo(function PromptInput({
     ? statusMessage
     : busy
       ? busyStatusText
-      : `enter send · shift+enter newline · @ files · ctrl+v image · / commands · ctrl+c exit${processOrPasteHint}`;
+      : `enter send · shift+enter newline · @ files · ctrl+t plan · ctrl+v image · / commands · ctrl+c exit${processOrPasteHint}`;
   const showFooterText = useMemo(
     () => showMenu || showSkillsDropdown || openRawModelDropdown || showModelDropdown || showFileMentionMenu,
     [showMenu, showSkillsDropdown, showModelDropdown, openRawModelDropdown, showFileMentionMenu]
@@ -377,6 +379,11 @@ export const PromptInput = React.memo(function PromptInput({
 
       if (key.ctrl && (input === "p" || input === "P")) {
         onTogglePlanMode?.();
+        return;
+      }
+
+      if (key.ctrl && (input === "t" || input === "T")) {
+        onToggleTodoPanel?.();
         return;
       }
 
