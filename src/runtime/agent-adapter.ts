@@ -49,6 +49,26 @@ export async function createAgentAdapter(input: {
   maxTurns?: number;
   createSessionManager?: () => SessionManagerLike;
 }): Promise<AgentAdapter> {
+  if (process.env.ANNG_MOCK_LLM === "true") {
+    return {
+      submitPrompt: async (prompt: string) => {
+        return {
+          sessionId: "mock-session-123",
+          text: `Mock response for: ${prompt}`,
+          status: "completed",
+          usage: {
+            inputTokens: 10,
+            outputTokens: 20,
+            totalTokens: 30,
+          },
+          failReason: null,
+        };
+      },
+      abort: () => {},
+      dispose: () => {},
+    };
+  }
+
   const manager =
     input.createSessionManager?.() ??
     createDefaultSessionManager({

@@ -41,6 +41,7 @@
     "test:single": "tsx --test",
     "prepack": "npm run build",
     "prepare": "husky",
+    "bench:prepare": "npm run bundle",
     "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
