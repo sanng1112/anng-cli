@@ -21,6 +21,7 @@ import {
   type ToolDefinition,
 } from "../prompt";
 import { buildSystemPrompt } from "../prompt-engine";
+import { SessionStore } from "../core/engine/session-store";
 import {
   ToolExecutor,
   type CreateOpenAIClient,
@@ -54,11 +55,10 @@ import {
   type UserToolPermission,
 } from "../common/permissions";
 import { clearSessionWorkingDir } from "../tools/bash-handler";
-import { reportNewPrompt } from "../common/telemetry";
 import { ensureProjectStorageDir, getProjectStoragePaths } from "../common/project-storage";
 import { writeTextFileAtomic } from "../common/json-store";
 import { shouldCompactContext } from "./compacter";
-import { countMessagesTokens } from "../common/tokenizer";
+import { countMessagesTokens, getCompactThreshold } from "../common/tokenizer";
 import { OpenAIMessageConverter } from "../common/openai-message-converter";
 import type { ExecutionContext } from "../common/execution-context";
 import { globalCapabilityRegistry } from "../team/capability-registry";
@@ -1109,7 +1109,6 @@ ${agentInstructions}
   }
 
   async createSession(userPrompt: UserPromptContent, controller?: AbortController): Promise<string> {
-    this.reportNewPrompt();
     const signal = controller?.signal;
     this.throwIfAborted(signal);
 
@@ -1244,8 +1243,6 @@ ${agentInstructions}
       await this.activateSession(sessionId, controller, userPrompt);
       return;
     }
-
-    this.reportNewPrompt();
 
     this.ensureFileHistorySession(sessionId);
     const checkpoint = this.recordUserPromptCheckpoint(sessionId);
@@ -1453,11 +1450,13 @@ ${agentInstructions}
         }
 
         // --- Cache Shock Absorber ---
-        // If the active messages (after compaction attempt and pinned files) are still too large (e.g. > 40k tokens),
+        // If the active messages (after compaction attempt and pinned files) are still too large (e.g. > 85% of threshold),
         // we inject a system prompt forcing the model to output a very short response. This accelerates
         // the transition of the massive block into "old history" so it can be successfully pruned in the next turn.
         const remainingTokens = countMessagesTokens(activeMessages);
-        if (remainingTokens > 40000) {
+        const compactThreshold = getCompactThreshold(model);
+        const shockAbsorberThreshold = Math.floor(compactThreshold * 0.85);
+        if (remainingTokens > shockAbsorberThreshold) {
           const shockAbsorberMessage: SessionMessage = {
             id: `shock_absorber_${Date.now()}`,
             sessionId,
@@ -1877,11 +1876,6 @@ ${agentInstructions}
     };
   }
 
-  private reportNewPrompt(): void {
-    const { machineId, telemetryEnabled } = this.createOpenAIClient();
-    reportNewPrompt({ enabled: telemetryEnabled ?? true, machineId });
-  }
-
   interruptActiveSession(): void {
     const controller = this.activePromptController;
     if (controller && !controller.signal.aborted) {
@@ -1986,8 +1980,7 @@ ${agentInstructions}
   }
 
   listSessions(): SessionEntry[] {
-    const index = this.loadSessionsIndex();
-    return index.entries;
+    return new SessionStore(this.projectRoot).listSessions();
   }
 
   getSession(sessionId: string): SessionEntry | null {
@@ -2240,6 +2233,7 @@ ${agentInstructions}
 
     if (!fs.existsSync(sessionsIndexPath)) {
       this.cachedSessionsIndex = { version: 1, entries: [], originalPath: this.projectRoot };
+      SessionStore.setCachedSessions(this.projectRoot, []);
       return this.cachedSessionsIndex;
     }
 
@@ -2254,15 +2248,18 @@ ${agentInstructions}
         entries,
         originalPath: parsed.originalPath || this.projectRoot,
       };
+      SessionStore.setCachedSessions(this.projectRoot, entries);
       return this.cachedSessionsIndex;
     } catch {
       this.cachedSessionsIndex = { version: 1, entries: [], originalPath: this.projectRoot };
+      SessionStore.setCachedSessions(this.projectRoot, []);
       return this.cachedSessionsIndex;
     }
   }
 
   private saveSessionsIndex(index: SessionsIndex): void {
     this.cachedSessionsIndex = index;
+    SessionStore.setCachedSessions(this.projectRoot, index.entries);
     const { sessionsIndexPath } = this.getProjectStorage();
     this.ensureProjectDir();
     const normalized = {
@@ -2625,7 +2622,6 @@ ${agentInstructions}
     if (!hasUserContent) {
       return;
     }
-    this.reportNewPrompt();
     const signal = controller.signal;
     const userMessage = this.buildUserMessage(sessionId, userPrompt);
     this.appendSessionMessage(sessionId, userMessage);

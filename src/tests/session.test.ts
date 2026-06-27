@@ -7,6 +7,7 @@ import * as path from "path";
 import { GitFileHistory } from "../common/file-history";
 import { clearSessionState } from "../common/state";
 import { getProjectCode, SessionManager, globalFileWriteQueue, type SessionMessage, type SkillInfo } from "../session";
+import { SessionStore } from "../core/engine/session-store";
 import { buildAssistantMessage } from "../session/message-factory";
 
 const originalFetch = globalThis.fetch;
@@ -25,6 +26,7 @@ function setHomeDir(dir: string): void {
 }
 
 afterEach(() => {
+  SessionStore.clearCache();
   globalThis.fetch = originalFetch;
   console.warn = originalConsoleWarn;
   if (originalHome === undefined) {

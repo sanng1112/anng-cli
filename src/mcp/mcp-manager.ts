@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { McpClient, type McpToolDefinition, type McpPromptDefinition, type McpResourceDefinition } from "./mcp-client";
 import type { McpServerConfig } from "../settings";
+import { createInternalMcpServers, type InternalMcpTool } from "../core/mcp/internal-servers";
 
 const MCP_STARTUP_TIMEOUT_MS = process.env.ANNG_MCP_TIMEOUT ? parseInt(process.env.ANNG_MCP_TIMEOUT, 10) : 30_000;
 const MCP_CALL_TOOL_TIMEOUT_MS = 60_000;
@@ -57,6 +58,7 @@ function buildMcpNamespacedName(
 export class McpManager {
   private clients: McpClient[] = [];
   private tools: McpToolEntry[] = [];
+  private internalTools: Array<InternalMcpTool & { namespacedName: string }> = [];
   private prompts: Array<{
     serverName: string;
     namespacedName: string;
@@ -76,6 +78,10 @@ export class McpManager {
   private onToolsListChanged: (() => void) | null = null;
   private onStatusChanged: (() => void) | null = null;
   private serverConfigs: Record<string, McpServerConfig> = {};
+
+  constructor(private readonly projectRoot: string = process.cwd()) {
+    this.initializeInternalServers();
+  }
 
   prepare(servers?: Record<string, McpServerConfig>): void {
     if (!servers || Object.keys(servers).length === 0) return;
@@ -281,10 +287,11 @@ export class McpManager {
   }
 
   getStatus(): McpServerStatus[] {
-    const result = [...this.serverStatuses];
+    const internalServerNames = new Set(this.internalTools.map((t) => t.serverName));
+    const result = this.serverStatuses.filter((s) => !internalServerNames.has(s.name));
     const knownNames = new Set(result.map((s) => s.name));
     for (const name of this.configuredServerNames) {
-      if (!knownNames.has(name)) {
+      if (!internalServerNames.has(name) && !knownNames.has(name)) {
         result.push({
           name,
           status: "starting",
@@ -314,7 +321,7 @@ export class McpManager {
       };
     };
   }> {
-    return this.tools.map((t) => ({
+    const external = this.tools.map((t) => ({
       type: "function" as const,
       function: {
         name: t.namespacedName,
@@ -329,6 +336,22 @@ export class McpManager {
         },
       },
     }));
+    const internal = this.internalTools.map((tool) => ({
+      type: "function" as const,
+      function: {
+        name: tool.namespacedName,
+        description: `${tool.definition.description ?? tool.definition.name}\nMCP source: ${tool.serverName}: ${tool.definition.name}`,
+        parameters: {
+          type: "object" as const,
+          properties: tool.definition.inputSchema.properties,
+          required: tool.definition.inputSchema.required,
+          ...(tool.definition.inputSchema.additionalProperties !== undefined
+            ? { additionalProperties: tool.definition.inputSchema.additionalProperties }
+            : {}),
+        },
+      },
+    }));
+    return [...internal, ...external];
   }
 
   isMcpTool(name: string): boolean {
@@ -340,6 +363,23 @@ export class McpManager {
     args: Record<string, unknown>,
     timeoutMs = MCP_CALL_TOOL_TIMEOUT_MS
   ): Promise<{ ok: boolean; name: string; output?: string; error?: string }> {
+    const internalTool = this.internalTools.find((tool) => tool.namespacedName === name);
+    if (internalTool) {
+      try {
+        return {
+          ok: true,
+          name,
+          output: await internalTool.execute(args),
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          name,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+
     const tool = this.tools.find((t) => t.namespacedName === name);
     if (!tool) {
       return { ok: false, name, error: `Unknown MCP tool: ${name}` };
@@ -436,6 +476,41 @@ export class McpManager {
     this.configuredServerNames = [];
     this.serverConfigs = {};
     this.initialized = false;
+    this.initializeInternalServers();
+  }
+
+  private initializeInternalServers(): void {
+    this.internalTools = createInternalMcpServers(this.projectRoot).map((tool) => ({
+      ...tool,
+      namespacedName: `mcp__${tool.serverName}__${tool.definition.name}`,
+    }));
+
+    for (const tool of this.internalTools) {
+      if (!this.configuredServerNames.includes(tool.serverName)) {
+        this.configuredServerNames.push(tool.serverName);
+      }
+    }
+
+    const grouped = new Map<string, string[]>();
+    for (const tool of this.internalTools) {
+      const current = grouped.get(tool.serverName) ?? [];
+      current.push(tool.namespacedName);
+      grouped.set(tool.serverName, current);
+    }
+
+    for (const [serverName, tools] of grouped.entries()) {
+      this.setStatus({
+        name: serverName,
+        status: "ready",
+        connected: true,
+        toolCount: tools.length,
+        tools,
+        promptCount: 0,
+        prompts: [],
+        resourceCount: 0,
+        resources: [],
+      });
+    }
   }
 
   private async refreshServerTools(serverName: string, client: McpClient): Promise<void> {
