@@ -11,6 +11,7 @@ import { runDaemon as runDaemonRuntime } from "./runtime/run-daemon";
 import { runInteractive as runInteractiveRuntime } from "./runtime/run-interactive";
 import { ANNG_CLI_VERSION } from "./version";
 import { runTeamRuntime } from "./core/team/team-runtime";
+import { type DaemonManifest } from "./core/team/daemon-state";
 import * as fs from "node:fs";
 
 export type RunCliHooks = {
@@ -233,7 +234,7 @@ export async function runCli(argv = process.argv.slice(2), hooks: RunCliHooks = 
 
 function finalizeDaemonManifest(manifestPath: string, status: "completed" | "failed"): void {
   try {
-    const current = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+    const current = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as DaemonManifest;
     current.status = status;
     current.finishedAt = new Date().toISOString();
     if (status === "failed") {
@@ -242,6 +243,11 @@ function finalizeDaemonManifest(manifestPath: string, status: "completed" | "fai
       delete current.failureReason;
     }
     fs.writeFileSync(manifestPath, `${JSON.stringify(current, null, 2)}\n`, "utf8");
+
+    if (current.queueName && current.queueTaskId) {
+      const { markTaskDoneById } = require("./common/task-queue");
+      markTaskDoneById(current.cwd, current.queueName, current.queueTaskId);
+    }
   } catch {
     // Ignore daemon manifest finalization failures so the worker result is not hidden.
   }

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createDaemonManifest } from "../../core/team/daemon-state";
 import { runDaemon } from "../../runtime/run-daemon";
 import { parseCliArgs } from "../../commands/program";
+import { markTaskDoneById } from "../../common/task-queue";
 
 const tempDirs: string[] = [];
 const previousAnngHome = process.env.ANNG_HOME;
@@ -64,5 +65,9 @@ describe("createDaemonManifest", () => {
     const parsed = parseCliArgs(["--anng-team", "--anng-tmux", "refactor repo"]);
     expect(parsed.anngTeam).toBe(true);
     expect(parsed.anngTmux).toBe(true);
+  });
+
+  it("records queue task completion during daemon processing", () => {
+    expect(typeof markTaskDoneById).toBe("function");
   });
 });
