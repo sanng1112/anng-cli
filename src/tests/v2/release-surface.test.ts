@@ -19,4 +19,11 @@ describe("release surface", () => {
     expect(readme).toContain("anng mcp");
     expect(readme).toContain("anng daemon");
   });
+
+  it("defines a release:check script", () => {
+    const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    expect(pkg.scripts?.["release:check"]).toBeDefined();
+  });
 });
