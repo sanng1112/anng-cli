@@ -91,7 +91,8 @@ export type PromptSubmission = {
     | "goal"
     | "query"
     | "btw"
-    | "bg";
+    | "bg"
+    | "temp";
 };
 
 export type PromptDraft = {
@@ -729,6 +730,13 @@ export const PromptInput = React.memo(function PromptInput({
       clearSlashToken();
       setShowSkillsDropdown(false);
       setShowModelDropdown(true);
+      return;
+    }
+    if (item.kind === "temp") {
+      const rawText = buffer.text.trim();
+      const val = rawText.startsWith("/temp") ? rawText.slice(5).trim() : "";
+      onSubmit({ text: val, imageUrls: [], command: "temp" });
+      resetPromptInput();
       return;
     }
     if (item.kind === "raw") {

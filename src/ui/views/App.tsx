@@ -31,7 +31,14 @@ import {
   isCurrentSessionEmpty,
   renderRawModeMessages,
 } from "../utils";
-import { resolveCurrentSettings, writeModelConfigSelection } from "../../settings";
+import {
+  resolveCurrentSettings,
+  writeModelConfigSelection,
+  writeSettings,
+  writeProjectSettings,
+  readSettings,
+  readProjectSettings,
+} from "../../settings";
 import { isCollapsedThinking } from "../core/thinking-state";
 import { ANSI_CLEAR_SCREEN } from "../constants";
 import type {
@@ -697,6 +704,41 @@ function App({
           setStatusLine(`BTW note added: "${btwText.slice(0, 60)}${btwText.length > 60 ? "..." : ""}"`);
         } else {
           setStatusLine("No active session. Create one first with /new or type a message.");
+        }
+        return;
+      }
+      if (submission.command === "temp") {
+        const val = submission.text.trim();
+        const current = resolveCurrentSettings(projectRoot);
+        if (!val) {
+          const currentTemp = current.temperature !== undefined ? current.temperature : "default (not set)";
+          setStatusLine(`Current LLM temperature: ${currentTemp}`);
+          return;
+        }
+        const num = parseFloat(val);
+        if (isNaN(num) || num < 0 || num > 2) {
+          setErrorLine("Temperature must be a number between 0 and 2.");
+          return;
+        }
+
+        const projectSettingsPath = path.join(projectRoot, ".anng", "settings.json");
+        const shouldWriteProjectSettings = fs.existsSync(projectSettingsPath);
+        const rawSettings = shouldWriteProjectSettings ? readProjectSettings(projectRoot) || {} : readSettings() || {};
+        rawSettings.temperature = num;
+
+        if (shouldWriteProjectSettings) {
+          writeProjectSettings(rawSettings, projectRoot);
+        } else {
+          writeSettings(rawSettings);
+        }
+
+        const next = resolveCurrentSettings(projectRoot);
+        setResolvedSettings(next);
+        setStatusLine(`✅ Temperature set to ${num}`);
+
+        const activeSessionId = sessionManager.getActiveSessionId();
+        if (activeSessionId) {
+          sessionManager.addSessionSystemMessage(activeSessionId, `⚙️ *Temperature set to:* ${num}`, true);
         }
         return;
       }

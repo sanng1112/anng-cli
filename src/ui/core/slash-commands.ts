@@ -20,6 +20,7 @@ export type SlashCommandKind =
   | "goal"
   | "btw"
   | "bg"
+  | "temp"
   | "queue";
 
 export type SlashCommandItem = {
@@ -45,6 +46,12 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
     name: "model",
     label: "/model",
     description: "Select model, thinking mode and effort control",
+  },
+  {
+    kind: "temp",
+    name: "temp",
+    label: "/temp <value>",
+    description: "Get or set the LLM temperature (e.g. /temp 0.2)",
   },
   {
     kind: "new",
