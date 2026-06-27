@@ -10,16 +10,18 @@
   },
   "homepage": "https://anng.vegamo.cn",
   "bin": {
-    "anng": "./dist/cli.js"
+    "anng": "./dist/index.js"
   },
-  "main": "./dist/cli.js",
+  "main": "./dist/index.js",
   "files": [
-    "dist/cli.js",
+    "dist/index.js",
     "dist/bundled/**",
     "templates/tools/**",
     "templates/prompts/**",
     "templates/skills/**",
     "README.md",
+    "README-en.md",
+    "README-zh_CN.md",
     "LICENSE"
   ],
   "engines": {
@@ -27,14 +29,14 @@
   },
   "scripts": {
     "typecheck": "tsc -p ./ --noEmit",
-    "bundle": "esbuild ./src/cli.tsx --bundle --platform=node --format=esm --target=node18 --outfile=dist/cli.js --banner:js=\"#!/usr/bin/env node\" --jsx=automatic --jsx-import-source=react --packages=external --log-override:empty-import-meta=silent && node scripts/copy_bundle_assets.js",
+    "bundle": "esbuild ./src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js --banner:js=\"#!/usr/bin/env node\" --packages=external --log-override:empty-import-meta=silent && node scripts/copy_bundle_assets.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write 'src/**/*.{ts,tsx}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx}'",
     "check": "npm run typecheck && npm run lint && npm run format:check",
-    "build": "npm run check && npm run bundle && node -e \"require('fs').chmodSync('dist/cli.js', 0o755)\"",
-    "test": "node src/tests/run-tests.mjs",
+    "build": "npm run check && npm run bundle && node -e \"require('fs').chmodSync('dist/index.js', 0o755)\"",
+    "test": "vitest run",
     "test:coverage": "node --experimental-test-coverage src/tests/run-tests.mjs",
     "test:single": "tsx --test",
     "prepack": "npm run build",
