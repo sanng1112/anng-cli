@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import { ChatView } from "./views/chat-view";
 import { ConfigView } from "./views/config-view";
 import { HomeView } from "./views/home-view";
+import { SessionListView } from "./views/session-list-view";
 import { anngPalette } from "./palette";
 import type { DoctorStatus } from "../commands/doctor";
 import type { ProjectStorageSnapshot, RecentSessionSummary } from "../common/project-storage";
@@ -78,6 +79,13 @@ export function RootView({
             recentSessions={recentSessions}
             latestTranscript={latestTranscript}
             recentDaemonTasks={recentDaemonTasks}
+          />
+          <SessionListView
+            sessions={recentSessions.map((session) => ({
+              id: session.id,
+              summary: session.summary,
+              status: session.status,
+            }))}
           />
           <ConfigView settings={settings} doctor={doctor} />
         </Box>
