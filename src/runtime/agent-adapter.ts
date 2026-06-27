@@ -1,5 +1,5 @@
 import { createOpenAIClient } from "../common/openai-client";
-import { SessionManager } from "../session";
+import { SessionManager } from "../core/engine";
 import { resolveCurrentSettings } from "../settings";
 
 type SessionSnapshot = {
