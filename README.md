@@ -23,6 +23,12 @@ Tiếng Việt · [English](./README-en.md) · [中文](./README-zh_CN.md)
 
 ANNG CLI được tối ưu hóa đặc biệt cho các mô hình suy luận sâu như **DeepSeek V4/R1** và **Google Gemini 1.5/2.0 Pro**, giúp tự động hóa toàn bộ quá trình phát triển phần mềm: từ viết mã, kiểm thử, sửa lỗi, tìm kiếm cấu trúc dự án cho đến điều phối toàn bộ đội ngũ Multi-Agent thông minh giải quyết những task phức tạp nhất.
 
+Phiên bản ANNG cơ bản tập trung vào:
+- Trò chuyện tương tác với các session được lưu trữ lâu dài (interactive chat with persisted sessions).
+- Chạy trực tiếp một lần / chế độ headless (one-shot/headless execution).
+- Cấu hình provider cục bộ mang theo key riêng (local BYOK provider configuration).
+- Cơ chế quay vòng API keys thông minh cho Gemini (Gemini smart key rotation).
+
 ---
 
 ## 🌟 Tính năng nổi bật

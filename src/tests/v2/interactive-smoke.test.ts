@@ -179,4 +179,10 @@ describe("RootView", () => {
     expect(text).toContain("Latest Transcript");
     expect(text).toContain("[user] fix parser");
   });
+
+  it("asserts that the interactive path contains branding", () => {
+    const node = React.createElement(RootView, {});
+    const text = extractRenderableText(node);
+    expect(text).toContain("ANNG // Terminal First Autonomy");
+  });
 });

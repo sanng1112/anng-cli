@@ -1,3 +1,4 @@
+// Legacy interactive implementation retained temporarily while ANNG TUI absorbs remaining controls.
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Box, Static, Text, useApp, useStdout, useWindowSize } from "ink";
 import chalk from "chalk";
@@ -158,6 +159,7 @@ function App({
   const writeRef = useRef(write);
   const lastRenderedColumnsRef = useRef<number | null>(null);
   const messagesRef = useRef<SessionMessage[]>([]);
+  const streamRenderTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [view, setView] = useState<View>("chat");
   const [busy, setBusy] = useState(false);
   const [skills, setSkills] = useState<SkillInfo[]>([]);
@@ -228,17 +230,45 @@ function App({
         setActiveAskPermissions(entry.askPermissions);
       },
       onLlmStreamProgress: (() => {
-        let lastUpdate = 0;
+        let bufferedProgress: LlmStreamProgress | null = null;
+        const RENDER_INTERVAL_MS = 33; // ~30 FPS fixed frame-rate rendering loop, extremely smooth on terminals
+
+        const startTimer = () => {
+          if (!streamRenderTimerRef.current) {
+            streamRenderTimerRef.current = setInterval(() => {
+              if (bufferedProgress) {
+                setStreamProgress(bufferedProgress);
+                bufferedProgress = null; // Clear to avoid redundant renders if no new data
+              }
+            }, RENDER_INTERVAL_MS);
+          }
+        };
+
+        const stopTimer = () => {
+          if (streamRenderTimerRef.current) {
+            clearInterval(streamRenderTimerRef.current);
+            streamRenderTimerRef.current = null;
+          }
+        };
+
         return (progress: LlmStreamProgress) => {
+          if (progress.phase === "start") {
+            bufferedProgress = progress;
+            setStreamProgress(progress);
+            startTimer();
+            return;
+          }
+
           if (progress.phase === "end") {
+            stopTimer();
+            bufferedProgress = null;
             setStreamProgress(null);
             return;
           }
-          const now = Date.now();
-          if (now - lastUpdate > 66) {
-            lastUpdate = now;
-            setStreamProgress(progress);
-          }
+
+          // For phase === "update"
+          bufferedProgress = progress;
+          startTimer();
         };
       })(),
       onMcpStatusChanged: () => {
@@ -265,6 +295,14 @@ function App({
     sessionManager.setAutoAccept(currentAutoAccept);
     sessionManager.setPlanMode(currentPlanMode);
   }, [currentAutoAccept, currentPlanMode, sessionManager]);
+
+  useEffect(() => {
+    return () => {
+      if (streamRenderTimerRef.current) {
+        clearInterval(streamRenderTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleTogglePlanMode = useCallback(() => {
     setCurrentPlanMode((p) => {
