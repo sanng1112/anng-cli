@@ -1,9 +1,12 @@
-// src/tui/session-shell.ts
+import { createPromptController } from "./controllers/prompt-controller";
+
 export type SessionShellState = {
   activeSessionId: string | null;
+  busy: boolean;
   answer: string;
   status: string | null;
   failReason: string | null;
+  errorLine: string | null;
 };
 
 export function createSessionShell(deps: {
@@ -14,23 +17,23 @@ export function createSessionShell(deps: {
     failReason: string | null;
   }>;
 }) {
-  let state: SessionShellState = {
-    activeSessionId: null,
-    answer: "",
-    status: null,
-    failReason: null,
-  };
+  let activeSessionId: string | null = null;
+
+  const promptController = createPromptController({
+    submitPrompt: async (prompt) => {
+      const result = await deps.submitPrompt(prompt);
+      activeSessionId = result.sessionId ?? activeSessionId;
+      return result;
+    },
+  });
 
   return {
-    getState: () => state,
+    getState: (): SessionShellState => ({
+      activeSessionId,
+      ...promptController.getState(),
+    }),
     submit: async (prompt: string) => {
-      const result = await deps.submitPrompt(prompt);
-      state = {
-        activeSessionId: result.sessionId ?? state.activeSessionId,
-        answer: result.text,
-        status: result.status,
-        failReason: result.failReason,
-      };
+      await promptController.submit(prompt);
     },
   };
 }

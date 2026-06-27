@@ -88,6 +88,7 @@ export function RootView({
           answer={chat?.answer ?? ""}
           status={chat?.status}
           failReason={chat?.failReason}
+          errorLine={chat?.errorLine}
         />
       )}
     </Box>
