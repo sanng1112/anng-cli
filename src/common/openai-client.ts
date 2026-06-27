@@ -4,7 +4,10 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { OpenAI } from "openai";
 import { Agent, fetch as undiciFetch } from "undici";
-import { resolveCurrentSettings, type ResolvedDeepcodingSettings } from "../settings";
+import { resolveProviderConfig, isGeminiModel as isGeminiModelFromResolver } from "../core/providers/resolve-provider";
+import { GeminiSmartPool } from "../core/gemini/smart-pool";
+import { appendKeyRotationSnapshot } from "../core/gemini/key-log";
+import { resolveCurrentSettings, type ResolvedDeepcodingSettings, type SettingsProcessEnv } from "../settings";
 import { quarantineGeminiKey } from "./gemini-keys-sync";
 import { KeyRotator, type KeyStat } from "./key-rotator";
 import {
@@ -40,10 +43,9 @@ type OpenAIHttpError = Error & {
 };
 
 const providerState = new Map<string, ProviderState>();
+const geminiSmartPools = new Map<string, GeminiSmartPool>();
 
 // Detect provider from model name
-const GEMINI_DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
-
 function buildProviderStateKey(baseURL: string, apiKey: string): string {
   const normalizedBaseURL = baseURL.trim().replace(/\/+$/g, "");
   const hash = crypto.createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
@@ -97,24 +99,22 @@ function parseRetryAfterSeconds(value: string | null): number | undefined {
 }
 
 export function isGeminiModel(model: string): boolean {
-  const lower = model.toLowerCase();
-  return lower.startsWith("gemini") || lower.startsWith("gemma");
+  return isGeminiModelFromResolver(model);
 }
 
 export function getProviderConfig(settings: ResolvedDeepcodingSettings): {
   apiKey: string;
   baseURL: string;
 } {
-  if (isGeminiModel(settings.model)) {
-    return {
-      apiKey: settings.geminiApiKey || settings.apiKey || "",
-      baseURL: settings.geminiBaseURL || GEMINI_DEFAULT_BASE_URL,
-    };
-  }
-  return {
-    apiKey: settings.apiKey || "",
+  const resolved = resolveProviderConfig({
+    provider: settings.provider,
+    model: settings.model,
+    apiKey: settings.apiKey,
     baseURL: settings.baseURL,
-  };
+    geminiApiKey: settings.geminiApiKey,
+    geminiBaseURL: settings.geminiBaseURL,
+  });
+  return { apiKey: resolved.apiKey, baseURL: resolved.baseURL };
 }
 
 export function rotateApiKey(providerKey: string): void {
@@ -200,7 +200,10 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function createOpenAIClient(projectRoot: string = process.cwd()): {
+export function createOpenAIClient(
+  projectRoot: string = process.cwd(),
+  processEnv: SettingsProcessEnv = process.env
+): {
   client: OpenAI | null;
   model: string;
   baseURL: string;
@@ -215,7 +218,7 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
   env: Record<string, string>;
   machineId?: string;
 } {
-  const settings = resolveCurrentSettings(projectRoot);
+  const settings = resolveCurrentSettings(projectRoot, processEnv);
   const providerConfig = getProviderConfig(settings);
   const isGeminiProvider =
     isGeminiModel(settings.model) || providerConfig.baseURL.includes("generativelanguage.googleapis.com");
@@ -239,6 +242,9 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
   }
 
   const providerStateKey = buildProviderStateKey(providerConfig.baseURL, providerConfig.apiKey);
+  const geminiPool = isGeminiProvider
+    ? getOrCreateGeminiSmartPool(providerStateKey, settings.model, providerConfig.apiKey)
+    : undefined;
   const state = providerState.get(providerStateKey);
   pruneProviderStatesForBaseURL(providerConfig.baseURL, providerStateKey);
 
@@ -269,11 +275,14 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fetchWithRotation = async (url: any, init: any): Promise<any> => {
     let lastError: unknown;
-    const maxRetries = Math.max(1, rotator.getKeyCount());
+    const maxRetries = Math.min(5, Math.max(1, rotator.getKeyCount()));
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       if (attempt > 0) {
         rotator.rotate();
+      }
+      if (isGeminiProvider && geminiPool) {
+        alignRotatorToGeminiPool(rotator, geminiPool, settings.model);
       }
       if (isGeminiProvider) {
         const allocation = await acquireGeminiQuotaSlot(
@@ -295,6 +304,10 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
       }
       const currentKey = rotator.getCurrentKey();
       rotator.markRequest();
+      if (isGeminiProvider && geminiPool) {
+        geminiPool.markRequest(settings.model, currentKey);
+        appendGeminiPoolSnapshot(projectRoot, geminiPool, settings.model, currentKey);
+      }
 
       const headers = new Headers(init.headers);
       headers.set("authorization", `Bearer ${currentKey}`);
@@ -354,16 +367,28 @@ export function createOpenAIClient(projectRoot: string = process.cwd()): {
           if (isRetryableAcrossKeys) {
             if (response.status === 429) {
               rotator.markFailure(retryAfterSec ?? 60);
+              if (isGeminiProvider && geminiPool) {
+                geminiPool.markRateLimited(settings.model, currentKey, retryAfterSec ?? 60);
+                appendGeminiPoolSnapshot(projectRoot, geminiPool, settings.model, currentKey);
+              }
             } else if (response.status === 401 || response.status === 403) {
               if (isGeminiProvider) {
                 quarantineGeminiKey(currentKey, `${response.status}: ${apiError.message}`);
                 await markGeminiQuotaKeyInvalid(currentKey, `${response.status}: ${apiError.message}`);
                 rotator.markInvalid();
+                if (geminiPool) {
+                  geminiPool.markInvalid(settings.model, currentKey, `${response.status}: ${apiError.message}`);
+                  appendGeminiPoolSnapshot(projectRoot, geminiPool, settings.model, currentKey);
+                }
               } else {
                 rotator.markFailure(300);
               }
             } else {
               rotator.markFailure(15);
+              if (isGeminiProvider && geminiPool) {
+                geminiPool.markRateLimited(settings.model, currentKey, 15);
+                appendGeminiPoolSnapshot(projectRoot, geminiPool, settings.model, currentKey);
+              }
             }
           }
 
@@ -498,4 +523,63 @@ export function resetKeyRotators(): void {
   for (const state of providerState.values()) {
     state.rotator.reset();
   }
+  geminiSmartPools.clear();
+}
+
+function getOrCreateGeminiSmartPool(providerStateKey: string, model: string, apiKeys: string): GeminiSmartPool {
+  const poolKey = `${providerStateKey}|${model}`;
+  const existing = geminiSmartPools.get(poolKey);
+  if (existing) {
+    return existing;
+  }
+
+  const keys = Array.from(
+    new Set(
+      apiKeys
+        .split(",")
+        .map((key) => key.trim())
+        .filter((key) => key.length > 0)
+    )
+  );
+  const created = new GeminiSmartPool({ [model]: keys });
+  geminiSmartPools.set(poolKey, created);
+  return created;
+}
+
+function alignRotatorToGeminiPool(rotator: KeyRotator, pool: GeminiSmartPool, model: string): void {
+  const preferred = pool.snapshot(model).find((entry) => entry.status === "active");
+  if (!preferred) {
+    return;
+  }
+
+  const index = rotator.getKeys().findIndex((key) => key === preferred.key);
+  if (index >= 0) {
+    rotator.setCurrentIndex(index);
+  }
+}
+
+function appendGeminiPoolSnapshot(projectRoot: string, pool: GeminiSmartPool, model: string, key: string): void {
+  const entry = pool.snapshot(model).find((candidate) => candidate.key === key);
+  if (!entry) {
+    return;
+  }
+
+  appendKeyRotationSnapshot(
+    {
+      model,
+      maskedKey: maskKey(entry.key),
+      requests: entry.requests,
+      failures: entry.failures,
+      status: entry.status,
+      waitSeconds: entry.waitSeconds,
+    },
+    projectRoot
+  );
+}
+
+function maskKey(value: string): string {
+  if (value.length <= 8) {
+    return value ? `${value.slice(0, 2)}***` : "";
+  }
+  return `${value.slice(0, 4)}***${value.slice(-4)}`;
 }
