@@ -8,9 +8,11 @@ import {
   readStoredSessionMessages,
 } from "../common/project-storage";
 import { buildProjectContextHints } from "../core/memory/project-memory";
+import { buildRuleBundle } from "../core/rules/discovery";
 import { listDaemonManifests } from "../core/team/daemon-state";
 import { resolveCurrentSettings } from "../settings";
 import { RootView } from "./root";
+import * as fs from "node:fs";
 import { createAgentAdapter } from "../runtime/agent-adapter";
 import { createSessionShell } from "./session-shell";
 
@@ -35,6 +37,15 @@ export async function renderInteractiveTui(args: {
   const recentDaemonTasks = listDaemonManifests(args.cwd).slice(0, 5);
   const latestSession = recentSessions[0];
   const latestTranscript = readRecentSessionTranscript(args.cwd, 4);
+
+  const ruleBundle = buildRuleBundle({ cwd: args.cwd });
+  const ruleSources = ruleBundle.files.filter((f) => {
+    try {
+      return fs.existsSync(f);
+    } catch {
+      return false;
+    }
+  });
 
   const adapter = await createAgentAdapter({
     cwd: args.cwd,
@@ -71,6 +82,7 @@ export async function renderInteractiveTui(args: {
       recentSessions,
       latestTranscript,
       recentDaemonTasks,
+      ruleSources,
       chat: {
         answer: shell.getState().answer,
         status: shell.getState().status,

@@ -14,6 +14,7 @@ describe("RootView", () => {
       teamMode: true,
       teamTmux: true,
       contextHints: ["README.md", "package.json"],
+      ruleSources: ["global", "project"],
       settings: {
         env: {},
         apiKey: "sk-test",
@@ -105,6 +106,8 @@ describe("RootView", () => {
     expect(text).toContain("team=team/tmux");
     expect(text).toContain("cwd=/repo");
     expect(text).toContain("context=README.md, package.json");
+    expect(text).toContain("Context");
+    expect(text).toContain("ruleSources=global, project");
     expect(text).toContain("thinking=true");
     expect(text).toContain("tmux=installed");
     expect(text).toContain("projectCode=repo-code");

@@ -4,6 +4,7 @@ import { ChatView } from "./views/chat-view";
 import { ConfigView } from "./views/config-view";
 import { HomeView } from "./views/home-view";
 import { SessionListView } from "./views/session-list-view";
+import { ContextView } from "./views/context-view";
 import { anngPalette } from "./palette";
 import type { DoctorStatus } from "../commands/doctor";
 import type { ProjectStorageSnapshot, RecentSessionSummary } from "../common/project-storage";
@@ -20,6 +21,7 @@ export type RootViewProps = {
   teamMode?: boolean;
   teamTmux?: boolean;
   contextHints?: string[];
+  ruleSources?: string[];
   settings?: ResolvedDeepcodingSettings;
   doctor?: DoctorStatus;
   storage?: ProjectStorageSnapshot;
@@ -31,6 +33,7 @@ export type RootViewProps = {
     answer: string;
     status: string | null;
     failReason: string | null;
+    errorLine?: string | null;
   };
 };
 
@@ -43,6 +46,7 @@ export function RootView({
   teamMode = false,
   teamTmux = false,
   contextHints = [],
+  ruleSources = [],
   settings,
   doctor,
   storage,
@@ -68,6 +72,7 @@ export function RootView({
       </Box>
       {cwd && settings && doctor ? (
         <Box marginBottom={1}>
+          <ContextView hints={contextHints} ruleSources={ruleSources} memoryDir={doctor.memoryDir} />
           <HomeView
             cwd={cwd}
             mode={mode}
