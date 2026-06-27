@@ -1,4 +1,5 @@
 import { createPromptController } from "./controllers/prompt-controller";
+import { dispatchSlashCommand } from "./controllers/slash-command-controller";
 
 export type SessionShellState = {
   activeSessionId: string | null;
@@ -32,7 +33,18 @@ export function createSessionShell(deps: {
       activeSessionId,
       ...promptController.getState(),
     }),
-    submit: async (prompt: string) => {
+    submit: async (
+      prompt: string,
+      actions?: {
+        newSession: () => void;
+        continueSession: () => void;
+        toggleRaw: () => void;
+        openSessions: () => void;
+      }
+    ) => {
+      if (actions && dispatchSlashCommand(prompt, actions)) {
+        return;
+      }
       await promptController.submit(prompt);
     },
   };
