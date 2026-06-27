@@ -1,0 +1,8 @@
+{
+  "name": "anng-benchmark-mini-repo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node src/index.ts"
+  }
+}

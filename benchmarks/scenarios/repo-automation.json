@@ -1,0 +1,5 @@
+{
+  "name": "repo-automation",
+  "cwd": "benchmarks/fixtures/mini-repo",
+  "prompt": "inspect this repo and summarize the entrypoint"
+}

@@ -1,0 +1,5 @@
+{
+  "name": "headless-contract",
+  "prompt": "say hello",
+  "expectedEvents": ["run_started", "run_result"]
+}
