@@ -10,11 +10,13 @@ import { runAgent as runAgentRuntime } from "./runtime/run-agent";
 import { runDaemon as runDaemonRuntime } from "./runtime/run-daemon";
 import { runInteractive as runInteractiveRuntime } from "./runtime/run-interactive";
 import { ANNG_CLI_VERSION } from "./version";
+import { runTeamRuntime } from "./core/team/team-runtime";
 import * as fs from "node:fs";
 
 export type RunCliHooks = {
   launchInteractive?: (args: ParsedCliArgs) => Promise<void>;
   runOneShot?: (args: ParsedCliArgs) => Promise<void>;
+  runTeam?: (args: ParsedCliArgs) => Promise<void>;
   migrateSettings?: (cwd: string) => Promise<StartupMigrationResult>;
   writeStderr?: (text: string) => void;
   writeStdout?: (text: string) => void;
@@ -91,10 +93,22 @@ async function defaultRunOneShot(args: ParsedCliArgs): Promise<void> {
   });
 }
 
+async function defaultRunTeam(args: ParsedCliArgs): Promise<void> {
+  if (!args.prompt) {
+    return;
+  }
+  await runTeamRuntime({
+    prompt: args.prompt,
+    cwd: args.cwd ?? process.cwd(),
+    tmux: args.anngTmux,
+  });
+}
+
 export async function runCli(argv = process.argv.slice(2), hooks: RunCliHooks = {}): Promise<void> {
   const parsed = parseCliArgs(argv);
   const launchInteractive = hooks.launchInteractive ?? defaultLaunchInteractive;
   const runOneShot = hooks.runOneShot ?? defaultRunOneShot;
+  const runTeam = hooks.runTeam ?? defaultRunTeam;
   const migrateSettings = hooks.migrateSettings ?? ensureStartupSettingsMigration;
   const writeStderr = hooks.writeStderr ?? ((text: string) => process.stderr.write(text));
   const writeStdout = hooks.writeStdout ?? ((text: string) => process.stdout.write(text));
@@ -188,6 +202,11 @@ export async function runCli(argv = process.argv.slice(2), hooks: RunCliHooks = 
       sessionId: parsed.sessionId,
       outputMode: parsed.outputMode,
     });
+    return;
+  }
+
+  if (parsed.anngTeam && parsed.prompt) {
+    await runTeam(parsed);
     return;
   }
 
