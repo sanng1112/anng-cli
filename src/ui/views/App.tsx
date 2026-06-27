@@ -773,6 +773,7 @@ function App({
 
         const next = resolveCurrentSettings(projectRoot);
         setResolvedSettings(next);
+        setWelcomeNonce((n) => n + 1);
         setStatusLine(`✅ Temperature set to ${num}`);
 
         const activeSessionId = sessionManager.getActiveSessionId();
@@ -1120,6 +1121,7 @@ function App({
       const { changed } = writeModelConfigSelection(selection, current, projectRoot);
       const next = resolveCurrentSettings(projectRoot);
       setResolvedSettings(next);
+      setWelcomeNonce((n) => n + 1);
 
       if (!changed) {
         return "Model settings unchanged";
@@ -1620,6 +1622,7 @@ function App({
             projectRoot={projectRoot}
             onExit={() => {
               setResolvedSettings(resolveCurrentSettings(projectRoot));
+              setWelcomeNonce((n) => n + 1);
               navigateToSubView("chat");
             }}
           />
