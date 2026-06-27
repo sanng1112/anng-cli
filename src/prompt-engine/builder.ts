@@ -10,12 +10,13 @@
  * Inspired by Cline's buildClineSystemPrompt() + resolveSystemPrompt().
  */
 
-import * as fs from "fs";
-import * as path from "path";
 import type { AgentMode } from "../harness/types";
 import { DEFAULT_SYSTEM_PROMPT, YOLO_SYSTEM_PROMPT, PLAN_MODE_INSTRUCTIONS } from "./templates";
 import { buildWorkspaceMetadata } from "./metadata";
 import { getGoalSnapshot } from "../common/goal-store";
+import { buildRuleBundle } from "../core/rules/discovery";
+// Imported for future rules context refactoring seam
+import { buildRuleBundle as buildRuleBundleV2 } from "../core/engine/rules-context";
 
 // =============================================================================
 // Types
@@ -121,41 +122,12 @@ function resolveRules(options: BuildPromptOptions): string {
 }
 
 function loadFileRules(projectRoot: string): string | undefined {
-  const candidates = [
-    path.join(projectRoot, "ANNG.md"),
-    // Note: AGENTS.md is handled separately by SessionManager.loadAgentInstructions()
-    path.join(projectRoot, ".anng", "rules"),
-    path.join(projectRoot, ".agents", "rules"),
-  ];
-
-  const blocks: string[] = [];
-  for (const filePath of candidates) {
-    try {
-      if (fs.existsSync(filePath)) {
-        if (fs.statSync(filePath).isDirectory()) {
-          // Directory: read all .md files
-          const entries = fs.readdirSync(filePath);
-          for (const entry of entries.sort()) {
-            if (entry.endsWith(".md")) {
-              const content = fs.readFileSync(path.join(filePath, entry), "utf8");
-              if (content.trim()) {
-                blocks.push(`## ${entry.replace(/\.md$/, "")}\n${content.trim()}`);
-              }
-            }
-          }
-        } else {
-          const content = fs.readFileSync(filePath, "utf8");
-          if (content.trim()) {
-            blocks.push(content.trim());
-          }
-        }
-      }
-    } catch {
-      // Silently skip unreadable files
-    }
+  try {
+    const bundle = buildRuleBundle({ cwd: projectRoot });
+    return bundle.content.trim() || undefined;
+  } catch {
+    return undefined;
   }
-
-  return blocks.length > 0 ? blocks.join("\n\n") : undefined;
 }
 
 // =============================================================================
