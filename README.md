@@ -34,7 +34,7 @@ Phiên bản ANNG cơ bản tập trung vào:
 ## 🌟 Tính năng nổi bật
 
 - 🤖 **Đa nền tảng & Tối ưu LLM:** Hỗ trợ đa dạng Provider (OpenAI, DeepSeek, Gemini,...) với khả năng tùy chọn **Thinking Mode** (chế độ suy luận sâu) và **Reasoning Effort** (mức độ suy luận) trực quan ngay trên menu TUI.
-- 🎨 **Terminal UI (TUI) Sang Trọng:** Giao diện TUI (viết bằng React Ink) được thiết kế tối giản, tinh tế mang đậm chất nghệ thuật ASCII/Quadrant Blocks với dải màu `#D4704B` thanh lịch, hỗ trợ paste ảnh trực tiếp từ clipboard (`Ctrl+V`).
+- 🎨 **Terminal UI (TUI) Sang Trọng:** Giao diện TUI mặc định chạy qua shell trong `src/tui/*` (được viết bằng React Ink), thiết kế tối giản, tinh tế mang đậm chất nghệ thuật ASCII/Quadrant Blocks với dải màu `#D4704B` thanh lịch, hỗ trợ paste ảnh trực tiếp từ clipboard (`Ctrl+V`). Các mã nguồn cũ trong `src/ui/*` tạm thời được giữ lại làm lớp tương thích ngược và phục vụ kiểm thử di trú.
 - 👥 **Multi-Agent (Team Mode):** Chia sẻ và điều phối công việc cho nhiều AI Agent chạy song song. Hỗ trợ hiển thị trực quan thông qua các bảng điều khiển (panes) trong **Tmux**.
 - 🛠️ **Hỗ trợ Model Context Protocol (MCP):** Mở rộng tính năng vô hạn. Kết nối trực tiếp hệ thống AI với Database, Trình duyệt Web, Git, AWS, Slack, v.v. thông qua các plugin MCP server.
 - 🧩 **Hệ thống Kỹ năng (Skills System):** Định nghĩa và mở rộng các kỹ năng cho Agent thông qua tài liệu định dạng Markdown (`SKILL.md`) kết hợp với các helper scripts.

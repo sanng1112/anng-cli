@@ -1,6 +1,5 @@
 import React from "react";
 import { render } from "ink";
-import { AppContainer } from "../ui";
 import { getDoctorStatus } from "../commands/doctor";
 import {
   getProjectStorageSnapshot,
@@ -76,22 +75,8 @@ export async function renderInteractiveTui(args: {
         answer: shell.getState().answer,
         status: shell.getState().status,
         failReason: shell.getState().failReason,
+        errorLine: shell.getState().errorLine,
       },
-      app: React.createElement(AppContainer, {
-        projectRoot: args.cwd,
-        version: "v2-dev",
-        initialPrompt: args.prompt,
-        autoAccept: args.autoAccept,
-        planMode: args.planMode,
-        maxTurns: args.maxTurns,
-        onRestart: () => {
-          // The v2 shell currently delegates restart orchestration to the process-level CLI entrypoint.
-        },
-        teamMode: args.teamMode,
-        teamConfig: {
-          mode: args.teamTmux ? "tmux" : "internal",
-        },
-      }),
     })
   );
 

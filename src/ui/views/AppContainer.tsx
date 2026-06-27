@@ -1,3 +1,4 @@
+// Legacy interactive implementation retained only for compatibility tests while ANNG TUI owns the runtime shell.
 import React from "react";
 import { AppContext } from "../contexts";
 import App from "./App";
