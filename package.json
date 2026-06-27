@@ -42,6 +42,7 @@
     "prepack": "npm run build",
     "prepare": "husky",
     "bench:prepare": "npm run bundle",
+    "bench:run": "node scripts/run-benchmarks.mjs",
     "release:check": "node scripts/release-check.mjs"
   },
   "dependencies": {
