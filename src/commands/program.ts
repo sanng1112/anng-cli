@@ -5,7 +5,7 @@ export type LegacyCliWarning = {
 };
 
 export type ParsedCliArgs = {
-  command?: "doctor" | "config" | "mcp" | "daemon" | "sessions";
+  command?: "doctor" | "config" | "mcp" | "daemon" | "sessions" | "context";
   mcpAction?: "status" | "tools";
   daemonAction?: "list" | "show" | "logs";
   daemonTaskId?: string;
@@ -118,7 +118,8 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
     normalized[0] === "config" ||
     normalized[0] === "mcp" ||
     normalized[0] === "daemon" ||
-    normalized[0] === "sessions"
+    normalized[0] === "sessions" ||
+    normalized[0] === "context"
   ) {
     if (normalized[0] === "help") {
       help = true;

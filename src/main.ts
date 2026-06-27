@@ -5,6 +5,7 @@ import { runDoctorCommand } from "./commands/doctor";
 import { readHelpText } from "./commands/help";
 import { runMcpCommand } from "./commands/mcp";
 import { runSessionsCommand } from "./commands/sessions";
+import { runContextCommand } from "./commands/context";
 import { ensureStartupSettingsMigration, type StartupMigrationResult } from "./core/config/settings-startup";
 import { runAgent as runAgentRuntime } from "./runtime/run-agent";
 import { runDaemon as runDaemonRuntime } from "./runtime/run-daemon";
@@ -201,6 +202,14 @@ export async function runCli(argv = process.argv.slice(2), hooks: RunCliHooks = 
       cwd: parsed.cwd ?? process.cwd(),
       action: parsed.sessionsAction,
       sessionId: parsed.sessionId,
+      outputMode: parsed.outputMode,
+    });
+    return;
+  }
+
+  if (parsed.command === "context") {
+    await runContextCommand({
+      cwd: parsed.cwd ?? process.cwd(),
       outputMode: parsed.outputMode,
     });
     return;
