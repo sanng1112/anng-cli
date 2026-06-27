@@ -1,8 +1,9 @@
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { writeJsonFileAtomicSync } from "./json-store";
 import { getProjectCode } from "../session/types";
+import { resolveAnngHome } from "../core/config/home";
+import type { SessionMessage, SessionStatus } from "../session/types";
 
 export type ProjectStoragePaths = {
   projectCode: string;
@@ -24,9 +25,22 @@ export type ProjectStorageSnapshot = ProjectStoragePaths & {
   queueFileCount: number;
 };
 
+export type RecentSessionSummary = {
+  id: string;
+  summary: string | null;
+  status: SessionStatus | "unknown";
+  updateTime: string;
+};
+
+export type StoredSessionDetail = RecentSessionSummary & {
+  assistantReply?: string | null;
+  failReason?: string | null;
+  createTime?: string;
+};
+
 export function getProjectStoragePaths(projectRoot: string): ProjectStoragePaths {
   const projectCode = getProjectCode(projectRoot);
-  const projectDir = path.join(os.homedir(), ".anng", "projects", projectCode);
+  const projectDir = path.join(resolveAnngHome(), "projects", projectCode);
   const memoryDir = path.join(projectRoot, ".anng", "memory");
   return {
     projectCode,
@@ -78,4 +92,111 @@ export function getProjectStorageSnapshot(projectRoot: string): ProjectStorageSn
     queueDirExists,
     queueFileCount,
   };
+}
+
+export function readRecentSessions(projectRoot: string, limit = 5): RecentSessionSummary[] {
+  return readStoredSessions(projectRoot).slice(0, Math.max(1, limit));
+}
+
+export function readStoredSessions(projectRoot: string): RecentSessionSummary[] {
+  const { sessionsIndexPath } = getProjectStoragePaths(projectRoot);
+  try {
+    if (!fs.existsSync(sessionsIndexPath)) {
+      return [];
+    }
+    const raw = fs.readFileSync(sessionsIndexPath, "utf8");
+    const parsed = JSON.parse(raw) as { entries?: unknown[] };
+    if (!Array.isArray(parsed.entries)) {
+      return [];
+    }
+
+    return parsed.entries
+      .flatMap((entry) => {
+        if (!entry || typeof entry !== "object") {
+          return [];
+        }
+        const candidate = entry as Record<string, unknown>;
+        if (typeof candidate.id !== "string" || typeof candidate.updateTime !== "string") {
+          return [];
+        }
+        return [
+          {
+            id: candidate.id,
+            summary: typeof candidate.summary === "string" ? candidate.summary : null,
+            status:
+              typeof candidate.status === "string" ? (candidate.status as RecentSessionSummary["status"]) : "unknown",
+            updateTime: candidate.updateTime,
+          },
+        ];
+      })
+      .sort((left, right) => right.updateTime.localeCompare(left.updateTime));
+  } catch {
+    return [];
+  }
+}
+
+export function readStoredSessionDetail(projectRoot: string, sessionId: string): StoredSessionDetail | null {
+  const { sessionsIndexPath } = getProjectStoragePaths(projectRoot);
+  try {
+    if (!fs.existsSync(sessionsIndexPath)) {
+      return null;
+    }
+    const parsed = JSON.parse(fs.readFileSync(sessionsIndexPath, "utf8")) as { entries?: unknown[] };
+    if (!Array.isArray(parsed.entries)) {
+      return null;
+    }
+    for (const entry of parsed.entries) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const candidate = entry as Record<string, unknown>;
+      if (candidate.id !== sessionId || typeof candidate.updateTime !== "string") {
+        continue;
+      }
+      return {
+        id: sessionId,
+        summary: typeof candidate.summary === "string" ? candidate.summary : null,
+        status: typeof candidate.status === "string" ? (candidate.status as StoredSessionDetail["status"]) : "unknown",
+        updateTime: candidate.updateTime,
+        assistantReply: typeof candidate.assistantReply === "string" ? candidate.assistantReply : null,
+        failReason: typeof candidate.failReason === "string" ? candidate.failReason : null,
+        createTime: typeof candidate.createTime === "string" ? candidate.createTime : undefined,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function readStoredSessionMessages(projectRoot: string, sessionId: string, limit = 10): SessionMessage[] {
+  const { projectDir } = getProjectStoragePaths(projectRoot);
+  const messagePath = path.join(projectDir, `${sessionId}.jsonl`);
+  try {
+    if (!fs.existsSync(messagePath)) {
+      return [];
+    }
+    return fs
+      .readFileSync(messagePath, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line) as SessionMessage];
+        } catch {
+          return [];
+        }
+      })
+      .slice(-Math.max(1, limit));
+  } catch {
+    return [];
+  }
+}
+
+export function readRecentSessionTranscript(projectRoot: string, limit = 4): SessionMessage[] {
+  const recent = readRecentSessions(projectRoot, 1)[0];
+  if (!recent) {
+    return [];
+  }
+  return readStoredSessionMessages(projectRoot, recent.id, limit);
 }

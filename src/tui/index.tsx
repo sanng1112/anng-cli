@@ -2,7 +2,12 @@ import React from "react";
 import { render } from "ink";
 import { AppContainer } from "../ui";
 import { getDoctorStatus } from "../commands/doctor";
-import { getProjectStorageSnapshot, readRecentSessions, readStoredSessionMessages } from "../common/project-storage";
+import {
+  getProjectStorageSnapshot,
+  readRecentSessions,
+  readRecentSessionTranscript,
+  readStoredSessionMessages,
+} from "../common/project-storage";
 import { buildProjectContextHints } from "../core/memory/project-memory";
 import { listDaemonManifests } from "../core/team/daemon-state";
 import { resolveCurrentSettings } from "../settings";
@@ -30,13 +35,7 @@ export async function renderInteractiveTui(args: {
   const recentSessions = readRecentSessions(args.cwd);
   const recentDaemonTasks = listDaemonManifests(args.cwd).slice(0, 5);
   const latestSession = recentSessions[0];
-  const latestTranscript =
-    latestSession && latestSession.id
-      ? readStoredSessionMessages(args.cwd, latestSession.id, 4).map((message) => ({
-          role: message.role,
-          content: message.content,
-        }))
-      : [];
+  const latestTranscript = readRecentSessionTranscript(args.cwd, 4);
 
   const adapter = await createAgentAdapter({
     cwd: args.cwd,
