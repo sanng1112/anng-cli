@@ -1126,7 +1126,7 @@ test("createSession appends default system prompts in prefix-cache-friendly orde
 
   assert.equal(systemContents.length >= 4, true);
   // [0] = base system prompt (most static — no model-specific content)
-  assert.match(systemContents[0] ?? "", /# ROLE & OBJECTIVE/);
+  assert.match(systemContents[0] ?? "", /You are ANNG/);
   assert.doesNotMatch(systemContents[0] ?? "", /# Local Workspace Environment/);
   assert.doesNotMatch(systemContents[0] ?? "", /The current LLM model is test-model/);
   // [1] = capabilities (static)

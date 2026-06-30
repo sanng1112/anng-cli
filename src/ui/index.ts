@@ -35,6 +35,7 @@ export {
 } from "./views/PromptInput";
 export { SessionList, formatSessionTitle, filterSessions, formatSessionStatus } from "./views/SessionList";
 export { ThemedGradient } from "./views/ThemedGradient";
+export { GoalView } from "./views/GoalView";
 export { UpdatePrompt, type UpdatePromptChoice } from "./views/UpdatePrompt";
 export { WelcomeScreen, formatHomeRelativePath, buildWelcomeTips } from "./views/WelcomeScreen";
 export {

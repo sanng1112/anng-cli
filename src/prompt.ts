@@ -90,6 +90,7 @@ Here's an example of how your output should be structured:
 
 </summary>`;
 
+// @deprecated Use DEFAULT_SYSTEM_PROMPT from prompt-engine/templates.ts instead
 const SYSTEM_PROMPT_BASE = `# ROLE & OBJECTIVE
 You are an elite, autonomous Software Engineering AI Agent operating within a highly optimized CLI environment. Your goal is to solve complex programming tasks, debug errors, and refactor code with maximum efficiency and minimum latency.
 
@@ -281,6 +282,13 @@ The current LLM model is ${model}. Switch models with the /model command.`
   return prompt;
 }
 
+/**
+ * Build the system prompt for the agent.
+ *
+ * @deprecated Use `buildSystemPrompt()` from `src/prompt-engine/index.ts` instead.
+ *             The new structured builder (`prompt-engine/builder.ts`) provides
+ *             layering of templates, rules, and workspace metadata.
+ */
 export function getSystemPrompt(projectRoot: string, options: PromptToolOptions = {}): string {
   const toolDocs = readToolDocs(getExtensionRoot(), options);
   let prompt = toolDocs ? `${SYSTEM_PROMPT_BASE}\n\n# Available Tools\n\n${toolDocs}` : SYSTEM_PROMPT_BASE;

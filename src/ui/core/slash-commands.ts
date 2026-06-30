@@ -34,7 +34,8 @@ export type SlashCommandKind =
   | "custom-agents"
   | "skills"
   | "skill"
-  | "workflow";
+  | "workflow"
+  | "goal";
 
 export type SlashCommandSource = "tui" | "runtime" | "plugin";
 
@@ -180,6 +181,15 @@ export const BUILTIN_SLASH_COMMANDS: SlashCommandItem[] = [
     description: "Customize agents team route, numbers, model and reasoning effort",
     source: "tui",
     visible: true,
+  },
+  {
+    kind: "goal",
+    name: "goal",
+    label: "/goal",
+    description: "Run a deterministic goal (e.g. /goal code-review, /goal health-check)",
+    source: "tui",
+    visible: true,
+    group: "Built-in Commands",
   },
 ];
 

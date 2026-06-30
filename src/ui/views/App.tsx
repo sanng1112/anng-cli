@@ -48,8 +48,9 @@ import { SessionManager } from "../../session";
 import { SettingsView } from "./SettingsView";
 import { TeamDpConfigView } from "./TeamDpConfigView";
 import { TeamWfConfigView } from "./TeamWfConfigView";
+import { GoalView } from "./GoalView";
 
-type View = "chat" | "session-list" | "undo" | "mcp-status" | "settings" | "team-dp" | "team-wf";
+type View = "chat" | "session-list" | "undo" | "mcp-status" | "settings" | "team-dp" | "team-wf" | "goal";
 
 const STATUS_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -144,6 +145,7 @@ function App({
   const [currentAutoAccept, setCurrentAutoAccept] = useState(autoAccept);
   const [currentPlanMode, setCurrentPlanMode] = useState(planMode);
   const [teamDpPrompt, setTeamDpPrompt] = useState("");
+  const [goalName, setGoalName] = useState("");
 
   const initialAutoAccept = useRef(autoAccept).current;
   const initialPlanMode = useRef(planMode).current;
@@ -399,6 +401,16 @@ function App({
       }
       if (submission.command === "team-wf") {
         navigateToSubView("team-wf");
+        return;
+      }
+      if (submission.command === "goal") {
+        const name = submission.text?.replace(/^\/goal\s*/, "").trim() || "";
+        if (!name) {
+          setErrorLine("Usage: /goal <name>. Available: code-review, full-test, health-check");
+          return;
+        }
+        setGoalName(name);
+        navigateToSubView("goal");
         return;
       }
 
@@ -968,6 +980,8 @@ function App({
         />
       ) : view === "team-wf" ? (
         <TeamWfConfigView onCancel={() => navigateToSubView("chat")} />
+      ) : view === "goal" ? (
+        <GoalView projectRoot={projectRoot} goalName={goalName} onCancel={() => navigateToSubView("chat")} />
       ) : shouldShowQuestionPrompt && pendingQuestion && !busy ? (
         <AskUserQuestionPrompt
           questions={pendingQuestion.questions}

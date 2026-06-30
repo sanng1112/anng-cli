@@ -82,7 +82,8 @@ export type PromptSubmission = {
     | "team-dp"
     | "team-wf"
     | "custom-agents"
-    | "settings";
+    | "settings"
+    | "goal";
 };
 
 export type PromptDraft = {
@@ -760,6 +761,12 @@ export const PromptInput = React.memo(function PromptInput({
     }
     if (item.kind === "settings") {
       onSubmit({ text: "/settings", imageUrls: [], command: "settings" });
+      resetPromptInput();
+      return;
+    }
+    if (item.kind === "goal") {
+      const rawText = expandPasteMarkers(buffer.text, pastesRef.current).trim() || "/goal";
+      onSubmit({ text: rawText, imageUrls: [], command: "goal" });
       resetPromptInput();
       return;
     }
